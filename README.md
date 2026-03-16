@@ -168,6 +168,8 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE)
 
 Architectural inspiration from [Hive](https://github.com/aden-hive/hive) (YC-backed AI agent infrastructure) — the node pipeline, shared memory, and evolution loop patterns informed the agentic curriculum engine design.
 
+Knowledge graph layer powered by [LightRAG](https://github.com/HKUDS/LightRAG) (HKUDS) — incremental knowledge graph construction and prerequisite inference across course materials.
+
 Built with [Claude](https://claude.ai) (Anthropic) as AI pair programmer.
 
 ---
