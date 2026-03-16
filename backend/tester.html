@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>灵感方舟 - API 测试器 v25.3</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f0f2f5; color: #333; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .container { width: 100%; max-width: 800px; background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px_12px rgba(0, 0, 0, 0.1); }
+        h1 { text-align: center; color: #007bff; margin-bottom: 25px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-weight: 600; margin-bottom: 8px; }
+        input[type="text"], textarea, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+        textarea { min-height: 100px; resize: vertical; }
+        select { appearance: none; -webkit-appearance: none; background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007CB2%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E'); background-repeat: no-repeat; background-position: right 12px center; background-size: .65em auto; }
+        button { width: 100%; padding: 15px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
+        button:disabled { background-color: #a0cfff; cursor: not-allowed; }
+        #result-container { margin-top: 30px; padding: 20px; background-color: #f7f7f7; border: 1px solid #e0e0e0; border-radius: 8px; white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; min-height: 100px; }
+        .spinner { border: 4px solid rgba(0,0,0,0.1); width: 24px; height: 24px; border-radius: 50%; border-left-color: #fff; animation: spin 1s ease infinite; display: inline-block; vertical-align: middle; margin-left: 10px; }
+        .status-bar { text-align: center; margin-top: 15px; font-weight: bold; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>灵感方舟 - API 测试器 🚀</h1>
+        
+        <div class="form-group">
+            <label for="authToken">身份认证令牌 (Auth Token)</label>
+            <input type="text" id="authToken" value="guest-token-for-testing">
+            <small>使用 "guest-token-for-testing" 作为游客 (3次免费额度)。登录后请粘贴您的JWT令牌。</small>
+        </div>
+
+        <div class="form-group">
+            <label for="character1">角色1 (Character 1)</label>
+            <textarea id="character1">Ash Lynx, a charismatic youth with a complex background from New York, haunted by a traumatic past.</textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="character2">角色2 (Character 2)</label>
+            <textarea id="character2">Eiji Okumura, a kind-hearted Japanese photographer who becomes Ash's unwavering source of light.</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="plot_prompt">核心梗/场景 (Plot Prompt)</label>
+            <textarea id="plot_prompt">What if they met again years later in modern Japan, and Ash has lost his memories?</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="language">生成语言 (Language)</label>
+            <select id="language">
+                <option value="zh-CN" selected>简体中文 (Simplified Chinese)</option>
+                <option value="zh-TW">繁體中文 (Traditional Chinese)</option>
+                <option value="en">English</option>
+            </select>
+        </div>
+        
+        <button id="generate-button">生成灵感 (Generate)</button>
+
+        <div class="status-bar" id="status-bar"></div>
+
+        <div id="result-container">（AI生成的大纲将显示在这里）</div>
+    </div>
+
+    <script>
+        const generateButton = document.getElementById('generate-button');
+        const resultContainer = document.getElementById('result-container');
+        const statusBar = document.getElementById('status-bar');
+
+        generateButton.addEventListener('click', async function() {
+            const originalButtonText = generateButton.innerHTML;
+            generateButton.innerHTML = '生成中...<div class="spinner"></div>';
+            generateButton.disabled = true;
+            resultContainer.textContent = '正在呼叫AI，请稍候...';
+            statusBar.textContent = '';
+
+            const data = {
+                character1: document.getElementById('character1').value,
+                character2: document.getElementById('character2').value,
+                plot_prompt: document.getElementById('plot_prompt').value,
+                language: document.getElementById('language').value
+            };
+            
+            const token = document.getElementById('authToken').value;
+            const headers = { 
+                'Content-Type': 'application/json',
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            try {
+                // 注意：根据 app.py，端口现在是 8080
+                const response = await fetch('http://127.0.0.1:8080/api/generate', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(data),
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultContainer.textContent = result.outline;
+                    if (result.remaining_credits !== undefined) {
+                        statusBar.textContent = `🎉 生成成功！剩余点数: ${result.remaining_credits}`;
+                        statusBar.style.color = 'green';
+                    } else {
+                        statusBar.textContent = `🎉 游客模式生成成功！`;
+                        statusBar.style.color = 'green';
+                    }
+                } else {
+                    // 根据新的后端错误格式更新
+                    resultContainer.textContent = `发生错误: ${result.error}
+
+详细信息: ${result.message || '无'}`;
+                    statusBar.textContent = `❌ 操作失败`;
+                    statusBar.style.color = 'red';
+                }
+
+            } catch (error) {
+                resultContainer.textContent = '发生连接错误: ' + error.message + '\n\n请确保后端服务正在 http://127.0.0.1:8080 运行。';
+                statusBar.textContent = `❌ 连接失败`;
+                statusBar.style.color = 'red';
+            } finally {
+                generateButton.innerHTML = originalButtonText;
+                generateButton.disabled = false;
+            }
+        });
+    </script>
+
+</body>
+</html>

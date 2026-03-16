@@ -1,0 +1,38 @@
+# -----------------------------------------------------------------------------
+# 「灵感方舟」施工总纲领 (Plot Ark Cloud Build Master Plan)
+# 版本: 3.0 - 最终授权版 (The Final Authorization)
+# 描述: 这份文件拥有最高权限，将指导Cloud Build完成所有构建和部署工作。
+# -----------------------------------------------------------------------------
+steps:
+  # 第1步：构建Docker镜像
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/plot-ark-backend:$COMMIT_SHA', '.']
+
+  # 第2步：将构建好的镜像推送到Google的镜像仓库
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/plot-ark-backend:$COMMIT_SHA']
+
+  # 第3步：将这个全新的、完美的镜像部署到Cloud Run (注入所有秘密！)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'plot-ark-backend' # <-- 这是你的Cloud Run服务名称
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/plot-ark-backend:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1' # <-- 这是你的服务所在区域
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated' # <-- 允许公开访问
+      # --- 这就是我们最终的魔法！用逗号分隔，注入所有秘密！---
+      - '--set-secrets=GOOGLE_API_KEY=GOOGLE_API_KEY:latest,DATABASE_URL=DATABASE_URL:latest,SECRET_KEY=SECRET_KEY:latest'
+
+# 我们将构建好的镜像信息保存下来
+images:
+  - 'gcr.io/$PROJECT_ID/plot-ark-backend:$COMMIT_SHA'
+
+# 解决日志问题的关键！我们在这里明确告诉它日志记录的方式！
+options:
+  logging: CLOUD_LOGGING_ONLY

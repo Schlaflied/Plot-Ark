@@ -1,0 +1,895 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+*/
+
+import React, { useState, useEffect, useRef } from 'react';
+import { HeroScene, QuantumComputerScene } from './components/QuantumScene';
+import { SurfaceCodeDiagram, TransformerDecoderDiagram } from './components/Diagrams';
+import { ArrowDown, Menu, X, BookOpen, Download, Copy, CheckCircle2, ChevronLeft, ChevronRight, FileText, Pencil, Save, Plus, Trash2 } from 'lucide-react';
+
+interface Reading {
+  title: string;
+  key_points: string[];
+  rationale: string;
+}
+
+interface Assignment {
+  title: string;
+  type: string;
+  coverage: string;
+}
+
+interface Module {
+  title: string;
+  complexity_level: number;
+  learning_objectives: string[];
+  narrative_preview: string;
+  recommended_readings: Reading[];
+  assignments: Assignment[];
+}
+
+interface CurriculumData {
+  modules: Module[];
+  sources: { url: string; domain: string; retrieved_at: string }[];
+}
+
+const CITATIONS_PER_PAGE = 5;
+
+const COURSE_TYPES = [
+  { value: 'mixed', label: 'Mixed' },
+  { value: 'project', label: 'Project-Based' },
+  { value: 'essay', label: 'Essay / Research' },
+  { value: 'debate', label: 'Debate / Roleplay' },
+  { value: 'lab', label: 'Lab / Simulation' },
+];
+
+const ASSIGNMENT_TYPES = ['essay', 'project', 'debate', 'lab', 'quiz', 'reflection'];
+
+const inputCls = 'w-full p-2 bg-white border border-stone-300 rounded-lg text-sm focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors';
+
+const App: React.FC = () => {
+  const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Form state
+  const [topic, setTopic] = useState('');
+  const [level, setLevel] = useState('');
+  const [audience, setAudience] = useState('');
+  const [audienceCustom, setAudienceCustom] = useState('');
+  const [accreditationContext, setAccreditationContext] = useState('');
+  const [courseCode, setCourseCode] = useState('');
+  const [moduleCount, setModuleCount] = useState('6');
+  const [courseType, setCourseType] = useState('mixed');
+
+  // Generation state
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [streamText, setStreamText] = useState('');
+  const [curriculum, setCurriculum] = useState<CurriculumData | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Module navigation & editing
+  const [currentModuleIndex, setCurrentModuleIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState<'objectives' | 'resources' | 'assessment'>('objectives');
+  const [editedModules, setEditedModules] = useState<Module[]>([]);
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Drag and drop
+  const dragIndex = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Citations — collapsible groups of 5
+  const [openCitationGroups, setOpenCitationGroups] = useState<Set<number>>(new Set([0]));
+  const toggleCitationGroup = (i: number) => {
+    setOpenCitationGroups(prev => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToSection = (id: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenuOpen(false);
+    const element = document.getElementById(id);
+    if (element) {
+      const offsetPosition = element.getBoundingClientRect().top + window.pageYOffset - 100;
+      window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+    }
+  };
+
+  const handleGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const effectiveAudience = audience === 'custom' ? audienceCustom : audience;
+    if (!topic || !level || !effectiveAudience) return;
+
+    setIsGenerating(true);
+    setStreamText('');
+    setCurriculum(null);
+    setCurrentModuleIndex(0);
+    setActiveTab('objectives');
+    setIsEditing(false);
+    setOpenCitationGroups(new Set([0]));
+
+    try {
+      const response = await fetch('/api/curriculum/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic, level, audience: effectiveAudience,
+          accreditation_context: accreditationContext,
+          course_code: courseCode,
+          module_count: moduleCount,
+          course_type: courseType,
+        }),
+      });
+
+      if (!response.body) throw new Error('No response body');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') {
+              try {
+                let cleanText = accumulatedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                const firstBrace = cleanText.indexOf('{');
+                const lastBrace = cleanText.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace !== -1) {
+                  cleanText = cleanText.slice(firstBrace, lastBrace + 1);
+                }
+                const parsed = JSON.parse(cleanText) as CurriculumData;
+                setCurriculum(parsed);
+                setEditedModules(parsed.modules.map((m, i, arr) => ({
+                  ...m,
+                  complexity_level: Number(m.complexity_level) || Math.max(1, Math.round((i + 1) / arr.length * 5)),
+                })));
+              } catch (err) {
+                console.error('Failed to parse JSON', err);
+              }
+              break;
+            }
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.text) {
+                accumulatedText += parsed.text;
+                setStreamText(accumulatedText);
+              }
+            } catch {
+              // Incomplete chunk
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const navigateModule = (direction: number) => {
+    if (!editedModules.length) return;
+    const newIndex = Math.max(0, Math.min(editedModules.length - 1, currentModuleIndex + direction));
+    setCurrentModuleIndex(newIndex);
+    setActiveTab('objectives');
+    setIsEditing(false);
+  };
+
+  const updateCurrentModule = (updates: Partial<Module>) => {
+    setEditedModules(prev => prev.map((m, i) =>
+      i === currentModuleIndex ? { ...m, ...updates } : m
+    ));
+  };
+
+  const handleSaveEdit = () => {
+    setIsEditing(false);
+    try {
+      localStorage.setItem('plot-ark-modules', JSON.stringify(editedModules));
+    } catch {
+      // localStorage unavailable
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (index: number) => {
+    dragIndex.current = index;
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    const from = dragIndex.current;
+    if (from === null || from === dropIndex) {
+      setDragOverIndex(null);
+      return;
+    }
+    const reordered = [...editedModules];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(dropIndex, 0, moved);
+    setEditedModules(reordered);
+    // Keep selection on the moved module
+    setCurrentModuleIndex(dropIndex);
+    dragIndex.current = null;
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    dragIndex.current = null;
+    setDragOverIndex(null);
+  };
+
+  // Objective edit helpers
+  const updateObjective = (i: number, value: string) => {
+    const newObjs = [...currentModule!.learning_objectives];
+    newObjs[i] = value;
+    updateCurrentModule({ learning_objectives: newObjs });
+  };
+  const addObjective = () => {
+    updateCurrentModule({ learning_objectives: [...currentModule!.learning_objectives, ''] });
+  };
+  const removeObjective = (i: number) => {
+    updateCurrentModule({ learning_objectives: currentModule!.learning_objectives.filter((_, j) => j !== i) });
+  };
+
+  // Reading edit helpers
+  const updateReading = (ri: number, updates: Partial<Reading>) => {
+    const readings = currentModule!.recommended_readings.map((r, i) => i === ri ? { ...r, ...updates } : r);
+    updateCurrentModule({ recommended_readings: readings });
+  };
+  const updateReadingKeyPoint = (ri: number, ki: number, value: string) => {
+    const kps = [...currentModule!.recommended_readings[ri].key_points];
+    kps[ki] = value;
+    updateReading(ri, { key_points: kps });
+  };
+  const addReading = () => {
+    updateCurrentModule({ recommended_readings: [...(currentModule!.recommended_readings || []), { title: '', key_points: [''], rationale: '' }] });
+  };
+  const removeReading = (ri: number) => {
+    updateCurrentModule({ recommended_readings: currentModule!.recommended_readings.filter((_, i) => i !== ri) });
+  };
+
+  // Assignment edit helpers
+  const updateAssignment = (ai: number, updates: Partial<Assignment>) => {
+    const assignments = currentModule!.assignments.map((a, i) => i === ai ? { ...a, ...updates } : a);
+    updateCurrentModule({ assignments });
+  };
+  const addAssignment = () => {
+    updateCurrentModule({ assignments: [...(currentModule!.assignments || []), { title: '', type: 'essay', coverage: '' }] });
+  };
+  const removeAssignment = (ai: number) => {
+    updateCurrentModule({ assignments: currentModule!.assignments.filter((_, i) => i !== ai) });
+  };
+
+  const buildMarkdown = () => {
+    if (!curriculum) return '';
+    let md = `# Curriculum: ${topic}\n`;
+    md += `**Level:** ${level} | **Audience:** ${audience}`;
+    if (courseCode) md += ` | **Course Code:** ${courseCode}`;
+    md += '\n\n## Modules\n\n';
+    editedModules.forEach((m, i) => {
+      md += `### Module ${i + 1}: ${m.title} *(Complexity ${m.complexity_level}/5)*\n\n`;
+      md += `**Learning Objectives:**\n`;
+      m.learning_objectives.forEach(obj => (md += `- ${obj}\n`));
+      md += `\n**Narrative:** ${m.narrative_preview}\n\n`;
+      if (m.recommended_readings?.length > 0) {
+        md += `**Recommended Readings:**\n`;
+        m.recommended_readings.forEach(r => {
+          md += `- **${r.title}**\n`;
+          r.key_points?.forEach(kp => (md += `  - ${kp}\n`));
+          md += `  - *Why:* ${r.rationale}\n`;
+        });
+        md += '\n';
+      }
+      if (m.assignments?.length > 0) {
+        md += `**Assignments:**\n`;
+        m.assignments.forEach(a => (md += `- [${a.type?.toUpperCase()}] ${a.title} — ${a.coverage}\n`));
+        md += '\n';
+      }
+    });
+    md += `## Sources\n\n`;
+    curriculum.sources.forEach(s => (md += `- [${s.domain}](${s.url})\n`));
+    return md;
+  };
+
+  const handleCopyMarkdown = () => {
+    navigator.clipboard.writeText(buildMarkdown());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleExportMarkdown = () => {
+    const blob = new Blob([buildMarkdown()], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${topic.replace(/\s+/g, '_').toLowerCase()}_curriculum.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadIMSCC = () => {
+    const blob = new Blob(['Mock IMSCC Content'], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${topic.replace(/\s+/g, '_').toLowerCase()}_curriculum.imscc`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const currentModule = editedModules[currentModuleIndex] ?? null;
+  const citationGroups = curriculum
+    ? Array.from({ length: Math.ceil(curriculum.sources.length / CITATIONS_PER_PAGE) }, (_, i) =>
+        curriculum.sources.slice(i * CITATIONS_PER_PAGE, (i + 1) * CITATIONS_PER_PAGE)
+      )
+    : [];
+
+  return (
+    <div className="min-h-screen bg-[#F9F8F4] text-stone-800 selection:bg-nobel-gold selection:text-white">
+
+      {/* Navigation */}
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-[#F9F8F4]/90 backdrop-blur-md shadow-sm py-4' : 'bg-transparent py-6'}`}>
+        <div className="container mx-auto px-6 flex justify-between items-center">
+          <div className="flex items-center gap-4 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+            <div className="w-8 h-8 bg-nobel-gold rounded-full flex items-center justify-center text-white font-serif font-bold text-xl shadow-sm pb-1">C</div>
+            <span className={`font-serif font-bold text-lg tracking-wide transition-opacity ${scrolled ? 'opacity-100' : 'opacity-0 md:opacity-100'}`}>
+              CURRICULUM <span className="font-normal text-stone-500">ENGINE</span>
+            </span>
+          </div>
+          <div className="hidden md:flex items-center gap-8 text-sm font-medium tracking-wide text-stone-600">
+            <a href="#overview" onClick={scrollToSection('overview')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Overview</a>
+            <a href="#modules" onClick={scrollToSection('modules')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Modules</a>
+            <a href="#sources" onClick={scrollToSection('sources')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Sources</a>
+            <a href="#export" onClick={scrollToSection('export')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Export</a>
+          </div>
+          <button className="md:hidden text-stone-900 p-2" onClick={() => setMenuOpen(!menuOpen)}>
+            {menuOpen ? <X /> : <Menu />}
+          </button>
+        </div>
+      </nav>
+
+      {/* Mobile Menu */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-40 bg-[#F9F8F4] flex flex-col items-center justify-center gap-8 text-xl font-serif animate-fade-in">
+          <a href="#overview" onClick={scrollToSection('overview')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Overview</a>
+          <a href="#modules" onClick={scrollToSection('modules')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Modules</a>
+          <a href="#sources" onClick={scrollToSection('sources')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Sources</a>
+          <a href="#export" onClick={scrollToSection('export')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Export</a>
+        </div>
+      )}
+
+      {/* Hero */}
+      <header className="relative h-screen flex items-center justify-center overflow-hidden">
+        <HeroScene />
+        <div className="absolute inset-0 z-0 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(249,248,244,0.92)_0%,rgba(249,248,244,0.6)_50%,rgba(249,248,244,0.3)_100%)]" />
+        <div className="relative z-10 container mx-auto px-6 text-center">
+          <div className="inline-block mb-4 px-3 py-1 border border-nobel-gold text-nobel-gold text-xs tracking-[0.2em] uppercase font-bold rounded-full backdrop-blur-sm bg-white/30">
+            AI-Powered Design
+          </div>
+          <h1 className="font-serif text-5xl md:text-7xl lg:text-9xl font-medium leading-tight md:leading-[0.9] mb-8 text-stone-900 drop-shadow-sm">
+            Curriculum Engine <br /><span className="italic font-normal text-stone-600 text-3xl md:text-5xl block mt-4">Narrative Curriculum Design</span>
+          </h1>
+          <p className="max-w-2xl mx-auto text-lg md:text-xl text-stone-700 font-light leading-relaxed mb-12">
+            Generate comprehensive, narrative-driven educational modules tailored to your specific audience and accreditation standards.
+          </p>
+          <div className="flex justify-center">
+            <a href="#overview" onClick={scrollToSection('overview')} className="group flex flex-col items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors cursor-pointer">
+              <span>START DESIGNING</span>
+              <span className="p-2 border border-stone-300 rounded-full group-hover:border-stone-900 transition-colors bg-white/50">
+                <ArrowDown size={16} />
+              </span>
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        {/* OVERVIEW */}
+        <section id="overview" className="py-24 bg-white">
+          <div className="container mx-auto px-6 md:px-12 grid grid-cols-1 md:grid-cols-12 gap-12 items-start">
+            <div className="md:col-span-4">
+              <div className="inline-block mb-3 text-xs font-bold tracking-widest text-stone-500 uppercase">Overview</div>
+              <h2 className="font-serif text-4xl mb-6 leading-tight text-stone-900">Define Parameters</h2>
+              <div className="w-16 h-1 bg-nobel-gold mb-6"></div>
+              <p className="text-stone-600 leading-relaxed">
+                Provide the core parameters for your curriculum. The AI engine applies Bloom's Taxonomy, i+1 difficulty scaffolding, and cognitive load principles.
+              </p>
+            </div>
+            <div className="md:col-span-8">
+              <form onSubmit={handleGenerate} className="bg-[#F9F8F4] p-8 rounded-2xl border border-stone-200 shadow-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-2">Topic <span className="text-red-400">*</span></label>
+                    <input type="text" value={topic} onChange={e => setTopic(e.target.value)}
+                      placeholder="e.g. Introduction to Financial Accounting"
+                      className="w-full p-3 bg-white border border-stone-300 rounded-lg focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-2">
+                      Course Code <span className="text-stone-400 font-normal text-xs normal-case tracking-normal">optional</span>
+                    </label>
+                    <input type="text" value={courseCode} onChange={e => setCourseCode(e.target.value)}
+                      placeholder="e.g. ACCT 201"
+                      className="w-full p-3 bg-white border border-stone-300 rounded-lg focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-2">Level <span className="text-red-400">*</span></label>
+                    <input type="text" value={level} onChange={e => setLevel(e.target.value)}
+                      placeholder="e.g. Undergraduate Year 2"
+                      className="w-full p-3 bg-white border border-stone-300 rounded-lg focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-2">Audience <span className="text-red-400">*</span></label>
+                    <select value={audience} onChange={e => { setAudience(e.target.value); if (e.target.value !== 'custom') setAudienceCustom(''); }}
+                      className="w-full p-3 bg-white border border-stone-300 rounded-lg focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors" required>
+                      <option value="">Select discipline...</option>
+                      <option value="Business & Commerce">Business & Commerce</option>
+                      <option value="Computer Science & Engineering">Computer Science & Engineering</option>
+                      <option value="Humanities & Social Sciences">Humanities & Social Sciences</option>
+                      <option value="Natural Sciences">Natural Sciences</option>
+                      <option value="Health Sciences">Health Sciences</option>
+                      <option value="Education">Education</option>
+                      <option value="Arts & Design">Arts & Design</option>
+                      <option value="Law">Law</option>
+                      <option value="custom">Other / Custom...</option>
+                    </select>
+                    {audience === 'custom' && (
+                      <input type="text" value={audienceCustom} onChange={e => setAudienceCustom(e.target.value)}
+                        placeholder="e.g. Cross-listed Engineering & Business"
+                        className="w-full mt-2 p-3 bg-white border border-stone-300 rounded-lg focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors" required />
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-2">
+                      Accreditation Context <span className="text-stone-400 font-normal text-xs normal-case tracking-normal">optional</span>
+                    </label>
+                    <input type="text" value={accreditationContext} onChange={e => setAccreditationContext(e.target.value)}
+                      placeholder="e.g. CPA Canada, AACSB"
+                      className="w-full p-3 bg-white border border-stone-300 rounded-lg focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-2">Course Type</label>
+                    <select value={courseType} onChange={e => setCourseType(e.target.value)}
+                      className="w-full p-3 bg-white border border-stone-300 rounded-lg focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors">
+                      {COURSE_TYPES.map(ct => <option key={ct.value} value={ct.value}>{ct.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Module Count */}
+                <div className="mb-8">
+                  <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-3">Number of Modules</label>
+                  <div className="flex items-center gap-3">
+                    <div className="flex gap-2 flex-wrap">
+                      {['4', '6', '8', '10', '12'].map(n => (
+                        <button key={n} type="button" onClick={() => setModuleCount(n)}
+                          className={`w-10 h-10 rounded-lg text-sm font-bold transition-colors ${moduleCount === n ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-stone-400 text-sm">or</span>
+                    <input type="number" min="3" max="12" value={moduleCount} onChange={e => setModuleCount(e.target.value)}
+                      className="w-20 p-2 bg-white border border-stone-300 rounded-lg text-center text-sm font-bold focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors" />
+                  </div>
+                </div>
+
+                <button type="submit" disabled={isGenerating}
+                  className="w-full py-4 bg-stone-900 text-white font-bold uppercase tracking-widest rounded-lg hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+                  {isGenerating ? (
+                    <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>Generating...</>
+                  ) : 'Generate Curriculum'}
+                </button>
+              </form>
+
+              {isGenerating && !curriculum && (
+                <div className="mt-8 p-6 bg-stone-900 text-stone-300 rounded-xl font-mono text-sm overflow-hidden relative">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-nobel-gold/30">
+                    <div className="h-full bg-nobel-gold animate-pulse w-1/3"></div>
+                  </div>
+                  <p className="mb-2 text-nobel-gold uppercase tracking-widest text-xs font-bold">Receiving Stream...</p>
+                  <div className="whitespace-pre-wrap max-h-60 overflow-y-auto opacity-80">{streamText || 'Initializing AI engine...'}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* MODULES */}
+        <section id="modules" className="py-24 bg-white border-t border-stone-100">
+          <div className="container mx-auto px-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-start">
+
+              {/* Left sidebar */}
+              <div className="lg:col-span-4 sticky top-32">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-100 text-stone-600 text-xs font-bold tracking-widest uppercase rounded-full mb-6 border border-stone-200">
+                  <BookOpen size={14} /> STRUCTURE
+                </div>
+                <h2 className="font-serif text-4xl md:text-5xl mb-4 text-stone-900">Modules</h2>
+                <p className="text-sm text-stone-500 mb-6 leading-relaxed">
+                  Narrative-driven, i+1 scaffolded. {editedModules.length > 0 && <span className="text-stone-400">Drag to reorder.</span>}
+                </p>
+
+                {editedModules.length > 0 && (
+                  <div className="space-y-1.5">
+                    {editedModules.map((mod, idx) => (
+                      <div
+                        key={idx}
+                        draggable
+                        onDragStart={() => handleDragStart(idx)}
+                        onDragOver={e => handleDragOver(e, idx)}
+                        onDrop={e => handleDrop(e, idx)}
+                        onDragEnd={handleDragEnd}
+                        onClick={() => { setCurrentModuleIndex(idx); setActiveTab('objectives'); setIsEditing(false); }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-3 cursor-grab active:cursor-grabbing select-none ${
+                          idx === currentModuleIndex ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                        } ${dragOverIndex === idx && dragIndex.current !== idx ? 'border-2 border-nobel-gold' : 'border-2 border-transparent'}`}
+                      >
+                        <span className="font-mono text-xs opacity-50 w-4 shrink-0">{idx + 1}</span>
+                        <span className="truncate flex-1">{mod.title}</span>
+                        <span className="ml-auto flex gap-0.5 shrink-0">
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <span key={n} className={`w-1.5 h-1.5 rounded-full ${
+                              n <= Number(mod.complexity_level)
+                                ? idx === currentModuleIndex ? 'bg-nobel-gold' : 'bg-stone-400'
+                                : idx === currentModuleIndex ? 'bg-white/20' : 'bg-stone-300'
+                            }`} />
+                          ))}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Right — module card */}
+              <div className="lg:col-span-8">
+                {currentModule ? (
+                  <>
+                    {/* Navigation */}
+                    <div className="flex items-center justify-between mb-6">
+                      <button onClick={() => navigateModule(-1)} disabled={currentModuleIndex === 0}
+                        className="flex items-center gap-1 px-3 py-2 bg-stone-100 rounded-lg text-stone-700 hover:bg-stone-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm font-medium">
+                        <ChevronLeft size={16} /> Prev
+                      </button>
+                      <span className="font-serif text-stone-600">
+                        Module <span className="text-stone-900 font-bold">{currentModuleIndex + 1}</span>
+                        <span className="text-stone-400"> of {editedModules.length}</span>
+                      </span>
+                      <button onClick={() => navigateModule(1)} disabled={currentModuleIndex === editedModules.length - 1}
+                        className="flex items-center gap-1 px-3 py-2 bg-stone-100 rounded-lg text-stone-700 hover:bg-stone-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm font-medium">
+                        Next <ChevronRight size={16} />
+                      </button>
+                    </div>
+
+                    {/* Module Card */}
+                    <div className="bg-[#F9F8F4] border border-stone-200 rounded-2xl p-8 shadow-sm">
+                      {/* Header */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-stone-500 uppercase tracking-widest font-bold">Complexity</span>
+                          <div className="flex gap-1">
+                            {[1, 2, 3, 4, 5].map(n => (
+                              <div key={n} className={`h-2 w-7 rounded-full transition-colors ${n <= Number(currentModule.complexity_level) ? 'bg-nobel-gold' : 'bg-stone-300'}`} />
+                            ))}
+                          </div>
+                          <span className="text-xs text-stone-500 font-mono">{currentModule.complexity_level}/5</span>
+                        </div>
+                        <button onClick={() => isEditing ? handleSaveEdit() : setIsEditing(true)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                            isEditing ? 'bg-stone-900 text-white hover:bg-stone-700' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                          }`}>
+                          {isEditing ? <><Save size={12} /> Save</> : <><Pencil size={12} /> Edit</>}
+                        </button>
+                      </div>
+
+                      <div className="text-nobel-gold font-serif text-xl italic mb-2">Module {currentModuleIndex + 1}</div>
+
+                      {/* Title */}
+                      {isEditing ? (
+                        <input value={currentModule.title} onChange={e => updateCurrentModule({ title: e.target.value })}
+                          className="font-serif text-2xl text-stone-900 w-full border-b-2 border-nobel-gold bg-transparent outline-none mb-6 pb-1" />
+                      ) : (
+                        <h3 className="font-serif text-2xl text-stone-900 mb-6">{currentModule.title}</h3>
+                      )}
+
+                      {/* Tabs */}
+                      <div className="flex border-b border-stone-200 mb-6">
+                        {(['objectives', 'resources', 'assessment'] as const).map(tab => (
+                          <button key={tab} onClick={() => setActiveTab(tab)}
+                            className={`px-4 py-2 text-xs font-bold uppercase tracking-widest transition-colors ${
+                              activeTab === tab ? 'border-b-2 border-nobel-gold text-stone-900' : 'text-stone-400 hover:text-stone-700'
+                            }`}>
+                            {tab}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Tab: Objectives */}
+                      {activeTab === 'objectives' && (
+                        <>
+                          {isEditing ? (
+                            <div className="space-y-2 mb-6">
+                              {currentModule.learning_objectives.map((obj, i) => (
+                                <div key={i} className="flex gap-2 items-center">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-nobel-gold flex-shrink-0" />
+                                  <input value={obj} onChange={e => updateObjective(i, e.target.value)} className={`flex-1 ${inputCls}`} />
+                                  <button onClick={() => removeObjective(i)} className="text-stone-400 hover:text-red-500 transition-colors">
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                              <button onClick={addObjective} className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors mt-2">
+                                <Plus size={14} /> Add objective
+                              </button>
+                            </div>
+                          ) : (
+                            <ul className="space-y-2 mb-8">
+                              {currentModule.learning_objectives.map((obj, i) => (
+                                <li key={i} className="flex items-start gap-3 text-stone-700">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-nobel-gold mt-2 flex-shrink-0" />
+                                  <span className="leading-relaxed">{obj}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+
+                          <div>
+                            <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-3">Narrative Preview</h4>
+                            {isEditing ? (
+                              <textarea value={currentModule.narrative_preview} onChange={e => updateCurrentModule({ narrative_preview: e.target.value })}
+                                rows={4} className={inputCls + ' resize-none italic'} />
+                            ) : (
+                              <p className="text-stone-600 leading-relaxed italic border-l-2 border-stone-300 pl-4">"{currentModule.narrative_preview}"</p>
+                            )}
+                          </div>
+                        </>
+                      )}
+
+                      {/* Tab: Resources */}
+                      {activeTab === 'resources' && (
+                        <div className="space-y-4">
+                          {(currentModule.recommended_readings || []).map((r, ri) => (
+                            <div key={ri} className="bg-white rounded-xl p-5 border border-stone-200">
+                              {isEditing ? (
+                                <div className="space-y-3">
+                                  <div className="flex gap-2 items-start">
+                                    <input value={r.title} onChange={e => updateReading(ri, { title: e.target.value })}
+                                      placeholder="Reading title" className={`flex-1 ${inputCls} font-bold`} />
+                                    <button onClick={() => removeReading(ri)} className="text-stone-400 hover:text-red-500 mt-1 transition-colors">
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    {(r.key_points || []).map((kp, ki) => (
+                                      <div key={ki} className="flex gap-2 items-center">
+                                        <span className="text-nobel-gold font-bold">·</span>
+                                        <input value={kp} onChange={e => updateReadingKeyPoint(ri, ki, e.target.value)}
+                                          placeholder="Key point" className={`flex-1 ${inputCls}`} />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <input value={r.rationale} onChange={e => updateReading(ri, { rationale: e.target.value })}
+                                    placeholder="Why this reading is essential..." className={inputCls} />
+                                </div>
+                              ) : (
+                                <>
+                                  <h5 className="font-bold text-stone-900 mb-3 leading-snug">{r.title}</h5>
+                                  {r.key_points?.length > 0 && (
+                                    <ul className="space-y-1 mb-3">
+                                      {r.key_points.map((kp, j) => (
+                                        <li key={j} className="text-sm text-stone-600 flex items-start gap-2">
+                                          <span className="text-nobel-gold font-bold mt-0.5">·</span><span>{kp}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                  <div className="text-xs text-stone-500 border-t border-stone-100 pt-3 mt-3">
+                                    <span className="font-bold text-stone-400 uppercase tracking-wide mr-1">Why:</span>{r.rationale}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                          {isEditing && (
+                            <button onClick={addReading} className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors">
+                              <Plus size={14} /> Add reading
+                            </button>
+                          )}
+                          {!isEditing && (currentModule.recommended_readings || []).length === 0 && (
+                            <p className="text-stone-400 italic text-sm">No readings recommended for this module.</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Tab: Assessment */}
+                      {activeTab === 'assessment' && (
+                        <div className="space-y-4">
+                          {(currentModule.assignments || []).map((a, ai) => (
+                            <div key={ai} className="bg-white rounded-xl p-5 border border-stone-200">
+                              {isEditing ? (
+                                <div className="space-y-3">
+                                  <div className="flex gap-2 items-start">
+                                    <input value={a.title} onChange={e => updateAssignment(ai, { title: e.target.value })}
+                                      placeholder="Assignment title" className={`flex-1 ${inputCls} font-bold`} />
+                                    <button onClick={() => removeAssignment(ai)} className="text-stone-400 hover:text-red-500 mt-1 transition-colors">
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                  <select value={a.type} onChange={e => updateAssignment(ai, { type: e.target.value })}
+                                    className={inputCls}>
+                                    {ASSIGNMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                  </select>
+                                  <textarea value={a.coverage} onChange={e => updateAssignment(ai, { coverage: e.target.value })}
+                                    placeholder="Which concepts and objectives this covers..." rows={3}
+                                    className={inputCls + ' resize-none'} />
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <span className="px-2 py-0.5 bg-stone-100 text-stone-600 text-xs font-bold rounded uppercase tracking-wide">{a.type}</span>
+                                    <h5 className="font-bold text-stone-900">{a.title}</h5>
+                                  </div>
+                                  <p className="text-sm text-stone-600 leading-relaxed">{a.coverage}</p>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                          {isEditing && (
+                            <button onClick={addAssignment} className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors">
+                              <Plus size={14} /> Add assignment
+                            </button>
+                          )}
+                          {!isEditing && (currentModule.assignments || []).length === 0 && (
+                            <p className="text-stone-400 italic text-sm">No assignment for this module.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-stone-200 rounded-2xl text-stone-400">
+                    <BookOpen size={48} className="mb-4 opacity-20" />
+                    <p className="font-serif text-xl">Generate a curriculum to see modules.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* SOURCES */}
+        <section id="sources" className="py-24 bg-stone-900 text-stone-100 overflow-hidden relative">
+          <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+            <div className="w-96 h-96 rounded-full bg-stone-600 blur-[100px] absolute top-[-100px] left-[-100px]"></div>
+            <div className="w-96 h-96 rounded-full bg-nobel-gold blur-[100px] absolute bottom-[-100px] right-[-100px]"></div>
+          </div>
+          <div className="container mx-auto px-6 relative z-10">
+            <div className="max-w-2xl mx-auto w-full">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-800 text-nobel-gold text-xs font-bold tracking-widest uppercase rounded-full mb-6 border border-stone-700">
+                  CITATIONS
+                </div>
+                <h2 className="font-serif text-4xl md:text-5xl mb-8 text-white">Sources</h2>
+                {curriculum ? (
+                  <div className="space-y-3">
+                    <p className="text-xs text-stone-500 uppercase tracking-widest mb-4">
+                      {curriculum.sources.length} sources
+                    </p>
+                    {citationGroups.map((group, gi) => (
+                      <div key={gi} className="border border-stone-700 rounded-xl overflow-hidden">
+                        {/* Group header */}
+                        <button
+                          onClick={() => toggleCitationGroup(gi)}
+                          className="w-full flex items-center justify-between px-5 py-3 bg-stone-800/60 hover:bg-stone-800 transition-colors text-left"
+                        >
+                          <span className="text-sm font-bold text-stone-300">
+                            Sources {gi * CITATIONS_PER_PAGE + 1}–{Math.min((gi + 1) * CITATIONS_PER_PAGE, curriculum.sources.length)}
+                          </span>
+                          <ChevronRight
+                            size={14}
+                            className={`text-stone-500 transition-transform duration-200 ${openCitationGroups.has(gi) ? 'rotate-90' : ''}`}
+                          />
+                        </button>
+                        {/* Group body */}
+                        {openCitationGroups.has(gi) && (
+                          <div className="divide-y divide-stone-800">
+                            {group.map((source, idx) => (
+                              <a key={idx} href={source.url} target="_blank" rel="noopener noreferrer"
+                                className="flex items-start justify-between gap-4 px-5 py-3 bg-stone-900/40 hover:bg-stone-800/60 transition-colors group">
+                                <div className="min-w-0">
+                                  <span className="block font-bold text-stone-200 group-hover:text-nobel-gold transition-colors text-sm">{source.domain}</span>
+                                  <span className="block text-xs text-stone-500 truncate mt-0.5">{source.url}</span>
+                                </div>
+                                <span className="text-xs text-stone-600 shrink-0 mt-0.5">{source.retrieved_at}</span>
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-lg text-stone-500 leading-relaxed italic">Sources will appear here once the curriculum is generated.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* EXPORT */}
+        <section id="export" className="py-24 bg-white border-t border-stone-200">
+          <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
+            <div className="md:col-span-5 relative">
+              <div className="aspect-square bg-[#F5F4F0] rounded-xl overflow-hidden relative border border-stone-200 shadow-inner">
+                <QuantumComputerScene />
+                <div className="absolute bottom-4 left-0 right-0 text-center text-xs text-stone-400 font-serif italic">Curriculum Engine Visualization</div>
+              </div>
+            </div>
+            <div className="md:col-span-7 flex flex-col justify-center">
+              <div className="inline-block mb-3 text-xs font-bold tracking-widest text-stone-500 uppercase">EXPORT</div>
+              <h2 className="font-serif text-4xl mb-6 text-stone-900">Deploy Your Curriculum</h2>
+              <p className="text-lg text-stone-600 mb-8 leading-relaxed">
+                Export as an IMS Common Cartridge for direct LMS import, download as Markdown, or copy to clipboard.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <button onClick={handleDownloadIMSCC} disabled={!curriculum}
+                  className="flex items-center justify-center gap-2 px-5 py-4 bg-stone-900 text-white rounded-xl hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
+                  <Download size={16} /> .imscc
+                </button>
+                <button onClick={handleExportMarkdown} disabled={!curriculum}
+                  className="flex items-center justify-center gap-2 px-5 py-4 bg-white border-2 border-stone-200 text-stone-900 rounded-xl hover:border-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
+                  <FileText size={16} /> Export .md
+                </button>
+                <button onClick={handleCopyMarkdown} disabled={!curriculum}
+                  className="flex items-center justify-center gap-2 px-5 py-4 bg-white border-2 border-stone-200 text-stone-900 rounded-xl hover:border-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
+                  {copied ? <CheckCircle2 size={16} className="text-green-600" /> : <Copy size={16} />}
+                  {copied ? 'Copied!' : 'Copy .md'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="bg-stone-900 text-stone-400 py-16">
+        <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="text-center md:text-left">
+            <div className="text-white font-serif font-bold text-2xl mb-2">Curriculum Engine</div>
+            <p className="text-sm">AI-Powered Narrative Curriculum Design</p>
+          </div>
+        </div>
+        <div className="text-center mt-12 text-xs text-stone-600">
+          Bloom's Taxonomy · i+1 Scaffolding · Cognitive Load Theory
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default App;
