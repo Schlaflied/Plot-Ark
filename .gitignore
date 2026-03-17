@@ -27,6 +27,9 @@ Thumbs.db
 # Course materials (copyrighted slides/PDFs — not for distribution)
 data/materials/
 
+# Internal feedback / strategy docs
+docs/FEEDBACK.md
+
 # LightRAG generated storage (large vector DBs — regenerate with ingest.py)
 data/lightrag_storage/
 data/lightrag_storage_call/

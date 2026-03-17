@@ -149,6 +149,61 @@ docker compose up --build
 
 ---
 
+## Using the Knowledge Graph
+
+The knowledge graph feature lets you ingest your own course materials (PDFs or PPTXs) and explore them as an interactive concept map.
+
+### 1. Add your materials
+
+Drop your course PDFs and/or PPTXs into subject folders under `data/materials/`:
+
+```
+data/materials/
+├── your-subject/          ← one folder per subject
+│   ├── week1.pdf
+│   ├── week2.pptx
+│   └── ...
+└── another-subject/
+    └── ...
+```
+
+### 2. Run the ingestion script
+
+```bash
+# Set your OpenAI key first (used for gpt-4o-mini + text-embedding-3-small)
+export OPENAI_API_KEY=sk-...
+
+# Run inside the backend container
+docker compose exec backend python ingest.py \
+  --input data/materials/your-subject \
+  --storage data/lightrag_storage_yoursubject
+```
+
+Ingestion cost estimate: ~$0.10–0.30 per 10 PDFs (gpt-4o-mini rates).
+
+### 3. Register the subject in the backend
+
+In `backend/app.py`, add your subject to the `SUBJECT_MAP` (search for `lightrag_storage_call`) following the existing pattern.
+
+### 4. Add the tab in the frontend
+
+In `frontend/components/GraphViewer.tsx`, add your subject to `SUBJECT_TABS`:
+
+```tsx
+const SUBJECT_TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'business-law', label: 'Business Law' },
+  { key: 'call', label: 'CALL' },
+  { key: 'your-subject', label: 'Your Subject' },  // ← add here
+];
+```
+
+### 5. Open the Knowledge Graph tab
+
+Navigate to **Knowledge Graph** in the top nav. Select your subject tab, explore the concept map, and use the query bar to ask natural language questions about your materials.
+
+---
+
 ## Project Structure
 
 ```
