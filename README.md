@@ -11,6 +11,8 @@
 
 > Unlike static AI course generators, Plot Ark applies evidence-based instructional design principles — Bloom's Taxonomy, Krashen's i+1 difficulty scaffolding, and Cognitive Load Theory — so the curriculum it generates is structured the way learning actually works.
 
+> **Agentic pipeline** — a Tavily research agent searches real academic sources first, then injects verified URLs into the generation prompt. No hallucinated citations.
+
 > **Multi-provider AI** — switch between OpenAI (GPT-4o-mini) and Google Gemini via a single env variable. Bring your own key.
 
 ---
@@ -20,11 +22,13 @@
 <details>
 <summary><strong>Curriculum Generation</strong></summary>
 
+- **Agentic source research** — Tavily agent runs 3 targeted queries across 14 academic domains (JSTOR, Springer, ResearchGate, MIT, Stanford, Coursera…) before generation begins
+- **Grounded citations** — verified real URLs injected into the prompt; sources panel shows full paper titles, domains, and links
 - **Bloom's Taxonomy alignment** — course code (e.g. ACCT 301) automatically maps to the correct cognitive level (Remember → Create)
 - **i+1 difficulty progression** — complexity_level increases across modules so each one builds on the last
 - **Cognitive Load constraints** — max 2 readings per module, each with explicit pedagogical rationale
 - **Course typology** — project-based, essay, debate/roleplay, lab/simulation, or mixed assessment formats
-- **SSE streaming** — content streams token-by-token as it's generated
+- **SSE streaming** — content streams token-by-token; research agent status shown before generation starts
 
 </details>
 
@@ -66,9 +70,11 @@
 ```
 Parameters (topic, level, course_code, course_type, module_count)
         ↓
+Research Agent (Tavily) — 3 queries × 14 academic domains → verified sources
+        ↓
 Curriculum Agent — Bloom's mapping, i+1 scaffolding, cognitive load rules
         ↓
-Gemini API — streaming JSON generation (SSE)
+OpenAI / Gemini — streaming JSON generation (SSE) with grounded citations
         ↓
 Module Editor — instructor edits, reorders, approves
         ↓
@@ -89,6 +95,8 @@ xAPI behavior events → Curriculum Agent → Redis learner state → Narrative 
 | **Frontend** | React + TypeScript + Vite | Module editor, SSE client, drag-and-drop |
 | **Backend** | Python + Flask + SSE | Streaming curriculum generation |
 | **AI** | OpenAI GPT-4o-mini / Google Gemini | Content generation (pluggable via `AI_PROVIDER`) |
+| **Research Agent** | Tavily Search API | Pre-generation academic source retrieval |
+| **History** | PostgreSQL | Persistent curriculum storage with favorites |
 | **Cache** | Redis | Learner state (roadmap) |
 | **Knowledge Graph** | LightRAG + PostgreSQL + Apache AGE | Prerequisite inference (roadmap) |
 | **Behavior Data** | xAPI + LRS | Learner event stream (roadmap) |
@@ -99,7 +107,7 @@ xAPI behavior events → Curriculum Agent → Redis learner state → Narrative 
 
 ## Quick Start
 
-**Prerequisites:** Docker, an OpenAI or Gemini API key
+**Prerequisites:** Docker, an OpenAI or Gemini API key, a Tavily API key (free tier at tavily.com)
 
 ```bash
 git clone https://github.com/Schlaflied/Plot-Ark.git
@@ -107,7 +115,7 @@ cd Plot-Ark
 
 cp .env.example .env
 # Set AI_PROVIDER=openai or AI_PROVIDER=gemini
-# Add the corresponding API key
+# Add the corresponding API key + TAVILY_API_KEY
 
 docker compose up --build
 ```
@@ -147,7 +155,9 @@ plot-ark/
 - [x] Inline module editing (all fields)
 - [x] Drag-and-drop module reordering
 - [x] IMS Common Cartridge + Markdown export
-- [ ] PostgreSQL history — persist curricula across sessions
+- [x] Tavily agentic research pipeline — real academic sources before generation
+- [x] PostgreSQL history — persist, favorite, and delete curricula
+- [x] LMS-style module sidebar (D2L Brightspace-inspired layout)
 - [ ] xAPI statement ingestion
 - [ ] Redis learner state management
 - [ ] LightRAG + PostgreSQL/AGE knowledge graph
