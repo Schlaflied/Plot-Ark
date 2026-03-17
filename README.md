@@ -1,7 +1,7 @@
 # Plot Ark — Agentic Curriculum Engine
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![GitHub stars](https://img.shields.io/github/stars/Schlaflied/Plot-Ark?style=social)](https://github.com/Schlaflied/Plot-Ark/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/Schlaflied/Plot-Ark?style=social&cacheSeconds=1)](https://github.com/Schlaflied/Plot-Ark/stargazers)
 
 <p align="center">
   <img src="Logo_Agentic.png" alt="Plot Ark Logo" width="200"/>
