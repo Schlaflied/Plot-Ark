@@ -252,7 +252,6 @@ plot-ark/
 - [ ] Human-in-the-loop source review — approve/reject Tavily results before generation
 - [ ] xAPI statement ingestion
 - [ ] Redis learner state management
-- [ ] LightRAG + PostgreSQL/AGE knowledge graph
 - [ ] Professor LTM — preference learning from edit history
 - [ ] LTI 1.3 — push into Canvas / Moodle
 
