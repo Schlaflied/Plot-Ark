@@ -6,7 +6,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { HeroScene, QuantumComputerScene } from './components/QuantumScene';
 import { SurfaceCodeDiagram, TransformerDecoderDiagram } from './components/Diagrams';
-import { ArrowDown, Menu, X, BookOpen, Download, Copy, CheckCircle2, ChevronLeft, ChevronRight, FileText, Pencil, Save, Plus, Trash2, Clock, Star } from 'lucide-react';
+import GraphViewer from './components/GraphViewer';
+import { ArrowDown, Menu, X, BookOpen, Download, Copy, CheckCircle2, ChevronLeft, ChevronRight, FileText, Pencil, Save, Plus, Trash2, Clock, Star, Network } from 'lucide-react';
 
 interface Reading {
   title: string;
@@ -451,6 +452,10 @@ const App: React.FC = () => {
             <a href="#modules" onClick={scrollToSection('modules')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Modules</a>
             <a href="#sources" onClick={scrollToSection('sources')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Sources</a>
             <a href="#export" onClick={scrollToSection('export')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Export</a>
+            <a href="#knowledge-graph" onClick={scrollToSection('knowledge-graph')} className="flex items-center gap-1.5 hover:text-nobel-gold transition-colors cursor-pointer uppercase">
+              <Network size={14} />
+              Knowledge Graph
+            </a>
             <button onClick={handleOpenHistory} className="flex items-center gap-1.5 text-stone-500 hover:text-nobel-gold transition-colors uppercase">
               <Clock size={14} />
               History
@@ -469,6 +474,10 @@ const App: React.FC = () => {
           <a href="#modules" onClick={scrollToSection('modules')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Modules</a>
           <a href="#sources" onClick={scrollToSection('sources')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Sources</a>
           <a href="#export" onClick={scrollToSection('export')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Export</a>
+          <a href="#knowledge-graph" onClick={scrollToSection('knowledge-graph')} className="flex items-center gap-2 hover:text-nobel-gold transition-colors cursor-pointer uppercase">
+            <Network size={18} />
+            Knowledge Graph
+          </a>
         </div>
       )}
 
@@ -1057,6 +1066,20 @@ const App: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Knowledge Graph */}
+        <section id="knowledge-graph" className="py-24 bg-stone-900">
+          <div className="container mx-auto px-6">
+            <div className="max-w-xl mb-12">
+              <div className="text-xs tracking-[0.2em] text-stone-400 uppercase font-bold mb-3">Knowledge Graph</div>
+              <h2 className="font-serif text-4xl mb-6 text-white">Explore the Knowledge Network</h2>
+              <p className="text-lg text-stone-400 leading-relaxed">
+                Visualize relationships between concepts, topics, and resources. Click a node to inspect it, filter by name, or ask a question about the graph.
+              </p>
+            </div>
+            <GraphViewer />
           </div>
         </section>
       </main>

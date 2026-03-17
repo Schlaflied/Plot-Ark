@@ -23,3 +23,10 @@ frontend/.vite/
 # OS
 .DS_Store
 Thumbs.db
+
+# Course materials (copyrighted slides/PDFs — not for distribution)
+data/materials/
+
+# LightRAG generated storage (large vector DBs — regenerate with ingest.py)
+data/lightrag_storage/
+data/lightrag_storage_call/

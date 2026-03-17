@@ -2,6 +2,7 @@ import os
 import re
 import json
 import time
+import asyncio
 import psycopg2
 from flask import Flask, request, Response, stream_with_context
 from flask_cors import CORS
@@ -9,6 +10,32 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import google.generativeai as genai
 from tavily import TavilyClient
+
+# ---------------------------------------------------------------------------
+# Module-level caches
+# ---------------------------------------------------------------------------
+_rag_instances = {}       # key: storage_dir path → LightRAG instance
+_initialized_instances = set()  # storage_dirs that have had initialize_storages() called
+
+# Persistent background event loop — never closed, so LightRAG's internal state stays valid
+import threading as _threading
+_bg_loop = asyncio.new_event_loop()
+_bg_thread = _threading.Thread(target=_bg_loop.run_forever, daemon=True)
+_bg_thread.start()
+
+def _run_async(coro):
+    """Submit a coroutine to the persistent background event loop and wait for result."""
+    future = asyncio.run_coroutine_threadsafe(coro, _bg_loop)
+    return future.result(timeout=120)
+
+try:
+    import redis as _redis_lib
+    _redis_client = _redis_lib.Redis(host="redis", port=6379, db=0, decode_responses=True)
+    _redis_client.ping()
+    print("Redis cache connected.")
+except Exception as _redis_err:
+    print(f"Redis unavailable, caching disabled: {_redis_err}")
+    _redis_client = None
 
 load_dotenv()
 
@@ -485,6 +512,247 @@ def receive_xapi():
     obj = statement.get("object", {}).get("definition", {}).get("name", {}).get("en-US", "unknown")
     print(f"xAPI: {actor} {verb} {obj}")
     return {"status": "received"}, 200
+
+
+def _get_lightrag_instance(storage_dir: str = None):
+    """Return a cached LightRAG instance (not yet initialized — init happens inside async context)."""
+    from lightrag import LightRAG
+    from lightrag.llm.openai import gpt_4o_mini_complete, openai_embed
+    from lightrag.utils import EmbeddingFunc
+
+    if storage_dir is None:
+        backend_dir = os.path.dirname(os.path.abspath(__file__))
+        storage_dir = os.path.normpath(os.path.join(backend_dir, "..", "data", "lightrag_storage"))
+
+    if storage_dir in _rag_instances:
+        return _rag_instances[storage_dir]
+
+    rag = LightRAG(
+        working_dir=storage_dir,
+        llm_model_func=gpt_4o_mini_complete,
+        embedding_func=EmbeddingFunc(
+            embedding_dim=1536,
+            max_token_size=8192,
+            func=lambda texts: openai_embed(texts, model="text-embedding-3-small"),
+        ),
+    )
+    _rag_instances[storage_dir] = rag
+    return rag
+
+
+def _get_graphml_path(subject: str = "all") -> str:
+    """Return the path to the graphml file for a specific (non-all) subject."""
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    if subject == "call":
+        storage_dir = "lightrag_storage_call"
+    else:
+        storage_dir = "lightrag_storage"
+    return os.path.normpath(
+        os.path.join(backend_dir, "..", "data", storage_dir, "graph_chunk_entity_relation.graphml")
+    )
+
+
+def _get_all_graphml_paths() -> list:
+    """Return paths for both graph files used in the 'all' merged view."""
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.normpath(os.path.join(backend_dir, "..", "data"))
+    return [
+        os.path.join(data_dir, "lightrag_storage", "graph_chunk_entity_relation.graphml"),
+        os.path.join(data_dir, "lightrag_storage_call", "graph_chunk_entity_relation.graphml"),
+    ]
+
+
+def _parse_graph_from_file(graphml_path: str):
+    """Read a graphml file and return (nodes_dict, edges_set_data).
+
+    nodes_dict  → {node_id: attrs_dict}
+    edges_list  → list of (source, target, attrs_dict)
+    """
+    import networkx as nx
+    G = nx.read_graphml(graphml_path)
+    return G
+
+
+def _build_graph_response(graphs):
+    """Merge one or more networkx graphs and return filtered {nodes, edges} dicts.
+
+    Deduplication rules:
+    - Nodes: keyed by node ID. If the same ID appears in multiple graphs, keep the
+      version with more attributes (len(attrs)).
+    - Edges: keyed by (source, target, relation). First occurrence wins.
+    """
+    PERSON_TYPES = {"person", "PERSON"}
+    PERSON_DESC_PHRASES = ("a person", "a student", "a fictional")
+
+    merged_nodes = {}  # node_id → attrs dict
+    merged_edges = {}  # (source, target, relation) → attrs dict
+
+    for G in graphs:
+        for node_id, attrs in G.nodes(data=True):
+            nid = str(node_id)
+            if nid not in merged_nodes or len(attrs) > len(merged_nodes[nid]):
+                merged_nodes[nid] = dict(attrs)
+
+        for source, target, attrs in G.edges(data=True):
+            relation = attrs.get("relation", attrs.get("label", ""))
+            key = (str(source), str(target), relation)
+            if key not in merged_edges:
+                merged_edges[key] = dict(attrs)
+
+    # Filter PERSON nodes
+    filtered_node_ids = set()
+    nodes = []
+    for node_id, attrs in merged_nodes.items():
+        entity_type = attrs.get("entity_type", "")
+        raw_desc = attrs.get("description", "")
+        if raw_desc and "<SEP>" in raw_desc:
+            raw_desc = raw_desc.split("<SEP>")[0].strip()
+
+        if entity_type in PERSON_TYPES:
+            filtered_node_ids.add(node_id)
+            continue
+        if raw_desc and any(phrase in raw_desc.lower() for phrase in PERSON_DESC_PHRASES):
+            filtered_node_ids.add(node_id)
+            continue
+
+        nodes.append({
+            "id": node_id,
+            "label": attrs.get("label", node_id),
+            "entity_type": entity_type,
+            "description": raw_desc,
+        })
+
+    edges = []
+    for (source, target, relation), attrs in merged_edges.items():
+        if source in filtered_node_ids or target in filtered_node_ids:
+            continue
+        edges.append({
+            "source": source,
+            "target": target,
+            "label": attrs.get("label", relation),
+        })
+
+    return nodes, edges
+
+
+@app.route("/api/graph", methods=["GET"])
+def get_graph():
+    """Return knowledge graph nodes and edges from the LightRAG graphml file(s).
+
+    subject=all (default) → merge business-law + CALL graphs
+    subject=business-law  → business-law graph only
+    subject=call          → CALL graph only
+    """
+    import networkx as nx
+    subject = request.args.get("subject", "all")
+
+    try:
+        if subject == "all":
+            paths = _get_all_graphml_paths()
+            existing_paths = [p for p in paths if os.path.exists(p)]
+            if not existing_paths:
+                return {"nodes": [], "edges": [], "status": "not_ready"}
+            graphs = [nx.read_graphml(p) for p in existing_paths]
+        else:
+            graphml_path = _get_graphml_path(subject)
+            if not os.path.exists(graphml_path):
+                return {"nodes": [], "edges": [], "status": "not_ready"}
+            graphs = [nx.read_graphml(graphml_path)]
+
+        nodes, edges = _build_graph_response(graphs)
+        return {"nodes": nodes, "edges": edges, "status": "ready"}
+
+    except Exception as e:
+        print(f"Graph read error: {e}")
+        return {"nodes": [], "edges": [], "status": "error", "error": str(e)}, 500
+
+
+@app.route("/api/graph/query", methods=["POST"])
+def query_graph():
+    """Query the LightRAG knowledge graph and return an answer.
+
+    Accepts optional 'subject' field (default: 'business-law') to select which
+    knowledge graph to query. Uses:
+    - Layer A: module-level _rag_instances dict to avoid re-initializing LightRAG
+    - Layer B: Redis cache (TTL 24h) keyed on subject + normalized question
+    """
+    data = request.get_json()
+    question = data.get("question", "").strip()
+    mode = data.get("mode", "hybrid")
+    subject = data.get("subject", "business-law")
+
+    if not question:
+        return {"error": "Missing 'question' field."}, 400
+
+    graphml_path = _get_graphml_path(subject)
+    if not os.path.exists(graphml_path):
+        return {"answer": "Knowledge graph not initialized yet."}
+
+    def clean_answer(text: str) -> str:
+        """Strip markdown formatting and truncate to 3 sentences."""
+        text = re.sub(r'#{1,6}\s*', '', text)
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+        text = re.sub(r'\*(.*?)\*', r'\1', text)
+        text = re.sub(r'\[\d+\]', '', text)
+        text = re.sub(r'(?m)^\s*[-*•]\s+', '', text)
+        text = re.sub(r'\n{2,}', ' ', text)
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = text.strip()
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
+        result = ' '.join(sentences[:3])
+        if result and result[-1] not in '.!?':
+            result += '.'
+        return result
+
+    # --- Layer B: Redis cache check ---
+    normalized_q = question.lower().strip()
+    cache_key = f"graph_query:{subject}:{normalized_q}"
+    if _redis_client is not None:
+        try:
+            cached = _redis_client.get(cache_key)
+            if cached:
+                print(f"Redis cache hit: {cache_key}")
+                return {"answer": cached, "cached": True}
+        except Exception as redis_err:
+            print(f"Redis get error (skipping cache): {redis_err}")
+
+    try:
+        import asyncio
+        try:
+            from lightrag import QueryParam
+        except ImportError:
+            return {"answer": "Query engine not available in this environment. Run the backend locally with lightrag installed."}
+
+        # --- Layer A: use cached LightRAG instance (initialize_storages only called once) ---
+        backend_dir = os.path.dirname(os.path.abspath(__file__))
+        if subject == "call":
+            storage_dir = os.path.normpath(os.path.join(backend_dir, "..", "data", "lightrag_storage_call"))
+        else:
+            storage_dir = os.path.normpath(os.path.join(backend_dir, "..", "data", "lightrag_storage"))
+
+        async def _run_query():
+            rag = _get_lightrag_instance(storage_dir)
+            if storage_dir not in _initialized_instances:
+                await rag.initialize_storages()
+                _initialized_instances.add(storage_dir)
+            return await rag.aquery(question, param=QueryParam(mode=mode))
+
+        raw_answer = _run_async(_run_query())
+
+        answer = clean_answer(raw_answer)
+
+        # --- Layer B: store result in Redis ---
+        if _redis_client is not None:
+            try:
+                _redis_client.setex(cache_key, 86400, answer)
+            except Exception as redis_err:
+                print(f"Redis set error (skipping cache store): {redis_err}")
+
+        return {"answer": answer}
+    except Exception as e:
+        print(f"Graph query error: {e}")
+        return {"answer": f"Query failed: {str(e)}"}, 500
 
 
 init_db()

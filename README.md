@@ -55,11 +55,24 @@
 </details>
 
 <details>
+<summary><strong>Knowledge Graph (LightRAG)</strong></summary>
+
+- **Material ingestion** — upload course PDFs and PPTXs; `ingest.py` processes them into a LightRAG knowledge graph
+- **Subject tabs** — separate graphs per course (Business Law, CALL) or merged All view (994 nodes, 586 edges)
+- **Force-directed visualization** — interactive 2D graph with warm brown palette; node size scales with connection count
+- **Node detail panel** — click any concept to see its definition and connection count
+- **Concept search** — filter and highlight matching nodes across the graph
+- **Knowledge query** — ask natural language questions against the graph; Redis-cached answers (24h TTL)
+- **Query history** — starred + deletable history of past questions with subject tags
+- **Persistent event loop** — LightRAG async engine runs on a dedicated background thread; no cold-start penalty after first query
+
+</details>
+
+<details>
 <summary><strong>Agentic Layer (Roadmap)</strong></summary>
 
 - **xAPI event collection** — fine-grained learner behavior (watched, skipped, struggled)
 - **Redis learner state** — real-time profile (mastered / struggling / recommended_next)
-- **LightRAG + PostgreSQL/AGE** — knowledge graph built from uploaded textbooks, prerequisite inference
 - **Professor LTM** — system learns instructor preferences from edit history (diff-based, no surveys)
 - **Multilingual concept bridging** — explain in learner's native language, preserve English terminology
 
@@ -81,6 +94,12 @@ OpenAI / Gemini — streaming JSON generation (SSE) with grounded citations
 Module Editor — instructor edits, reorders, approves
         ↓
 Export — .imscc / .md → LMS
+
+Course Materials (PDF / PPTX)
+        ↓
+ingest.py — LightRAG ingestion (gpt-4o-mini + text-embedding-3-small)
+        ↓
+Knowledge Graph — force-directed concept map, natural language query, Redis cache
 ```
 
 **Planned agentic loop:**
@@ -100,7 +119,8 @@ xAPI behavior events → Curriculum Agent → Redis learner state → Narrative 
 | **Research Agent** | Tavily Search API | Pre-generation academic source retrieval |
 | **History** | PostgreSQL | Persistent curriculum storage with favorites |
 | **Cache** | Redis | Learner state (roadmap) |
-| **Knowledge Graph** | LightRAG + PostgreSQL + Apache AGE | Prerequisite inference (roadmap) |
+| **Knowledge Graph** | LightRAG + networkx + react-force-graph-2d | Course material ingestion → interactive concept graph |
+| **Graph Cache** | Redis + in-memory | Query result cache (24h TTL) + rag instance reuse |
 | **Behavior Data** | xAPI + LRS | Learner event stream (roadmap) |
 | **Export** | IMS Common Cartridge | LMS-compatible output |
 | **Dev** | Docker Compose | Single-command local environment |
@@ -135,14 +155,23 @@ docker compose up --build
 plot-ark/
 ├── docker-compose.yml
 ├── .env.example
+├── docs/
+│   ├── architecture.md
+│   └── FEEDBACK.md            ← External feedback log (ID practitioners)
 ├── frontend/                  ← React + TypeScript + Vite
 │   ├── Dockerfile
 │   ├── App.tsx                ← Main UI
 │   ├── components/
+│   │   └── GraphViewer.tsx    ← LightRAG knowledge graph viewer
 │   └── vite.config.ts
-└── backend/                   ← Flask
-    ├── Dockerfile
-    └── app.py                 ← SSE endpoint, Bloom's mapping, prompt engine
+├── backend/                   ← Flask
+│   ├── Dockerfile
+│   ├── app.py                 ← SSE endpoint, Bloom's mapping, graph API
+│   └── ingest.py              ← LightRAG ingestion script (PDF + PPTX)
+└── data/
+    ├── materials/             ← Drop course PDFs/PPTXs here (gitignored)
+    ├── lightrag_storage/      ← Business Law graph (gitignored, regenerate)
+    └── lightrag_storage_call/ ← CALL graph (gitignored, regenerate)
 ```
 
 ---
@@ -162,8 +191,10 @@ plot-ark/
 - [x] LMS-style module sidebar (D2L Brightspace-inspired layout)
 - [x] Multi-type resource pipeline — academic / video / news with type badges and estimated time
 - [x] Structure self-check with auto-retry — validates complexity progression and module count
+- [x] LightRAG knowledge graph — PDF/PPTX ingestion → interactive force-directed concept map
+- [x] Knowledge graph query — natural language Q&A against course material graph, Redis-cached
 - [ ] Assignment Timeline + Due Date calculator
-- [ ] LightRAG knowledge graph — upload course materials for grounded generation
+- [ ] Human-in-the-loop source review — approve/reject Tavily results before generation
 - [ ] xAPI statement ingestion
 - [ ] Redis learner state management
 - [ ] LightRAG + PostgreSQL/AGE knowledge graph
