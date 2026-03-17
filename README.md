@@ -11,6 +11,8 @@
 
 > Unlike static AI course generators, Plot Ark applies evidence-based instructional design principles — Bloom's Taxonomy, Krashen's i+1 difficulty scaffolding, and Cognitive Load Theory — so the curriculum it generates is structured the way learning actually works.
 
+> **Multi-provider AI** — switch between OpenAI (GPT-4o-mini) and Google Gemini via a single env variable. Bring your own key.
+
 ---
 
 ## Features
@@ -86,7 +88,7 @@ xAPI behavior events → Curriculum Agent → Redis learner state → Narrative 
 |-------|-----------|------|
 | **Frontend** | React + TypeScript + Vite | Module editor, SSE client, drag-and-drop |
 | **Backend** | Python + Flask + SSE | Streaming curriculum generation |
-| **AI** | Google Gemini API | Content generation |
+| **AI** | OpenAI GPT-4o-mini / Google Gemini | Content generation (pluggable via `AI_PROVIDER`) |
 | **Cache** | Redis | Learner state (roadmap) |
 | **Knowledge Graph** | LightRAG + PostgreSQL + Apache AGE | Prerequisite inference (roadmap) |
 | **Behavior Data** | xAPI + LRS | Learner event stream (roadmap) |
@@ -97,14 +99,15 @@ xAPI behavior events → Curriculum Agent → Redis learner state → Narrative 
 
 ## Quick Start
 
-**Prerequisites:** Docker, a Gemini API key
+**Prerequisites:** Docker, an OpenAI or Gemini API key
 
 ```bash
 git clone https://github.com/Schlaflied/Plot-Ark.git
 cd Plot-Ark
 
 cp .env.example .env
-# Add your GEMINI_API_KEY to .env
+# Set AI_PROVIDER=openai or AI_PROVIDER=gemini
+# Add the corresponding API key
 
 docker compose up --build
 ```
