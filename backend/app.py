@@ -96,7 +96,7 @@ def init_db():
     print("Could not connect to DB after 10 attempts. Continuing without DB.")
 
 
-def save_curriculum(topic, level, audience, course_code, course_type, module_count, data):
+def save_curriculum(topic, level, audience, course_code, course_type, module_count, data, design_approach="addie"):
     conn = get_db()
     if not conn:
         return
@@ -116,7 +116,61 @@ def save_curriculum(topic, level, audience, course_code, course_type, module_cou
         print(f"DB save error: {e}")
 
 
+BLOOMS_BY_LEARNER_LEVEL = {
+    "beginner": {
+        "label": "Remember and Understand",
+        "verbs": "define, identify, recall, describe, explain, summarize",
+        "constraint": "Learning objectives MUST use only Remember and Understand verbs: define, identify, recall, describe, explain, summarize. Do NOT use Apply, Analyze, Evaluate, or Create verbs.",
+    },
+    "intermediate": {
+        "label": "Apply and Analyze",
+        "verbs": "apply, demonstrate, differentiate, compare, examine, solve",
+        "constraint": "Learning objectives MUST use only Apply and Analyze verbs: apply, demonstrate, differentiate, compare, examine, solve. Do NOT use Remember, Understand, Evaluate, or Create verbs.",
+    },
+    "advanced": {
+        "label": "Evaluate and Create",
+        "verbs": "assess, critique, design, construct, argue, justify, synthesize",
+        "constraint": "Learning objectives MUST use only Evaluate and Create verbs: assess, critique, design, construct, argue, justify, synthesize. Do NOT use Remember, Understand, Apply, or Analyze verbs.",
+    },
+}
+
+
+LEVEL_TO_BLOOMS = {
+    # Undergraduate
+    "undergraduate-year-1": "beginner",
+    "undergraduate-year-2": "beginner",
+    "undergraduate-year-3": "intermediate",
+    "undergraduate-year-4": "intermediate",
+    # Graduate
+    "master-year-1": "advanced",
+    "master-year-2": "advanced",
+    "master-year-3": "advanced",
+    "doctoral": "advanced",
+    # Professional
+    "professional-beginner": "beginner",
+    "professional-intermediate": "intermediate",
+    "professional-advanced": "advanced",
+    # ESL/EFL
+    "esl-beginner": "beginner",
+    "esl-intermediate": "intermediate",
+    "esl-advanced": "advanced",
+    # K-12
+    "k12-elementary": "beginner",
+    "k12-middle": "beginner",
+    "k12-highschool": "intermediate",
+}
+
+_BLOOMS_TO_NARRATIVE = {
+    "beginner": "Remember and Understand — definitions, identification, basic comprehension",
+    "intermediate": "Apply and Analyze — case analysis, pattern recognition, comparative evaluation",
+    "advanced": "Analyze, Evaluate, and Create — synthesis, critique, independent judgment, original work",
+}
+
+
 def get_blooms_level(course_code, level):
+    # Check structured level key first
+    if str(level) in LEVEL_TO_BLOOMS:
+        return _BLOOMS_TO_NARRATIVE[LEVEL_TO_BLOOMS[str(level)]]
     num_match = re.search(r'\d{3}', str(course_code).upper())
     if num_match:
         num = int(num_match.group())
@@ -134,6 +188,49 @@ def get_blooms_level(course_code, level):
     elif any(k in level_lower for k in ['senior', '4th', 'advanced']):
         return "Apply, Analyze, and Evaluate — critical analysis with some synthesis"
     return "Understand and Apply — foundational understanding with practical application"
+
+
+def get_session_constraints(minutes):
+    """Return a prompt instruction string based on session duration in minutes."""
+    if minutes <= 75:
+        return (
+            "Session length: 75 minutes. "
+            "Each module must be completable in 75 minutes. "
+            "Max 1 required reading per module (≤15 min read). "
+            "Assignments must be short and focused (≤30 min completion time). "
+            "Prefer in-class discussion or quick reflection over lengthy projects."
+        )
+    elif minutes <= 90:
+        return (
+            "Session length: 90 minutes. "
+            "Each module fits a standard 90-minute university class. "
+            "Max 1-2 required readings per module (≤20 min read each). "
+            "Assignments should be completable in 45-60 minutes."
+        )
+    else:  # 3 hours or more
+        return (
+            f"Session length: {minutes} minutes (extended format). "
+            "Each module covers more ground with deeper engagement. "
+            "Up to 2-3 readings allowed per module. "
+            "Assignments can include workshop components, group activities, or multi-part tasks. "
+            "Include at least one in-class activity suggestion per module."
+        )
+
+
+def get_blooms_constraint(level):
+    """Return Bloom's verb constraint based on beginner/intermediate/advanced learner level."""
+    # Check structured level key first
+    if str(level) in LEVEL_TO_BLOOMS:
+        return BLOOMS_BY_LEARNER_LEVEL[LEVEL_TO_BLOOMS[str(level)]]["constraint"]
+    level_lower = str(level).lower()
+    if level_lower in BLOOMS_BY_LEARNER_LEVEL:
+        return BLOOMS_BY_LEARNER_LEVEL[level_lower]["constraint"]
+    # Fuzzy fallback
+    if any(k in level_lower for k in ['begin', 'intro', 'foundation', '100', '1st', 'first']):
+        return BLOOMS_BY_LEARNER_LEVEL["beginner"]["constraint"]
+    if any(k in level_lower for k in ['advanc', 'senior', 'graduate', 'expert', 'master', 'phd', 'doctoral']):
+        return BLOOMS_BY_LEARNER_LEVEL["advanced"]["constraint"]
+    return BLOOMS_BY_LEARNER_LEVEL["intermediate"]["constraint"]
 
 
 RESOURCE_TYPES = {
@@ -235,6 +332,14 @@ def generate_curriculum():
     course_code = data.get("course_code", "")
     course_type = data.get("course_type", "mixed")
     module_count_raw = data.get("module_count", "6")
+    design_approach = data.get("design_approach", "addie").lower()
+    if design_approach not in ("addie", "sam"):
+        design_approach = "addie"
+
+    try:
+        session_duration = max(1, int(data.get("session_duration", 90)))
+    except (ValueError, TypeError):
+        session_duration = 90
 
     if not all([topic, level, audience]):
         return {"error": "Missing required fields"}, 400
@@ -245,6 +350,8 @@ def generate_curriculum():
         module_count = 6
 
     blooms = get_blooms_level(course_code, level)
+    blooms_constraint = get_blooms_constraint(level)
+    session_constraint = get_session_constraints(session_duration)
     assessment_format = ASSESSMENT_FORMATS.get(course_type, ASSESSMENT_FORMATS["mixed"])
 
     # Step 1: Agent researches real sources before generation
@@ -256,6 +363,27 @@ def generate_curriculum():
             sources_context += f"- [{s['type']}] {s['title']} | {s['url']}\n"
         sources_context += "\nPrioritize these real URLs. You may add more you know with confidence, but do NOT invent URLs.\n"
 
+    # Build design-approach-specific instructions
+    if design_approach == "sam":
+        design_approach_label = "SAM (Successive Approximation Model)"
+        design_approach_instructions = """
+Design Approach — SAM (Successive Approximation Model):
+- Frame each module with ITERATIVE checkpoints rather than fixed deliverables.
+- Each module MUST include a "rapid_prototype_cycle" field: a brief description of the Rapid Prototype → Evaluate → Revise loop learners will go through.
+- Assignments should be framed as low-stakes prototypes designed to be revised, not final submissions.
+- The overall curriculum narrative should emphasize continuous iteration over linear completion.
+"""
+        sam_module_field = '''"rapid_prototype_cycle": "Description of the Rapid Prototype → Evaluate → Revise cycle for this module.",'''
+    else:
+        design_approach_label = "ADDIE (Analysis → Design → Development → Implementation → Evaluation)"
+        design_approach_instructions = """
+Design Approach — ADDIE (linear instructional design model):
+- Follow the standard linear flow: Analysis → Design → Development → Implementation → Evaluation.
+- Each module represents a discrete, completed stage of learning before the next begins.
+- Assignments are summative deliverables that demonstrate mastery of that module's objectives.
+"""
+        sam_module_field = ""
+
     prompt = f"""You are an expert curriculum designer applying evidence-based instructional design principles. Generate a rigorous, narrative-driven curriculum.
 
 Topic: {topic}
@@ -265,21 +393,30 @@ Target Audience: {audience}
 Accreditation Context: {accreditation_context}
 Course Type: {course_type}
 Number of Modules: {module_count}
+Design Approach: {design_approach_label}
 
 Pedagogical Constraints:
 - Bloom's Taxonomy Target: {blooms}
+- Bloom's Verb Constraint: {blooms_constraint}
+- Session Duration: {session_constraint}
 - Assessment Format: {assessment_format}
 - Difficulty Progression (i+1 principle, Krashen): complexity_level must start at 1 and reach 5 by the final module, increasing evenly — never jump more than 1 level per module.
 - Cognitive Load (Sweller): Maximum 2 recommended readings per module. Each reading must have a clear rationale tied to that module's learning objectives.
 - Not every module requires an assignment. When included, it must align with the module's Bloom's level and course type.
-
+- Assignment task_description: MUST be specific and actionable (e.g. "Write a 500-word reflection comparing two case studies..."), NOT generic (e.g. "This assignment addresses the objectives of..."). Failing this instruction makes the output unusable.
+- Assignment rubric_highlights: MUST contain exactly 3-4 concrete criteria describing what excellent work looks like for THIS specific task.
+- Assignment estimated_time: MUST be realistic given the session duration constraint above. A 75-min session cannot have a 3-hour assignment.
+{design_approach_instructions}
 Return ONLY valid JSON (no markdown, no explanation):
 {{
+  "design_approach": "{design_approach}",
+  "session_duration_minutes": {session_duration},
   "modules": [
     {{
       "title": "Module title",
       "complexity_level": 1,
-      "learning_objectives": ["objective at correct Bloom's level", "objective 2", "objective 3"],
+      "learning_objectives": ["objective using only the permitted Bloom's verbs for this level", "objective 2", "objective 3"],
+      {sam_module_field}
       "narrative_preview": "A compelling 2-3 sentence narrative hook using metaphor, scenario, or challenge framing.",
       "recommended_readings": [
         {{
@@ -293,9 +430,18 @@ Return ONLY valid JSON (no markdown, no explanation):
       ],
       "assignments": [
         {{
-          "title": "Assignment title",
-          "type": "essay | project | debate | lab | quiz | reflection",
-          "coverage": "Which specific learning objectives and concepts this addresses."
+          "type": "project | essay | quiz | discussion | presentation | lab | reflection",
+          "title": "Short assignment title",
+          "task_description": "2-3 sentence specific description of exactly what students must do. Must be concrete and actionable — NOT generic phrases like 'addresses the objectives of this module'.",
+          "deliverable": "What they hand in — e.g. '1-page written reflection', '10-slide deck', 'in-class oral presentation (5 min)'",
+          "estimated_time": "Realistic completion time given the session duration — e.g. '45 minutes', '2 hours'. Must match the session length constraint above.",
+          "covers_objectives": "Which specific learning objectives from this module this assessment addresses.",
+          "rubric_highlights": [
+            "Criterion 1 — description of what good work looks like",
+            "Criterion 2 — description of what good work looks like",
+            "Criterion 3 — description of what good work looks like",
+            "Criterion 4 — description of what good work looks like"
+          ]
         }}
       ]
     }}
@@ -391,7 +537,7 @@ For sources: use the verified real URLs provided above. Add more real sources yo
                     print("Retry succeeded")
                 except Exception as e:
                     print(f"Retry parse failed: {e}")
-            save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed)
+            save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed, design_approach)
             print(f"Saved curriculum: {topic}")
         except Exception as e:
             print(f"Failed to parse/save curriculum: {e}")

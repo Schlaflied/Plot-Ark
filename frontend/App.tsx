@@ -21,7 +21,12 @@ interface Reading {
 interface Assignment {
   title: string;
   type: string;
-  coverage: string;
+  coverage?: string;
+  task_description?: string;
+  deliverable?: string;
+  estimated_time?: string;
+  covers_objectives?: string;
+  rubric_highlights?: string[];
 }
 
 interface Module {
@@ -51,12 +56,62 @@ interface HistoryEntry {
 
 const CITATIONS_PER_PAGE = 5;
 
+const LEVEL_GROUPS = [
+  {
+    label: 'Undergraduate',
+    options: [
+      { value: 'undergraduate-year-1', label: 'Undergraduate Year 1' },
+      { value: 'undergraduate-year-2', label: 'Undergraduate Year 2' },
+      { value: 'undergraduate-year-3', label: 'Undergraduate Year 3' },
+      { value: 'undergraduate-year-4', label: 'Undergraduate Year 4' },
+    ],
+  },
+  {
+    label: 'Graduate',
+    options: [
+      { value: 'master-year-1', label: "Master's Year 1" },
+      { value: 'master-year-2', label: "Master's Year 2" },
+      { value: 'master-year-3', label: "Master's Year 3" },
+      { value: 'doctoral', label: 'Doctoral / PhD' },
+    ],
+  },
+  {
+    label: 'Professional / Continuing Ed',
+    options: [
+      { value: 'professional-beginner', label: 'Professional — Beginner' },
+      { value: 'professional-intermediate', label: 'Professional — Intermediate' },
+      { value: 'professional-advanced', label: 'Professional — Advanced' },
+    ],
+  },
+  {
+    label: 'Language Learning (ESL/EFL)',
+    options: [
+      { value: 'esl-beginner', label: 'ESL/EFL — Beginner (CLB 1-4)' },
+      { value: 'esl-intermediate', label: 'ESL/EFL — Intermediate (CLB 5-7)' },
+      { value: 'esl-advanced', label: 'ESL/EFL — Advanced (CLB 8+)' },
+    ],
+  },
+  {
+    label: 'K-12',
+    options: [
+      { value: 'k12-elementary', label: 'K-12 Elementary' },
+      { value: 'k12-middle', label: 'K-12 Middle School' },
+      { value: 'k12-highschool', label: 'K-12 High School' },
+    ],
+  },
+];
+
 const COURSE_TYPES = [
   { value: 'mixed', label: 'Mixed' },
   { value: 'project', label: 'Project-Based' },
   { value: 'essay', label: 'Essay / Research' },
   { value: 'debate', label: 'Debate / Roleplay' },
   { value: 'lab', label: 'Lab / Simulation' },
+];
+
+const DESIGN_APPROACHES = [
+  { value: 'addie', label: 'ADDIE — Linear (Analysis → Design → Development → Implementation → Evaluation)' },
+  { value: 'sam', label: 'SAM — Iterative (Rapid Prototype → Evaluate → Revise)' },
 ];
 
 const ASSIGNMENT_TYPES = ['essay', 'project', 'debate', 'lab', 'quiz', 'reflection'];
@@ -69,13 +124,26 @@ const App: React.FC = () => {
 
   // Form state
   const [topic, setTopic] = useState('');
-  const [level, setLevel] = useState('');
+  const [level, setLevel] = useState('undergraduate-year-1');
+  const [levelCustom, setLevelCustom] = useState('');
   const [audience, setAudience] = useState('');
   const [audienceCustom, setAudienceCustom] = useState('');
   const [accreditationContext, setAccreditationContext] = useState('');
   const [courseCode, setCourseCode] = useState('');
   const [moduleCount, setModuleCount] = useState('6');
   const [courseType, setCourseType] = useState('mixed');
+  const [designApproach, setDesignApproach] = useState('addie');
+  const [sessionDuration, setSessionDuration] = useState<string>('90');
+  const [sessionDurationCustomHours, setSessionDurationCustomHours] = useState('');
+  const [sessionDurationCustomMins, setSessionDurationCustomMins] = useState('');
+  const [levelOpen, setLevelOpen] = useState(false);
+  const levelDropdownRef = useRef<HTMLDivElement>(null);
+  const [audienceOpen, setAudienceOpen] = useState(false);
+  const audienceDropdownRef = useRef<HTMLDivElement>(null);
+  const [courseTypeOpen, setCourseTypeOpen] = useState(false);
+  const courseTypeDropdownRef = useRef<HTMLDivElement>(null);
+  const [designApproachOpen, setDesignApproachOpen] = useState(false);
+  const designApproachDropdownRef = useRef<HTMLDivElement>(null);
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -115,6 +183,17 @@ const App: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (levelDropdownRef.current && !levelDropdownRef.current.contains(e.target as Node)) setLevelOpen(false);
+      if (audienceDropdownRef.current && !audienceDropdownRef.current.contains(e.target as Node)) setAudienceOpen(false);
+      if (courseTypeDropdownRef.current && !courseTypeDropdownRef.current.contains(e.target as Node)) setCourseTypeOpen(false);
+      if (designApproachDropdownRef.current && !designApproachDropdownRef.current.contains(e.target as Node)) setDesignApproachOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const scrollToSection = (id: string) => (e: React.MouseEvent) => {
     e.preventDefault();
     setMenuOpen(false);
@@ -128,7 +207,8 @@ const App: React.FC = () => {
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     const effectiveAudience = audience === 'custom' ? audienceCustom : audience;
-    if (!topic || !level || !effectiveAudience) return;
+    const effectiveLevel = level === 'other' ? levelCustom : level;
+    if (!topic || !effectiveLevel || !effectiveAudience) return;
 
     setIsGenerating(true);
     setStreamText('');
@@ -144,11 +224,15 @@ const App: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topic, level, audience: effectiveAudience,
+          topic, level: effectiveLevel, audience: effectiveAudience,
           accreditation_context: accreditationContext,
           course_code: courseCode,
           module_count: moduleCount,
           course_type: courseType,
+          design_approach: designApproach,
+          session_duration: sessionDuration === 'other'
+            ? String((parseInt(sessionDurationCustomHours || '0') * 60) + parseInt(sessionDurationCustomMins || '0') || 90)
+            : sessionDuration,
         }),
       });
 
@@ -361,7 +445,7 @@ const App: React.FC = () => {
     updateCurrentModule({ assignments });
   };
   const addAssignment = () => {
-    updateCurrentModule({ assignments: [...(currentModule!.assignments || []), { title: '', type: 'essay', coverage: '' }] });
+    updateCurrentModule({ assignments: [...(currentModule!.assignments || []), { title: '', type: 'essay', task_description: '', deliverable: '', estimated_time: '', covers_objectives: '', rubric_highlights: [] }] });
   };
   const removeAssignment = (ai: number) => {
     updateCurrentModule({ assignments: currentModule!.assignments.filter((_, i) => i !== ai) });
@@ -389,7 +473,17 @@ const App: React.FC = () => {
       }
       if (m.assignments?.length > 0) {
         md += `**Assignments:**\n`;
-        m.assignments.forEach(a => (md += `- [${a.type?.toUpperCase()}] ${a.title} — ${a.coverage}\n`));
+        m.assignments.forEach(a => {
+          md += `- [${a.type?.toUpperCase()}] ${a.title}\n`;
+          if (a.task_description) md += `  ${a.task_description}\n`;
+          else if (a.coverage) md += `  ${a.coverage}\n`;
+          if (a.deliverable) md += `  *Deliverable:* ${a.deliverable}\n`;
+          if (a.estimated_time) md += `  *Time:* ${a.estimated_time}\n`;
+          if (a.rubric_highlights?.length) {
+            md += `  *Rubric:*\n`;
+            a.rubric_highlights.forEach(r => (md += `    - ${r}\n`));
+          }
+        });
         md += '\n';
       }
     });
@@ -599,25 +693,75 @@ const App: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-2">Level <span className="text-red-400">*</span></label>
-                    <input type="text" value={level} onChange={e => setLevel(e.target.value)}
-                      placeholder="e.g. Undergraduate Year 2"
-                      className="w-full p-3 bg-white border border-stone-300 rounded-lg focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors" required />
+                    <div ref={levelDropdownRef} className="relative">
+                      <button type="button"
+                        onClick={() => setLevelOpen(o => !o)}
+                        className="w-full p-3 bg-white border border-stone-300 rounded-lg text-left text-sm focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors flex items-center justify-between">
+                        <span className={level === 'other' ? 'text-stone-500' : 'text-stone-800'}>
+                          {level === 'other' ? 'Other / Custom' :
+                            LEVEL_GROUPS.flatMap(g => g.options).find(o => o.value === level)?.label ?? 'Select level...'}
+                        </span>
+                        <svg className={`w-4 h-4 text-stone-400 transition-transform ${levelOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                      </button>
+                      {levelOpen && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-72 overflow-y-auto">
+                          {LEVEL_GROUPS.map(group => (
+                            <div key={group.label}>
+                              <div className="px-3 py-1.5 text-xs font-bold text-stone-400 uppercase tracking-wider bg-stone-50 border-b border-stone-100">{group.label}</div>
+                              {group.options.map(opt => (
+                                <button key={opt.value} type="button"
+                                  onClick={() => { setLevel(opt.value); setLevelCustom(''); setLevelOpen(false); }}
+                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-amber-50 hover:text-amber-800 transition-colors ${level === opt.value ? 'bg-amber-50 text-amber-800 font-medium' : 'text-stone-700'}`}>
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          ))}
+                          <div className="border-t border-stone-100">
+                            <button type="button"
+                              onClick={() => { setLevel('other'); setLevelOpen(false); }}
+                              className={`w-full text-left px-4 py-2 text-sm hover:bg-amber-50 hover:text-amber-800 transition-colors ${level === 'other' ? 'bg-amber-50 text-amber-800 font-medium' : 'text-stone-500'}`}>
+                              Other / Custom
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {level === 'other' && (
+                      <input type="text" value={levelCustom} onChange={e => setLevelCustom(e.target.value)}
+                        placeholder="Describe the learner level..."
+                        className="w-full p-3 mt-2 bg-white border border-stone-300 rounded-lg focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors" required />
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-2">Audience <span className="text-red-400">*</span></label>
-                    <select value={audience} onChange={e => { setAudience(e.target.value); if (e.target.value !== 'custom') setAudienceCustom(''); }}
-                      className="w-full p-3 bg-white border border-stone-300 rounded-lg focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors" required>
-                      <option value="">Select discipline...</option>
-                      <option value="Business & Commerce">Business & Commerce</option>
-                      <option value="Computer Science & Engineering">Computer Science & Engineering</option>
-                      <option value="Humanities & Social Sciences">Humanities & Social Sciences</option>
-                      <option value="Natural Sciences">Natural Sciences</option>
-                      <option value="Health Sciences">Health Sciences</option>
-                      <option value="Education">Education</option>
-                      <option value="Arts & Design">Arts & Design</option>
-                      <option value="Law">Law</option>
-                      <option value="custom">Other / Custom...</option>
-                    </select>
+                    <div ref={audienceDropdownRef} className="relative">
+                      <button type="button" onClick={() => setAudienceOpen(o => !o)}
+                        className="w-full p-3 bg-white border border-stone-300 rounded-lg text-left text-sm focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors flex items-center justify-between">
+                        <span className={!audience ? 'text-stone-400' : 'text-stone-800'}>
+                          {!audience ? 'Select discipline...' : audience === 'custom' ? (audienceCustom || 'Other / Custom...') : audience}
+                        </span>
+                        <svg className={`w-4 h-4 text-stone-400 transition-transform ${audienceOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                      </button>
+                      {audienceOpen && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg overflow-hidden">
+                          {['Business & Commerce','Computer Science & Engineering','Humanities & Social Sciences','Natural Sciences','Health Sciences','Education','Arts & Design','Law'].map(opt => (
+                            <button key={opt} type="button"
+                              onClick={() => { setAudience(opt); setAudienceCustom(''); setAudienceOpen(false); }}
+                              className={`w-full text-left px-4 py-2 text-sm hover:bg-amber-50 hover:text-amber-800 transition-colors ${audience === opt ? 'bg-amber-50 text-amber-800 font-medium' : 'text-stone-700'}`}>
+                              {opt}
+                            </button>
+                          ))}
+                          <div className="border-t border-stone-100">
+                            <button type="button"
+                              onClick={() => { setAudience('custom'); setAudienceOpen(false); }}
+                              className={`w-full text-left px-4 py-2 text-sm hover:bg-amber-50 hover:text-amber-800 transition-colors ${audience === 'custom' ? 'bg-amber-50 text-amber-800 font-medium' : 'text-stone-500'}`}>
+                              Other / Custom...
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     {audience === 'custom' && (
                       <input type="text" value={audienceCustom} onChange={e => setAudienceCustom(e.target.value)}
                         placeholder="e.g. Cross-listed Engineering & Business"
@@ -634,10 +778,83 @@ const App: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-2">Course Type</label>
-                    <select value={courseType} onChange={e => setCourseType(e.target.value)}
-                      className="w-full p-3 bg-white border border-stone-300 rounded-lg focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors">
-                      {COURSE_TYPES.map(ct => <option key={ct.value} value={ct.value}>{ct.label}</option>)}
-                    </select>
+                    <div ref={courseTypeDropdownRef} className="relative">
+                      <button type="button" onClick={() => setCourseTypeOpen(o => !o)}
+                        className="w-full p-3 bg-white border border-stone-300 rounded-lg text-left text-sm focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors flex items-center justify-between">
+                        <span className="text-stone-800">{COURSE_TYPES.find(ct => ct.value === courseType)?.label}</span>
+                        <svg className={`w-4 h-4 text-stone-400 transition-transform ${courseTypeOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                      </button>
+                      {courseTypeOpen && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg overflow-hidden">
+                          {COURSE_TYPES.map(ct => (
+                            <button key={ct.value} type="button"
+                              onClick={() => { setCourseType(ct.value); setCourseTypeOpen(false); }}
+                              className={`w-full text-left px-4 py-2 text-sm hover:bg-amber-50 hover:text-amber-800 transition-colors ${courseType === ct.value ? 'bg-amber-50 text-amber-800 font-medium' : 'text-stone-700'}`}>
+                              {ct.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-2">Design Approach</label>
+                    <div ref={designApproachDropdownRef} className="relative">
+                      <button type="button" onClick={() => setDesignApproachOpen(o => !o)}
+                        className="w-full p-3 bg-white border border-stone-300 rounded-lg text-left text-sm focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors flex items-center justify-between">
+                        <span className="text-stone-800">{DESIGN_APPROACHES.find(da => da.value === designApproach)?.label}</span>
+                        <svg className={`w-4 h-4 text-stone-400 transition-transform ${designApproachOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                      </button>
+                      {designApproachOpen && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg overflow-hidden">
+                          {DESIGN_APPROACHES.map(da => (
+                            <button key={da.value} type="button"
+                              onClick={() => { setDesignApproach(da.value); setDesignApproachOpen(false); }}
+                              className={`w-full text-left px-4 py-2 text-sm hover:bg-amber-50 hover:text-amber-800 transition-colors ${designApproach === da.value ? 'bg-amber-50 text-amber-800 font-medium' : 'text-stone-700'}`}>
+                              {da.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Session Duration */}
+                <div className="mb-6">
+                  <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-3">Session Duration <span className="normal-case font-normal text-stone-400">(per session)</span></label>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {[
+                      { value: '75', label: '75 min (1.25 hrs)' },
+                      { value: '90', label: '90 min (1.5 hrs)' },
+                      { value: '180', label: '3 hours' },
+                      { value: 'other', label: 'Other / Custom' },
+                    ].map(opt => (
+                      <button key={opt.value} type="button" onClick={() => setSessionDuration(opt.value)}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors border ${sessionDuration === opt.value ? 'bg-stone-900 text-white border-stone-900' : 'bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200'}`}>
+                        {opt.label}
+                      </button>
+                    ))}
+                    {sessionDuration === 'other' && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number" min="0" max="8"
+                          placeholder="hrs"
+                          value={sessionDurationCustomHours}
+                          onChange={e => setSessionDurationCustomHours(e.target.value)}
+                          className="w-16 p-2 bg-white border border-stone-300 rounded-lg text-center text-sm font-bold focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors"
+                        />
+                        <span className="text-xs text-stone-400 font-medium">hr</span>
+                        <input
+                          type="number" min="0" max="59"
+                          placeholder="min"
+                          value={sessionDurationCustomMins}
+                          onChange={e => setSessionDurationCustomMins(e.target.value)}
+                          className="w-16 p-2 bg-white border border-stone-300 rounded-lg text-center text-sm font-bold focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors"
+                        />
+                        <span className="text-xs text-stone-400 font-medium">min</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -941,7 +1158,37 @@ const App: React.FC = () => {
                                     <span className="px-2 py-0.5 bg-stone-100 text-stone-600 text-xs font-bold rounded uppercase tracking-wide">{a.type}</span>
                                     <h5 className="font-bold text-stone-900">{a.title}</h5>
                                   </div>
-                                  <p className="text-sm text-stone-600 leading-relaxed">{a.coverage}</p>
+                                  {/* task_description replaces old generic coverage text */}
+                                  {a.task_description ? (
+                                    <p className="text-sm text-stone-700 leading-relaxed mb-3">{a.task_description}</p>
+                                  ) : a.coverage ? (
+                                    <p className="text-sm text-stone-600 leading-relaxed mb-3">{a.coverage}</p>
+                                  ) : null}
+                                  {a.deliverable && (
+                                    <div className="mb-2">
+                                      <span className="text-xs font-bold tracking-widest text-stone-400 uppercase">Deliverable</span>
+                                      <p className="text-sm text-stone-600 mt-0.5">{a.deliverable}</p>
+                                    </div>
+                                  )}
+                                  {a.estimated_time && (
+                                    <div className="mb-2 flex items-center gap-1.5">
+                                      <span className="text-stone-400 text-sm">⏱</span>
+                                      <span className="text-sm text-stone-600">{a.estimated_time}</span>
+                                    </div>
+                                  )}
+                                  {a.rubric_highlights && a.rubric_highlights.length > 0 && (
+                                    <div className="mt-3">
+                                      <span className="text-xs font-bold tracking-widest text-stone-400 uppercase">Rubric</span>
+                                      <ul className="mt-1 space-y-1">
+                                        {a.rubric_highlights.map((point, pi) => (
+                                          <li key={pi} className="flex items-start gap-2 text-sm text-stone-600">
+                                            <span className="text-stone-300 mt-0.5">•</span>
+                                            <span>{point}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
                                 </>
                               )}
                             </div>
