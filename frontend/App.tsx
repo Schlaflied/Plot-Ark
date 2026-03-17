@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { HeroScene, QuantumComputerScene } from './components/QuantumScene';
 import { SurfaceCodeDiagram, TransformerDecoderDiagram } from './components/Diagrams';
-import { ArrowDown, Menu, X, BookOpen, Download, Copy, CheckCircle2, ChevronLeft, ChevronRight, FileText, Pencil, Save, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, Menu, X, BookOpen, Download, Copy, CheckCircle2, ChevronLeft, ChevronRight, FileText, Pencil, Save, Plus, Trash2, Clock, Star } from 'lucide-react';
 
 interface Reading {
   title: string;
@@ -31,7 +31,18 @@ interface Module {
 
 interface CurriculumData {
   modules: Module[];
-  sources: { url: string; domain: string; retrieved_at: string }[];
+  sources: { title?: string; url: string; domain: string; retrieved_at: string }[];
+}
+
+interface HistoryEntry {
+  id: number;
+  created_at: string;
+  topic: string;
+  level: string;
+  course_code: string;
+  course_type: string;
+  module_count: number;
+  is_favorite: boolean;
 }
 
 const CITATIONS_PER_PAGE = 5;
@@ -65,6 +76,7 @@ const App: React.FC = () => {
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamText, setStreamText] = useState('');
+  const [agentStatus, setAgentStatus] = useState('');
   const [curriculum, setCurriculum] = useState<CurriculumData | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -80,6 +92,11 @@ const App: React.FC = () => {
 
   // Citations — collapsible groups of 5
   const [openCitationGroups, setOpenCitationGroups] = useState<Set<number>>(new Set([0]));
+
+  // History panel
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const toggleCitationGroup = (i: number) => {
     setOpenCitationGroups(prev => {
       const next = new Set(prev);
@@ -111,6 +128,7 @@ const App: React.FC = () => {
 
     setIsGenerating(true);
     setStreamText('');
+    setAgentStatus('');
     setCurriculum(null);
     setCurrentModuleIndex(0);
     setActiveTab('objectives');
@@ -167,6 +185,10 @@ const App: React.FC = () => {
             }
             try {
               const parsed = JSON.parse(data);
+              if (parsed.status) {
+                setAgentStatus(parsed.message || '');
+                continue;
+              }
               if (parsed.text) {
                 accumulatedText += parsed.text;
                 setStreamText(accumulatedText);
@@ -204,6 +226,61 @@ const App: React.FC = () => {
       localStorage.setItem('plot-ark-modules', JSON.stringify(editedModules));
     } catch {
       // localStorage unavailable
+    }
+  };
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch('/api/history');
+      const data = await res.json();
+      setHistoryEntries(data.history || []);
+    } catch {
+      setHistoryEntries([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleOpenHistory = () => {
+    setShowHistory(true);
+    fetchHistory();
+  };
+
+  const deleteHistory = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    await fetch(`/api/history/${id}`, { method: 'DELETE' });
+    setHistoryEntries(prev => prev.filter(h => h.id !== id));
+  };
+
+  const toggleFavorite = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    const res = await fetch(`/api/history/${id}/favorite`, { method: 'POST' });
+    const data = await res.json();
+    setHistoryEntries(prev => prev.map(h =>
+      h.id === id ? { ...h, is_favorite: data.is_favorite } : h
+    ).sort((a, b) => (b.is_favorite ? 1 : 0) - (a.is_favorite ? 1 : 0)));
+  };
+
+  const loadFromHistory = async (entry: HistoryEntry) => {
+    try {
+      const res = await fetch(`/api/history/${entry.id}`);
+      const data = await res.json();
+      const parsed: CurriculumData = { modules: data.modules, sources: data.sources };
+      setCurriculum(parsed);
+      setEditedModules(parsed.modules.map((m, i, arr) => ({
+        ...m,
+        complexity_level: Number(m.complexity_level) || Math.max(1, Math.round((i + 1) / arr.length * 5)),
+      })));
+      setCurrentModuleIndex(0);
+      setActiveTab('objectives');
+      setIsEditing(false);
+      setOpenCitationGroups(new Set([0]));
+      setShowHistory(false);
+      const el = document.getElementById('modules');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    } catch (e) {
+      console.error('Failed to load history entry', e);
     }
   };
 
@@ -366,6 +443,10 @@ const App: React.FC = () => {
             <a href="#modules" onClick={scrollToSection('modules')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Modules</a>
             <a href="#sources" onClick={scrollToSection('sources')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Sources</a>
             <a href="#export" onClick={scrollToSection('export')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Export</a>
+            <button onClick={handleOpenHistory} className="flex items-center gap-1.5 text-stone-500 hover:text-nobel-gold transition-colors uppercase">
+              <Clock size={14} />
+              History
+            </button>
           </div>
           <button className="md:hidden text-stone-900 p-2" onClick={() => setMenuOpen(!menuOpen)}>
             {menuOpen ? <X /> : <Menu />}
@@ -380,6 +461,68 @@ const App: React.FC = () => {
           <a href="#modules" onClick={scrollToSection('modules')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Modules</a>
           <a href="#sources" onClick={scrollToSection('sources')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Sources</a>
           <a href="#export" onClick={scrollToSection('export')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Export</a>
+        </div>
+      )}
+
+      {/* History Panel */}
+      {showHistory && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowHistory(false)} />
+          <div className="relative ml-auto w-full max-w-md bg-[#F9F8F4] h-full shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-stone-200">
+              <div className="flex items-center gap-2">
+                <Clock size={16} className="text-nobel-gold" />
+                <h2 className="font-serif text-lg font-semibold">History</h2>
+              </div>
+              <button onClick={() => setShowHistory(false)} className="text-stone-400 hover:text-stone-700 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {historyLoading ? (
+                <div className="flex items-center justify-center h-32 text-stone-400 text-sm">Loading...</div>
+              ) : historyEntries.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-32 text-stone-400 text-sm gap-2">
+                  <Clock size={24} className="opacity-30" />
+                  <span>No curricula generated yet.</span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {historyEntries.map(entry => (
+                    <div
+                      key={entry.id}
+                      onClick={() => loadFromHistory(entry)}
+                      className="w-full text-left p-4 bg-white border border-stone-200 rounded-xl hover:border-nobel-gold hover:shadow-sm transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="font-medium text-stone-800 group-hover:text-nobel-gold transition-colors truncate flex-1">{entry.topic}</div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={e => toggleFavorite(e, entry.id)}
+                            className={`p-1 rounded transition-colors ${entry.is_favorite ? 'text-nobel-gold' : 'text-stone-300 hover:text-nobel-gold'}`}
+                          >
+                            <Star size={13} fill={entry.is_favorite ? 'currentColor' : 'none'} />
+                          </button>
+                          <button
+                            onClick={e => deleteHistory(e, entry.id)}
+                            className="p-1 rounded text-stone-300 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="text-xs text-stone-400 mt-1 flex items-center gap-2 flex-wrap">
+                        <span>{entry.level}</span>
+                        {entry.course_code && <span className="px-1.5 py-0.5 bg-stone-100 rounded text-stone-500">{entry.course_code}</span>}
+                        <span>{entry.module_count} modules</span>
+                        <span className="ml-auto">{new Date(entry.created_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -512,8 +655,12 @@ const App: React.FC = () => {
                   <div className="absolute top-0 left-0 w-full h-1 bg-nobel-gold/30">
                     <div className="h-full bg-nobel-gold animate-pulse w-1/3"></div>
                   </div>
-                  <p className="mb-2 text-nobel-gold uppercase tracking-widest text-xs font-bold">Receiving Stream...</p>
-                  <div className="whitespace-pre-wrap max-h-60 overflow-y-auto opacity-80">{streamText || 'Initializing AI engine...'}</div>
+                  <p className="mb-2 text-nobel-gold uppercase tracking-widest text-xs font-bold">
+                    {agentStatus ? '🔍 Research Agent' : 'Generating...'}
+                  </p>
+                  <div className="whitespace-pre-wrap max-h-60 overflow-y-auto opacity-80">
+                    {agentStatus && !streamText ? agentStatus : (streamText || 'Initializing...')}
+                  </div>
                 </div>
               )}
             </div>
@@ -521,22 +668,28 @@ const App: React.FC = () => {
         </section>
 
         {/* MODULES */}
-        <section id="modules" className="py-24 bg-white border-t border-stone-100">
-          <div className="container mx-auto px-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-start">
+        <section id="modules" className="bg-white border-t border-stone-100 min-h-screen">
+          <div className="flex">
 
-              {/* Left sidebar */}
-              <div className="lg:col-span-4 sticky top-32">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-100 text-stone-600 text-xs font-bold tracking-widest uppercase rounded-full mb-6 border border-stone-200">
-                  <BookOpen size={14} /> STRUCTURE
+            {/* Left sidebar — LMS style */}
+            <div className="w-72 shrink-0 bg-white border-r border-stone-200 sticky top-20 h-[calc(100vh-80px)] flex flex-col overflow-hidden">
+              {/* Sidebar header */}
+              <div className="px-4 py-4 border-b border-stone-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <BookOpen size={13} className="text-nobel-gold" />
+                  <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">Course Structure</span>
                 </div>
-                <h2 className="font-serif text-4xl md:text-5xl mb-4 text-stone-900">Modules</h2>
-                <p className="text-sm text-stone-500 mb-6 leading-relaxed">
-                  Narrative-driven, i+1 scaffolded. {editedModules.length > 0 && <span className="text-stone-400">Drag to reorder.</span>}
-                </p>
+                {editedModules.length > 0 ? (
+                  <p className="text-xs text-stone-500">{editedModules.length} modules · drag to reorder</p>
+                ) : (
+                  <p className="text-xs text-stone-400">Generate a curriculum to begin</p>
+                )}
+              </div>
 
-                {editedModules.length > 0 && (
-                  <div className="space-y-1.5">
+              {/* Module list */}
+              <div className="flex-1 overflow-y-auto p-3">
+                {editedModules.length > 0 ? (
+                  <div className="space-y-1">
                     {editedModules.map((mod, idx) => (
                       <div
                         key={idx}
@@ -546,29 +699,32 @@ const App: React.FC = () => {
                         onDrop={e => handleDrop(e, idx)}
                         onDragEnd={handleDragEnd}
                         onClick={() => { setCurrentModuleIndex(idx); setActiveTab('objectives'); setIsEditing(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-3 cursor-grab active:cursor-grabbing select-none ${
-                          idx === currentModuleIndex ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                        className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all flex items-center gap-3 cursor-grab active:cursor-grabbing select-none ${
+                          idx === currentModuleIndex ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-100'
                         } ${dragOverIndex === idx && dragIndex.current !== idx ? 'border-2 border-nobel-gold' : 'border-2 border-transparent'}`}
                       >
-                        <span className="font-mono text-xs opacity-50 w-4 shrink-0">{idx + 1}</span>
-                        <span className="truncate flex-1">{mod.title}</span>
-                        <span className="ml-auto flex gap-0.5 shrink-0">
+                        <span className="font-mono text-xs opacity-40 w-4 shrink-0">{idx + 1}</span>
+                        <span className="truncate flex-1 leading-snug">{mod.title}</span>
+                        <span className="flex gap-0.5 shrink-0">
                           {[1, 2, 3, 4, 5].map(n => (
                             <span key={n} className={`w-1.5 h-1.5 rounded-full ${
                               n <= Number(mod.complexity_level)
                                 ? idx === currentModuleIndex ? 'bg-nobel-gold' : 'bg-stone-400'
-                                : idx === currentModuleIndex ? 'bg-white/20' : 'bg-stone-300'
+                                : idx === currentModuleIndex ? 'bg-white/20' : 'bg-stone-200'
                             }`} />
                           ))}
                         </span>
                       </div>
                     ))}
                   </div>
+                ) : (
+                  <div className="py-12 text-center text-stone-300 text-xs">No modules yet</div>
                 )}
               </div>
+            </div>
 
               {/* Right — module card */}
-              <div className="lg:col-span-8">
+              <div className="flex-1 min-w-0 p-8 lg:p-12">
                 {currentModule ? (
                   <>
                     {/* Navigation */}
@@ -780,7 +936,6 @@ const App: React.FC = () => {
                 )}
               </div>
             </div>
-          </div>
         </section>
 
         {/* SOURCES */}
@@ -823,8 +978,9 @@ const App: React.FC = () => {
                               <a key={idx} href={source.url} target="_blank" rel="noopener noreferrer"
                                 className="flex items-start justify-between gap-4 px-5 py-3 bg-stone-900/40 hover:bg-stone-800/60 transition-colors group">
                                 <div className="min-w-0">
-                                  <span className="block font-bold text-stone-200 group-hover:text-nobel-gold transition-colors text-sm">{source.domain}</span>
-                                  <span className="block text-xs text-stone-500 truncate mt-0.5">{source.url}</span>
+                                  <span className="block font-bold text-stone-200 group-hover:text-nobel-gold transition-colors text-sm">{source.title || source.domain}</span>
+                                  <span className="block text-xs text-stone-400 mt-0.5">{source.domain}</span>
+                                  <span className="block text-xs text-stone-600 truncate mt-0.5">{source.url}</span>
                                 </div>
                                 <span className="text-xs text-stone-600 shrink-0 mt-0.5">{source.retrieved_at}</span>
                               </a>

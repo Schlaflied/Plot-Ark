@@ -19,8 +19,21 @@ services:
     env_file: .env
     depends_on:
       - redis
+      - postgres
 
   redis:
     image: redis:alpine
     ports:
       - "6380:6379"
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: plotark
+      POSTGRES_USER: plotark
+      POSTGRES_PASSWORD: plotark
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

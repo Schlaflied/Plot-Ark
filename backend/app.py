@@ -8,6 +8,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from openai import OpenAI
 import google.generativeai as genai
+from tavily import TavilyClient
 
 load_dotenv()
 
@@ -17,6 +18,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 AI_PROVIDER = os.getenv("AI_PROVIDER", "openai").lower()
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
+tavily_client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://plotark:plotark@postgres:5432/plotark")
 
@@ -107,6 +109,46 @@ def get_blooms_level(course_code, level):
     return "Understand and Apply — foundational understanding with practical application"
 
 
+def research_sources(topic, level, audience):
+    """Step 1: Agent searches for real academic sources before generation."""
+    try:
+        queries = [
+            f"{topic} academic research {level}",
+            f"{topic} {audience} course materials syllabus",
+            f"{topic} key concepts textbook",
+        ]
+        results = []
+        for query in queries:
+            response = tavily_client.search(
+                query=query,
+                search_depth="basic",
+                max_results=4,
+                include_domains=["scholar.google.com", "jstor.org", "researchgate.net",
+                                  "academia.edu", "ncbi.nlm.nih.gov", "springer.com",
+                                  "tandfonline.com", "sagepub.com", "wiley.com",
+                                  "oxfordhandbooks.com", "cambridge.org", "mit.edu",
+                                  "stanford.edu", "coursera.org", "edx.org"]
+            )
+            for r in response.get("results", []):
+                results.append({
+                    "title": r.get("title", ""),
+                    "url": r.get("url", ""),
+                    "content": r.get("content", "")[:300],
+                })
+        # Deduplicate by URL
+        seen = set()
+        unique = []
+        for r in results:
+            if r["url"] not in seen:
+                seen.add(r["url"])
+                unique.append(r)
+        print(f"Tavily found {len(unique)} real sources for: {topic}")
+        return unique[:10]
+    except Exception as e:
+        print(f"Tavily research error: {e}")
+        return []
+
+
 ASSESSMENT_FORMATS = {
     "project": "project-based assignments (group projects, case studies, presentations, portfolios)",
     "essay": "essay-based assessments (argumentative essays, reflective journals, research papers)",
@@ -142,6 +184,15 @@ def generate_curriculum():
 
     blooms = get_blooms_level(course_code, level)
     assessment_format = ASSESSMENT_FORMATS.get(course_type, ASSESSMENT_FORMATS["mixed"])
+
+    # Step 1: Agent researches real sources before generation
+    real_sources = research_sources(topic, level, audience)
+    sources_context = ""
+    if real_sources:
+        sources_context = "\n\nReal academic sources found by research agent (use these URLs in your sources array — they are verified real):\n"
+        for s in real_sources:
+            sources_context += f"- {s['title']} | {s['url']}\n"
+        sources_context += "\nPrioritize these real URLs in your sources. You may add more real sources you know, but do NOT invent URLs.\n"
 
     prompt = f"""You are an expert curriculum designer applying evidence-based instructional design principles. Generate a rigorous, narrative-driven curriculum.
 
@@ -186,6 +237,7 @@ Return ONLY valid JSON (no markdown, no explanation):
   ],
   "sources": [
     {{
+      "title": "Full title of the paper, book chapter, or resource",
       "url": "https://example.com",
       "domain": "example.com",
       "retrieved_at": "2026-03-16"
@@ -195,9 +247,10 @@ Return ONLY valid JSON (no markdown, no explanation):
 
 Generate exactly {module_count} modules. complexity_level must start at 1 and reach 5 by the last module.
 
-For sources: generate as many real, relevant resources as naturally fit the topic — aim for broad coverage across the full curriculum, not just one or two modules. Include a mix of academic journals, textbooks, official standards bodies, professional associations, and reputable online resources. Each source must have a real URL."""
+For sources: use the verified real URLs provided above. Add more real sources you know with confidence. Every URL must be real and accessible.{sources_context}"""
 
     def event_stream():
+        yield f"data: {json.dumps({'status': 'researching', 'message': f'Agent searching for real sources on {topic}...'})}\n\n"
         full_text = ""
         try:
             if AI_PROVIDER == "gemini":
