@@ -142,8 +142,18 @@ def research_sources(topic, level, audience):
             if r["url"] not in seen:
                 seen.add(r["url"])
                 unique.append(r)
-        print(f"Tavily found {len(unique)} real sources for: {topic}")
-        return unique[:10]
+        # Filter: drop sources with no title or content clearly unrelated to topic
+        topic_keywords = set(topic.lower().split())
+        def is_relevant(r):
+            if not r["title"]:
+                return False
+            combined = (r["title"] + " " + r["content"]).lower()
+            return any(kw in combined for kw in topic_keywords)
+        filtered = [r for r in unique if is_relevant(r)]
+        if len(filtered) < 3:
+            filtered = unique  # fallback: keep all if filter too aggressive
+        print(f"Tavily found {len(unique)} sources, {len(filtered)} passed relevance filter for: {topic}")
+        return filtered[:10]
     except Exception as e:
         print(f"Tavily research error: {e}")
         return []
@@ -276,12 +286,53 @@ For sources: use the verified real URLs provided above. Add more real sources yo
             yield "data: [DONE]\n\n"
             return
         print(f"Stream complete, full_text length: {len(full_text)}")
-        # Save to DB BEFORE sending [DONE] — client disconnects on [DONE]
-        try:
-            clean = full_text.replace("```json\n", "").replace("```\n", "").replace("```", "").strip()
+
+        def parse_curriculum(text):
+            clean = text.replace("```json\n", "").replace("```\n", "").replace("```", "").strip()
             first = clean.index("{")
             last = clean.rindex("}")
-            parsed = json.loads(clean[first:last + 1])
+            return json.loads(clean[first:last + 1])
+
+        def validate_structure(parsed, expected_count):
+            """Check complexity_level progression and module count."""
+            modules = parsed.get("modules", [])
+            if len(modules) != expected_count:
+                return False, f"Expected {expected_count} modules, got {len(modules)}"
+            levels = [m.get("complexity_level", 0) for m in modules]
+            if levels[0] != 1:
+                return False, f"First module complexity should be 1, got {levels[0]}"
+            if levels[-1] != 5:
+                return False, f"Last module complexity should be 5, got {levels[-1]}"
+            for i in range(1, len(levels)):
+                if levels[i] < levels[i-1]:
+                    return False, f"Complexity decreased at module {i+1}"
+            return True, "ok"
+
+        # Save to DB BEFORE sending [DONE] — client disconnects on [DONE]
+        parsed = None
+        try:
+            parsed = parse_curriculum(full_text)
+            valid, reason = validate_structure(parsed, module_count)
+            if not valid:
+                print(f"Validation failed: {reason} — retrying once")
+                yield f"data: {json.dumps({'status': 'fixing', 'message': f'Fixing structure: {reason}...'})} \n\n"
+                fix_prompt = prompt + f"\n\nIMPORTANT: Your previous response had a structural error: {reason}. Fix it and return valid JSON only."
+                if AI_PROVIDER == "gemini":
+                    model = genai.GenerativeModel("gemini-2.0-flash-lite")
+                    retry_response = model.generate_content(fix_prompt)
+                    retry_text = retry_response.text
+                else:
+                    retry_response = openai_client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[{"role": "user", "content": fix_prompt}],
+                    )
+                    retry_text = retry_response.choices[0].message.content
+                try:
+                    parsed = parse_curriculum(retry_text)
+                    yield f"data: {json.dumps({'text': retry_text})}\n\n"
+                    print("Retry succeeded")
+                except Exception as e:
+                    print(f"Retry parse failed: {e}")
             save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed)
             print(f"Saved curriculum: {topic}")
         except Exception as e:
