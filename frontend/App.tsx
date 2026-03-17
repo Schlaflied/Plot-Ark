@@ -10,6 +10,9 @@ import { ArrowDown, Menu, X, BookOpen, Download, Copy, CheckCircle2, ChevronLeft
 
 interface Reading {
   title: string;
+  url?: string;
+  type?: string;
+  estimated_time?: string;
   key_points: string[];
   rationale: string;
 }
@@ -31,7 +34,7 @@ interface Module {
 
 interface CurriculumData {
   modules: Module[];
-  sources: { title?: string; url: string; domain: string; retrieved_at: string }[];
+  sources: { title?: string; url: string; domain: string; type?: string; estimated_time?: string; retrieved_at: string }[];
 }
 
 interface HistoryEntry {
@@ -187,6 +190,11 @@ const App: React.FC = () => {
               const parsed = JSON.parse(data);
               if (parsed.status) {
                 setAgentStatus(parsed.message || '');
+                continue;
+              }
+              if (parsed.reset) {
+                accumulatedText = '';
+                setStreamText('');
                 continue;
               }
               if (parsed.text) {
@@ -855,7 +863,20 @@ const App: React.FC = () => {
                                 </div>
                               ) : (
                                 <>
-                                  <h5 className="font-bold text-stone-900 mb-3 leading-snug">{r.title}</h5>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">
+                                      {r.type === 'video' ? '🎬' : r.type === 'news' ? '📰' : '📄'} {r.type || 'academic'}
+                                    </span>
+                                    {r.estimated_time && <span className="text-xs text-stone-400">{r.estimated_time}</span>}
+                                  </div>
+                                  {r.url ? (
+                                    <a href={r.url} target="_blank" rel="noopener noreferrer"
+                                      className="font-bold text-stone-900 hover:text-nobel-gold transition-colors mb-3 leading-snug block underline underline-offset-2 decoration-stone-300">
+                                      {r.title}
+                                    </a>
+                                  ) : (
+                                    <h5 className="font-bold text-stone-900 mb-3 leading-snug">{r.title}</h5>
+                                  )}
                                   {r.key_points?.length > 0 && (
                                     <ul className="space-y-1 mb-3">
                                       {r.key_points.map((kp, j) => (
@@ -977,10 +998,17 @@ const App: React.FC = () => {
                             {group.map((source, idx) => (
                               <a key={idx} href={source.url} target="_blank" rel="noopener noreferrer"
                                 className="flex items-start justify-between gap-4 px-5 py-3 bg-stone-900/40 hover:bg-stone-800/60 transition-colors group">
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                    <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-stone-800 text-stone-400">
+                                      {source.type === 'video' ? '🎬' : source.type === 'news' ? '📰' : '📄'} {source.type || 'academic'}
+                                    </span>
+                                    {source.estimated_time && (
+                                      <span className="text-xs text-stone-500">{source.estimated_time}</span>
+                                    )}
+                                  </div>
                                   <span className="block font-bold text-stone-200 group-hover:text-nobel-gold transition-colors text-sm">{source.title || source.domain}</span>
                                   <span className="block text-xs text-stone-400 mt-0.5">{source.domain}</span>
-                                  <span className="block text-xs text-stone-600 truncate mt-0.5">{source.url}</span>
                                 </div>
                                 <span className="text-xs text-stone-600 shrink-0 mt-0.5">{source.retrieved_at}</span>
                               </a>

@@ -109,32 +109,57 @@ def get_blooms_level(course_code, level):
     return "Understand and Apply — foundational understanding with practical application"
 
 
+RESOURCE_TYPES = {
+    "academic": {
+        "domains": ["jstor.org", "researchgate.net", "academia.edu", "ncbi.nlm.nih.gov",
+                    "springer.com", "tandfonline.com", "sagepub.com", "wiley.com",
+                    "oxfordhandbooks.com", "cambridge.org", "scholar.google.com"],
+        "queries": [
+            "{topic} academic research {level}",
+            "{topic} {audience} course materials",
+            "{topic} key concepts textbook",
+        ],
+        "max_per_query": 3,
+    },
+    "video": {
+        "domains": ["youtube.com", "ted.com", "coursera.org", "edx.org", "khanacademy.org"],
+        "queries": [
+            "{topic} lecture video course",
+            "{topic} TED talk introduction",
+        ],
+        "max_per_query": 2,
+    },
+    "news": {
+        "domains": ["hbr.org", "economist.com", "nytimes.com", "theguardian.com",
+                    "mit.edu", "stanford.edu", "bbc.com"],
+        "queries": [
+            "{topic} analysis report {level}",
+        ],
+        "max_per_query": 2,
+    },
+}
+
+
 def research_sources(topic, level, audience):
-    """Step 1: Agent searches for real academic sources before generation."""
+    """Step 1: Agent searches for real sources by type before generation."""
     try:
-        queries = [
-            f"{topic} academic research {level}",
-            f"{topic} {audience} course materials syllabus",
-            f"{topic} key concepts textbook",
-        ]
         results = []
-        for query in queries:
-            response = tavily_client.search(
-                query=query,
-                search_depth="basic",
-                max_results=4,
-                include_domains=["scholar.google.com", "jstor.org", "researchgate.net",
-                                  "academia.edu", "ncbi.nlm.nih.gov", "springer.com",
-                                  "tandfonline.com", "sagepub.com", "wiley.com",
-                                  "oxfordhandbooks.com", "cambridge.org", "mit.edu",
-                                  "stanford.edu", "coursera.org", "edx.org"]
-            )
-            for r in response.get("results", []):
-                results.append({
-                    "title": r.get("title", ""),
-                    "url": r.get("url", ""),
-                    "content": r.get("content", "")[:300],
-                })
+        for source_type, config in RESOURCE_TYPES.items():
+            for query_template in config["queries"]:
+                query = query_template.format(topic=topic, level=level, audience=audience)
+                response = tavily_client.search(
+                    query=query,
+                    search_depth="basic",
+                    max_results=config["max_per_query"],
+                    include_domains=config["domains"]
+                )
+                for r in response.get("results", []):
+                    results.append({
+                        "title": r.get("title", ""),
+                        "url": r.get("url", ""),
+                        "content": r.get("content", "")[:300],
+                        "type": source_type,
+                    })
         # Deduplicate by URL
         seen = set()
         unique = []
@@ -199,10 +224,10 @@ def generate_curriculum():
     real_sources = research_sources(topic, level, audience)
     sources_context = ""
     if real_sources:
-        sources_context = "\n\nReal academic sources found by research agent (use these URLs in your sources array — they are verified real):\n"
+        sources_context = "\n\nReal sources found by research agent — use these URLs in your sources array (they are verified real):\n"
         for s in real_sources:
-            sources_context += f"- {s['title']} | {s['url']}\n"
-        sources_context += "\nPrioritize these real URLs in your sources. You may add more real sources you know, but do NOT invent URLs.\n"
+            sources_context += f"- [{s['type']}] {s['title']} | {s['url']}\n"
+        sources_context += "\nPrioritize these real URLs. You may add more you know with confidence, but do NOT invent URLs.\n"
 
     prompt = f"""You are an expert curriculum designer applying evidence-based instructional design principles. Generate a rigorous, narrative-driven curriculum.
 
@@ -232,8 +257,11 @@ Return ONLY valid JSON (no markdown, no explanation):
       "recommended_readings": [
         {{
           "title": "Full title of reading (article, chapter, or textbook section)",
+          "url": "https://real-url-from-sources-above.com",
+          "type": "academic | video | news",
+          "estimated_time": "15 min read | 20 min video | 10 min read",
           "key_points": ["key point 1", "key point 2"],
-          "rationale": "Why this reading is essential for this module's specific learning objectives."
+          "rationale": "Why this reading is essential for this module's specific learning objectives and why it is relevant to students' lives or careers."
         }}
       ],
       "assignments": [
@@ -247,9 +275,11 @@ Return ONLY valid JSON (no markdown, no explanation):
   ],
   "sources": [
     {{
-      "title": "Full title of the paper, book chapter, or resource",
+      "title": "Full title of the paper, video, article, or resource",
       "url": "https://example.com",
       "domain": "example.com",
+      "type": "academic | video | news",
+      "estimated_time": "20 min read | 15 min video | 10 min read",
       "retrieved_at": "2026-03-16"
     }}
   ]
@@ -329,6 +359,7 @@ For sources: use the verified real URLs provided above. Add more real sources yo
                     retry_text = retry_response.choices[0].message.content
                 try:
                     parsed = parse_curriculum(retry_text)
+                    yield f"data: {json.dumps({'reset': True})}\n\n"
                     yield f"data: {json.dumps({'text': retry_text})}\n\n"
                     print("Retry succeeded")
                 except Exception as e:
