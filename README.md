@@ -22,8 +22,9 @@
 <details>
 <summary><strong>Curriculum Generation</strong></summary>
 
-- **Agentic source research** — Tavily agent runs 3 targeted queries across 14 academic domains (JSTOR, Springer, ResearchGate, MIT, Stanford, Coursera…) before generation begins
-- **Grounded citations** — verified real URLs injected into the prompt; sources panel shows full paper titles, domains, and links
+- **Agentic source research** — Tavily agent runs multi-type queries across academic (JSTOR, Springer, ResearchGate…), video (TED, Coursera, YouTube), and news (HBR, Economist, NYT) domains before generation begins
+- **Grounded citations** — verified real URLs injected into the prompt; sources panel shows full titles, type badges (📄/🎬/📰), and estimated read/watch time
+- **Structure self-check** — after generation, validates complexity_level progression and module count; auto-retries once if structure is invalid
 - **Bloom's Taxonomy alignment** — course code (e.g. ACCT 301) automatically maps to the correct cognitive level (Remember → Create)
 - **i+1 difficulty progression** — complexity_level increases across modules so each one builds on the last
 - **Cognitive Load constraints** — max 2 readings per module, each with explicit pedagogical rationale
@@ -39,6 +40,7 @@
 - **Drag-and-drop reordering** — restructure the sequence without regenerating
 - **Inline editing** — edit every field across all three tabs (Objectives, Resources, Assessment)
 - **Add / remove items** — learning objectives, readings, assignments all editable
+- **Resource cards** — each reading shows type badge, estimated time, and links directly to the source
 - **LocalStorage persistence** — edits survive page refresh
 
 </details>
@@ -158,6 +160,10 @@ plot-ark/
 - [x] Tavily agentic research pipeline — real academic sources before generation
 - [x] PostgreSQL history — persist, favorite, and delete curricula
 - [x] LMS-style module sidebar (D2L Brightspace-inspired layout)
+- [x] Multi-type resource pipeline — academic / video / news with type badges and estimated time
+- [x] Structure self-check with auto-retry — validates complexity progression and module count
+- [ ] Assignment Timeline + Due Date calculator
+- [ ] LightRAG knowledge graph — upload course materials for grounded generation
 - [ ] xAPI statement ingestion
 - [ ] Redis learner state management
 - [ ] LightRAG + PostgreSQL/AGE knowledge graph
