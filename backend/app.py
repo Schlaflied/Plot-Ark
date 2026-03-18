@@ -765,14 +765,35 @@ def get_curriculum_by_id(curriculum_id):
         conn.close()
         if not row:
             return {"error": "Not found"}, 404
+        # modules/sources are stored via json.dumps so psycopg2 may return
+        # them as a raw string (if JSONB oid decoding is not registered).
+        # Normalise to Python objects defensively.
+        def _decode(val):
+            if isinstance(val, str):
+                try:
+                    return json.loads(val)
+                except Exception:
+                    return []
+            return val if val is not None else []
+        modules = _decode(row[5])
+        sources = _decode(row[6])
+        # Ensure every module has the expected array fields so the frontend
+        # never calls .map() on null/undefined.
+        for m in (modules if isinstance(modules, list) else []):
+            if not isinstance(m.get("learning_objectives"), list):
+                m["learning_objectives"] = []
+            if not isinstance(m.get("recommended_readings"), list):
+                m["recommended_readings"] = []
+            if not isinstance(m.get("assignments"), list):
+                m["assignments"] = []
         return {
             "topic": row[0],
             "level": row[1],
             "audience": row[2],
             "course_code": row[3] or "",
             "course_type": row[4] or "mixed",
-            "modules": row[5],
-            "sources": row[6],
+            "modules": modules,
+            "sources": sources,
         }
     except Exception as e:
         return {"error": str(e)}, 500

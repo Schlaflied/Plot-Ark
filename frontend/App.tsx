@@ -409,6 +409,7 @@ const App: React.FC = () => {
   // Citations — collapsible groups of 5
   const [openCitationGroups, setOpenCitationGroups] = useState<Set<number>>(new Set([0]));
 
+
   // History panel (curriculum)
   const [showHistory, setShowHistory] = useState(false);
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
@@ -682,11 +683,15 @@ const App: React.FC = () => {
     try {
       const res = await fetch(`/api/history/${entry.id}`);
       const data = await res.json();
-      const parsed: CurriculumData = { modules: data.modules, sources: data.sources };
+      const parsed: CurriculumData = { modules: data.modules || [], sources: data.sources || [] };
       setCurriculum(parsed);
       setEditedModules(parsed.modules.map((m, i, arr) => ({
         ...m,
         complexity_level: Number(m.complexity_level) || Math.max(1, Math.round((i + 1) / arr.length * 5)),
+        // Normalise array fields so render never calls .map() on null/undefined
+        learning_objectives: Array.isArray(m.learning_objectives) ? m.learning_objectives : [],
+        recommended_readings: Array.isArray(m.recommended_readings) ? m.recommended_readings : [],
+        assignments: Array.isArray(m.assignments) ? m.assignments : [],
       })));
       setLoadedCurriculumMeta({ topic: data.topic || '', level: data.level || '', audience: data.audience || '' });
       setPreviewSources([]);
@@ -842,7 +847,7 @@ const App: React.FC = () => {
       }
     });
     md += `## Sources\n\n`;
-    curriculum.sources.forEach(s => (md += `- [${s.domain}](${s.url})\n`));
+    (curriculum.sources ?? []).forEach(s => (md += `- [${s.domain}](${s.url})\n`));
     return md;
   };
 
@@ -894,8 +899,8 @@ const App: React.FC = () => {
 
   const currentModule = editedModules[currentModuleIndex] ?? null;
   const citationGroups = curriculum
-    ? Array.from({ length: Math.ceil(curriculum.sources.length / CITATIONS_PER_PAGE) }, (_, i) =>
-        curriculum.sources.slice(i * CITATIONS_PER_PAGE, (i + 1) * CITATIONS_PER_PAGE)
+    ? Array.from({ length: Math.ceil((curriculum.sources ?? []).length / CITATIONS_PER_PAGE) }, (_, i) =>
+        (curriculum.sources ?? []).slice(i * CITATIONS_PER_PAGE, (i + 1) * CITATIONS_PER_PAGE)
       )
     : [];
 
@@ -1644,7 +1649,7 @@ const App: React.FC = () => {
                         <>
                           {isEditing && viewMode === 'professor' ? (
                             <div className="space-y-2 mb-6">
-                              {currentModule.learning_objectives.map((obj, i) => (
+                              {(currentModule.learning_objectives || []).map((obj, i) => (
                                 <div key={i} className="flex gap-2 items-center">
                                   <div className="w-1.5 h-1.5 rounded-full bg-nobel-gold flex-shrink-0" />
                                   <input value={obj} onChange={e => updateObjective(i, e.target.value)} className={`flex-1 ${inputCls}`} />
@@ -1659,7 +1664,7 @@ const App: React.FC = () => {
                             </div>
                           ) : (
                             <ul className="space-y-2 mb-8">
-                              {currentModule.learning_objectives.map((obj, i) => (
+                              {(currentModule.learning_objectives || []).map((obj, i) => (
                                 <li key={i} className="flex items-start gap-3 text-stone-700">
                                   <div className="w-1.5 h-1.5 rounded-full bg-nobel-gold mt-2 flex-shrink-0" />
                                   <span className="leading-relaxed">{obj}</span>
@@ -1991,7 +1996,7 @@ const App: React.FC = () => {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between mb-4">
                       <p className="text-xs text-stone-500 uppercase tracking-widest">
-                        {curriculum.sources.length} sources
+                        {(curriculum.sources ?? []).length} sources
                       </p>
                       {previewSources.length > 0 ? (
                         <button
@@ -2005,7 +2010,7 @@ const App: React.FC = () => {
                         >
                           ← Regenerate with Different Sources
                         </button>
-                      ) : loadedCurriculumMeta && !isStudentView && (
+                      ) : loadedCurriculumMeta && viewMode === 'professor' && (
                         <button
                           onClick={handleReresearch}
                           disabled={isFetchingSources}
@@ -2023,7 +2028,7 @@ const App: React.FC = () => {
                           className="w-full flex items-center justify-between px-5 py-3 bg-stone-800/60 hover:bg-stone-800 transition-colors text-left"
                         >
                           <span className="text-sm font-bold text-stone-300">
-                            Sources {gi * CITATIONS_PER_PAGE + 1}–{Math.min((gi + 1) * CITATIONS_PER_PAGE, curriculum.sources.length)}
+                            Sources {gi * CITATIONS_PER_PAGE + 1}–{Math.min((gi + 1) * CITATIONS_PER_PAGE, (curriculum.sources ?? []).length)}
                           </span>
                           <ChevronRight
                             size={14}
