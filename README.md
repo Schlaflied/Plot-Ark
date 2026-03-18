@@ -17,6 +17,20 @@
 
 ---
 
+## Demo
+
+**Curriculum Generation** — research agent → streaming generation → module editor
+
+![Curriculum Generation](docs/curriculum%20generate.gif)
+
+**Knowledge Graph** — concept map, node detail, natural language query with node highlight
+
+![Knowledge Graph](docs/knowledge%20graph.gif)
+
+▶ [Full demo video (Google Drive)](https://drive.google.com/file/d/1FQlOdrFeK6z3-vcjRDw2cdmhrmC0JI9J/view?usp=drive_link)
+
+---
+
 ## Features
 
 <details>
