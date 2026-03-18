@@ -284,7 +284,7 @@ const GraphViewer: React.FC = () => {
       const res = await fetch('/api/graph/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: question.trim(), mode: 'hybrid' }),
+        body: JSON.stringify({ question: question.trim(), mode: 'hybrid', subject: activeSubject === 'all' ? 'business-law' : activeSubject }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -295,14 +295,21 @@ const GraphViewer: React.FC = () => {
       // Highlight and pan to matched node if backend returned one
       const matchedNodeId: string | null = data.matched_node_id ?? null;
       if (matchedNodeId !== null && graphData) {
-        const matchedNode = graphData.nodes.find(n => String(n.id) === matchedNodeId) ?? null;
+        // Try id match first, fall back to label match
+        const matchedNode = (
+          graphData.nodes.find(n => String(n.id) === matchedNodeId) ??
+          graphData.nodes.find(n => (n as FGNode).label?.toLowerCase() === question.trim().toLowerCase())
+        ) ?? null;
         if (matchedNode) {
           setSelectedNode(matchedNode);
-          const n = matchedNode as FGNode;
-          if (fgRef.current && n.x != null && n.y != null) {
-            fgRef.current.centerAt(n.x, n.y, 1000);
-            fgRef.current.zoom(2, 1000);
-          }
+          // Delay to let React re-render + ensure force-graph has set x/y
+          setTimeout(() => {
+            const n = matchedNode as FGNode;
+            if (fgRef.current && n.x != null && n.y != null) {
+              fgRef.current.centerAt(n.x, n.y, 800);
+              fgRef.current.zoom(3, 800);
+            }
+          }, 150);
         }
       }
     } catch (err) {

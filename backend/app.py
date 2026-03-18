@@ -1037,7 +1037,20 @@ def query_graph():
             cached = _redis_client.get(cache_key)
             if cached:
                 print(f"Redis cache hit: {cache_key}")
-                return {"answer": cached, "subject": subject, "matched_node_id": None, "cached": True}
+                # Still resolve matched_node_id from the graph even on cache hit
+                cached_node_id = None
+                try:
+                    import networkx as nx
+                    _G = nx.read_graphml(graphml_path)
+                    _q = question.lower().strip()
+                    for _nid, _attrs in _G.nodes(data=True):
+                        _lbl = _attrs.get("label", str(_nid)).lower()
+                        if _lbl == _q or _lbl.startswith(_q) or _q in _lbl:
+                            cached_node_id = str(_nid)
+                            break
+                except Exception:
+                    pass
+                return {"answer": cached, "subject": subject, "matched_node_id": cached_node_id, "cached": True}
         except Exception as redis_err:
             print(f"Redis get error (skipping cache): {redis_err}")
 
@@ -1103,7 +1116,7 @@ def query_graph():
 
         answer = clean_answer(raw_answer)
 
-        # --- Fallback: if LightRAG has no answer, use best-matching node description ---
+        # --- Find best matching node for highlight (runs for ALL queries) ---
         NO_INFO_PHRASES = [
             "not have enough information",
             "don't have enough information",
@@ -1112,52 +1125,53 @@ def query_graph():
         ]
         matched_node_id = None
         answer_lower = answer.lower()
-        if any(phrase in answer_lower for phrase in NO_INFO_PHRASES):
-            try:
-                import networkx as nx
-                G = nx.read_graphml(graphml_path)
-                # Use the same term the expansion logic settled on (question itself as fallback)
-                search_term = (expanded_question if expanded_question != question else question).lower()
-                q_lower = question.lower()
+        is_no_info = any(phrase in answer_lower for phrase in NO_INFO_PHRASES)
 
-                best_node_id = None
-                best_node_label = None
-                best_node_desc = None
+        try:
+            import networkx as nx
+            G = nx.read_graphml(graphml_path)
+            q_lower = question.lower()
 
-                # Priority 1: exact label match on search_term or original question
-                for node_id, attrs in G.nodes(data=True):
-                    label = attrs.get("label", str(node_id))
-                    if label.lower() == search_term or label.lower() == q_lower:
-                        best_node_id = node_id
-                        best_node_label = label
-                        best_node_desc = attrs.get("description", "")
-                        break
+            best_node_id = None
+            best_node_label = None
+            best_node_desc = None
 
-                # Priority 2: starts-with match (shortest wins)
-                if best_node_id is None:
-                    candidates = [
-                        (node_id, attrs.get("label", str(node_id)), attrs.get("description", ""))
-                        for node_id, attrs in G.nodes(data=True)
-                        if attrs.get("label", str(node_id)).lower().startswith(q_lower)
-                    ]
-                    if candidates:
-                        best_node_id, best_node_label, best_node_desc = min(candidates, key=lambda x: len(x[1]))
+            # Priority 1: exact label match on original question
+            for node_id, attrs in G.nodes(data=True):
+                label = attrs.get("label", str(node_id))
+                if label.lower() == q_lower:
+                    best_node_id = node_id
+                    best_node_label = label
+                    best_node_desc = attrs.get("description", "")
+                    break
 
-                # Priority 3: contains match (shortest wins)
-                if best_node_id is None:
-                    candidates = [
-                        (node_id, attrs.get("label", str(node_id)), attrs.get("description", ""))
-                        for node_id, attrs in G.nodes(data=True)
-                        if q_lower in attrs.get("label", str(node_id)).lower()
-                    ]
-                    if candidates:
-                        best_node_id, best_node_label, best_node_desc = min(candidates, key=lambda x: len(x[1]))
+            # Priority 2: starts-with match (shortest wins)
+            if best_node_id is None:
+                candidates = [
+                    (node_id, attrs.get("label", str(node_id)), attrs.get("description", ""))
+                    for node_id, attrs in G.nodes(data=True)
+                    if attrs.get("label", str(node_id)).lower().startswith(q_lower)
+                ]
+                if candidates:
+                    best_node_id, best_node_label, best_node_desc = min(candidates, key=lambda x: len(x[1]))
 
-                if best_node_id is not None and best_node_desc:
+            # Priority 3: contains match (shortest wins)
+            if best_node_id is None:
+                candidates = [
+                    (node_id, attrs.get("label", str(node_id)), attrs.get("description", ""))
+                    for node_id, attrs in G.nodes(data=True)
+                    if q_lower in attrs.get("label", str(node_id)).lower()
+                ]
+                if candidates:
+                    best_node_id, best_node_label, best_node_desc = min(candidates, key=lambda x: len(x[1]))
+
+            if best_node_id is not None:
+                matched_node_id = str(best_node_id)
+                # Only override answer if LightRAG had no info
+                if is_no_info and best_node_desc:
                     answer = f"Based on the knowledge graph: {best_node_desc}"
-                    matched_node_id = str(best_node_id)
-            except Exception as fallback_err:
-                print(f"Node description fallback error: {fallback_err}")
+        except Exception as fallback_err:
+            print(f"Node matching error: {fallback_err}")
 
         # --- Layer B: store result in Redis ---
         if _redis_client is not None:
