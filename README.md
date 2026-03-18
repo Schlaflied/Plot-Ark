@@ -2,6 +2,8 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![GitHub stars](https://img.shields.io/github/stars/Schlaflied/Plot-Ark?style=social&cacheSeconds=1)](https://github.com/Schlaflied/Plot-Ark/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/Schlaflied/Plot-Ark?style=social&cacheSeconds=1)](https://github.com/Schlaflied/Plot-Ark/forks)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 
 <p align="center">
   <img src="Logo_Agentic.png" alt="Plot Ark Logo" width="200"/>
@@ -96,27 +98,13 @@
 
 ## Architecture
 
-<!-- Architecture diagram (Excalidraw) coming soon — drop docs/architecture.png here -->
+**Course Generation Pipeline**
 
-```
-Parameters (topic, level, course_code, course_type, module_count)
-        ↓
-Research Agent (Tavily) — 3 queries × 14 academic domains → verified sources
-        ↓
-Curriculum Agent — Bloom's mapping, i+1 scaffolding, cognitive load rules
-        ↓
-OpenAI / Gemini — streaming JSON generation (SSE) with grounded citations
-        ↓
-Module Editor — instructor edits, reorders, approves
-        ↓
-Export — .imscc / .md → LMS
+![Course Generation Pipeline](docs/Course%20generation.png)
 
-Course Materials (PDF / PPTX)
-        ↓
-ingest.py — LightRAG ingestion (gpt-4o-mini + text-embedding-3-small)
-        ↓
-Knowledge Graph — force-directed concept map, natural language query, Redis cache
-```
+**RAG & Knowledge Graph Ingestion**
+
+![RAG & Knowledge Graph Ingestion](docs/RAG%20flowchart.png)
 
 **Planned agentic loop:**
 ```
