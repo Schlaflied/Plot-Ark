@@ -308,6 +308,39 @@ def research_sources(topic, level, audience):
         return []
 
 
+ACADEMIC_DOMAINS = [
+    "jstor.org", "springer.com", "researchgate.net", "sciencedirect.com",
+    "wiley.com", "pubmed.ncbi.nlm.nih.gov", "scholar.google.com", ".edu",
+]
+NEWS_DOMAINS = [
+    "nytimes.com", "economist.com", "hbr.org", "theguardian.com",
+    "bbc.com", "reuters.com", ".gov", ".gc.ca",
+]
+VIDEO_DOMAINS = [
+    "youtube.com", "ted.com", "coursera.org", "edx.org",
+]
+
+
+def score_credibility(url: str, source_type: str) -> str:
+    """Return 'high', 'medium', or 'low' credibility based on domain heuristics."""
+    url_lower = url.lower()
+    if source_type == "academic":
+        if any(d in url_lower for d in ACADEMIC_DOMAINS):
+            return "high"
+    if source_type == "news":
+        if any(d in url_lower for d in NEWS_DOMAINS):
+            return "medium"
+    if source_type == "video":
+        if any(d in url_lower for d in VIDEO_DOMAINS):
+            return "medium"
+    # Cross-check all domains regardless of source_type label
+    if any(d in url_lower for d in ACADEMIC_DOMAINS):
+        return "high"
+    if any(d in url_lower for d in NEWS_DOMAINS + VIDEO_DOMAINS):
+        return "medium"
+    return "low"
+
+
 ASSESSMENT_FORMATS = {
     "project": "project-based assignments (group projects, case studies, presentations, portfolios)",
     "essay": "essay-based assessments (argumentative essays, reflective journals, research papers)",
@@ -320,6 +353,61 @@ ASSESSMENT_FORMATS = {
 @app.route("/")
 def index():
     return {"status": "online", "service": "Plot Ark — Agentic Curriculum Engine"}
+
+
+@app.route("/api/sources/preview", methods=["POST"])
+def preview_sources():
+    """Return Tavily sources for user review before curriculum generation."""
+    data = request.get_json()
+    topic = data.get("topic", "")
+    level = data.get("level", "")
+    audience = data.get("audience", "")
+
+    if not all([topic, level, audience]):
+        return {"error": "Missing required fields: topic, level, audience"}, 400
+
+    raw = research_sources(topic, level, audience)
+    sources = []
+    for r in raw:
+        sources.append({
+            "url": r.get("url", ""),
+            "title": r.get("title", ""),
+            "type": r.get("type", "other"),
+            "snippet": r.get("content", "")[:150],
+            "credibility": score_credibility(r.get("url", ""), r.get("type", "")),
+            "tags": [],
+        })
+
+    # Batch-generate keyword tags for all sources in one GPT call
+    if sources:
+        try:
+            tag_prompt = f"""For each of the following sources, generate 3-4 short keyword tags (1-3 words each) that describe the main topics covered. Return as JSON only, no explanation.
+
+Sources:
+{json.dumps([{{"title": s["title"], "snippet": s["snippet"]}} for s in sources])}
+
+Return format: {{"tags": [["tag1", "tag2", "tag3"], ["tag1", "tag2"], ...]}}
+Each inner array corresponds to one source in the same order."""
+
+            tag_response = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": tag_prompt}],
+                temperature=0.3,
+                max_tokens=500,
+            )
+            raw_tags = tag_response.choices[0].message.content.strip()
+            # Strip markdown code fences if present
+            raw_tags = raw_tags.replace("```json", "").replace("```", "").strip()
+            tag_data = json.loads(raw_tags)
+            tags_list = tag_data.get("tags", [])
+            for i, source in enumerate(sources):
+                if i < len(tags_list) and isinstance(tags_list[i], list):
+                    source["tags"] = tags_list[i]
+        except Exception as tag_err:
+            print(f"Tag generation failed (non-fatal): {tag_err}")
+            # Fall back to empty tags — already set above
+
+    return {"sources": sources}
 
 
 @app.route("/api/curriculum/generate", methods=["POST"])
@@ -354,14 +442,64 @@ def generate_curriculum():
     session_constraint = get_session_constraints(session_duration)
     assessment_format = ASSESSMENT_FORMATS.get(course_type, ASSESSMENT_FORMATS["mixed"])
 
-    # Step 1: Agent researches real sources before generation
-    real_sources = research_sources(topic, level, audience)
+    # Step 1: Use approved_sources if provided (R2 human-in-the-loop), otherwise run Tavily
+    approved_sources_raw = data.get("approved_sources", None)
+    required_sources = []
+    optional_sources = []
+    if approved_sources_raw and isinstance(approved_sources_raw, list) and len(approved_sources_raw) > 0:
+        # Convert approved_sources format (url/title/type/snippet/priority) to internal format
+        real_sources = []
+        for s in approved_sources_raw:
+            if not s.get("url"):
+                continue
+            priority = s.get("priority", "optional")
+            entry = {
+                "url": s.get("url", ""),
+                "title": s.get("title", ""),
+                "type": s.get("type", "other"),
+                "content": s.get("snippet", ""),
+                "priority": priority,
+            }
+            real_sources.append(entry)
+            if priority == "required":
+                required_sources.append(entry)
+            else:
+                optional_sources.append(entry)
+        print(f"Using {len(real_sources)} user-approved sources ({len(required_sources)} required, {len(optional_sources)} optional) — skipping Tavily")
+    else:
+        real_sources = research_sources(topic, level, audience)
     sources_context = ""
     if real_sources:
         sources_context = "\n\nReal sources found by research agent — use these URLs in your sources array (they are verified real):\n"
         for s in real_sources:
-            sources_context += f"- [{s['type']}] {s['title']} | {s['url']}\n"
+            priority_label = s.get("priority", "")
+            priority_tag = f" [PRIORITY: {priority_label.upper()}]" if priority_label else ""
+            sources_context += f"- [{s['type']}]{priority_tag} {s['title']} | {s['url']}\n"
         sources_context += "\nPrioritize these real URLs. You may add more you know with confidence, but do NOT invent URLs.\n"
+
+    # Build reading priority instructions for the prompt
+    reading_priority_instructions = ""
+    if required_sources or optional_sources:
+        reading_priority_instructions = "\n\nReading Priority Instructions (based on instructor selection):\n"
+        if required_sources:
+            reading_priority_instructions += "REQUIRED readings — these MUST appear in modules as assigned readings:\n"
+            for s in required_sources:
+                reading_priority_instructions += f"  - {s['title']} | {s['url']}\n"
+        if optional_sources:
+            reading_priority_instructions += "OPTIONAL/supplementary readings — include where relevant but not mandatory:\n"
+            for s in optional_sources:
+                reading_priority_instructions += f"  - {s['title']} | {s['url']}\n"
+        reading_priority_instructions += (
+            "When assigning readings to modules:\n"
+            "- Mark required readings with \"reading_type\": \"required\"\n"
+            "- Mark optional readings with \"reading_type\": \"optional\"\n"
+        )
+    else:
+        reading_priority_instructions = (
+            "\n\nFor each reading in recommended_readings, assign a reading_type field:\n"
+            "- \"required\" if it directly covers the core concept of the module\n"
+            "- \"optional\" if it is supplementary or extension material\n"
+        )
 
     # Build design-approach-specific instructions
     if design_approach == "sam":
@@ -406,7 +544,7 @@ Pedagogical Constraints:
 - Assignment task_description: MUST be specific and actionable (e.g. "Write a 500-word reflection comparing two case studies..."), NOT generic (e.g. "This assignment addresses the objectives of..."). Failing this instruction makes the output unusable.
 - Assignment rubric_highlights: MUST contain exactly 3-4 concrete criteria describing what excellent work looks like for THIS specific task.
 - Assignment estimated_time: MUST be realistic given the session duration constraint above. A 75-min session cannot have a 3-hour assignment.
-{design_approach_instructions}
+{design_approach_instructions}{reading_priority_instructions}
 Return ONLY valid JSON (no markdown, no explanation):
 {{
   "design_approach": "{design_approach}",
@@ -424,6 +562,7 @@ Return ONLY valid JSON (no markdown, no explanation):
           "url": "https://real-url-from-sources-above.com",
           "type": "academic | video | news",
           "estimated_time": "15 min read | 20 min video | 10 min read",
+          "reading_type": "required | optional",
           "key_points": ["key point 1", "key point 2"],
           "rationale": "Why this reading is essential for this module's specific learning objectives and why it is relevant to students' lives or careers."
         }}
@@ -463,7 +602,10 @@ Generate exactly {module_count} modules. complexity_level must start at 1 and re
 For sources: use the verified real URLs provided above. Add more real sources you know with confidence. Every URL must be real and accessible.{sources_context}"""
 
     def event_stream():
-        yield f"data: {json.dumps({'status': 'researching', 'message': f'Agent searching for real sources on {topic}...'})}\n\n"
+        if approved_sources_raw and isinstance(approved_sources_raw, list) and len(approved_sources_raw) > 0:
+            yield f"data: {json.dumps({'status': 'generating', 'message': f'Generating curriculum with {len(approved_sources_raw)} approved sources...'})}\n\n"
+        else:
+            yield f"data: {json.dumps({'status': 'researching', 'message': f'Agent searching for real sources on {topic}...'})}\n\n"
         full_text = ""
         try:
             if AI_PROVIDER == "gemini":

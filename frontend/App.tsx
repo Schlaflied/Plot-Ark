@@ -16,6 +16,7 @@ interface Reading {
   estimated_time?: string;
   key_points: string[];
   rationale: string;
+  reading_type?: 'required' | 'optional';
 }
 
 interface Assignment {
@@ -52,6 +53,15 @@ interface HistoryEntry {
   course_type: string;
   module_count: number;
   is_favorite: boolean;
+}
+
+interface Source {
+  url: string;
+  title: string;
+  type: 'academic' | 'video' | 'news' | 'other';
+  snippet: string;
+  credibility: 'high' | 'medium' | 'low';
+  tags?: string[];
 }
 
 const CITATIONS_PER_PAGE = 5;
@@ -121,6 +131,7 @@ const inputCls = 'w-full p-2 bg-white border border-stone-300 rounded-lg text-sm
 const App: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'professor' | 'student'>('professor');
 
   // Form state
   const [topic, setTopic] = useState('');
@@ -152,6 +163,15 @@ const App: React.FC = () => {
   const [curriculum, setCurriculum] = useState<CurriculumData | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // R2: Human-in-the-loop source review
+  const [isFetchingSources, setIsFetchingSources] = useState(false);
+  const [previewSources, setPreviewSources] = useState<Source[]>([]);
+  const [sourcePriorities, setSourcePriorities] = useState<Record<string, 'required' | 'optional' | 'exclude'>>({});
+  const [showSourceReview, setShowSourceReview] = useState(false);
+  const [expandedSnippets, setExpandedSnippets] = useState<Set<string>>(new Set());
+  // Store pending form params while user reviews sources
+  const pendingParams = useRef<Record<string, string> | null>(null);
+
   // Module navigation & editing
   const [currentModuleIndex, setCurrentModuleIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<'objectives' | 'resources' | 'assessment'>('objectives');
@@ -161,6 +181,14 @@ const App: React.FC = () => {
   // Drag and drop
   const dragIndex = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Student comprehension check
+  const [moduleCheckins, setModuleCheckins] = useState<Record<number, {
+    choice: '🟢' | '🟡' | '🔴' | '⚫' | null;
+    text: string;
+    submitted: boolean;
+  }>>({});
+  const [checkinText, setCheckinText] = useState('');
 
   // Citations — collapsible groups of 5
   const [openCitationGroups, setOpenCitationGroups] = useState<Set<number>>(new Set([0]));
@@ -204,12 +232,72 @@ const App: React.FC = () => {
     }
   };
 
+  // R2 Step 1: fetch sources for review before generating
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     const effectiveAudience = audience === 'custom' ? audienceCustom : audience;
     const effectiveLevel = level === 'other' ? levelCustom : level;
     if (!topic || !effectiveLevel || !effectiveAudience) return;
 
+    const params: Record<string, string> = {
+      topic,
+      level: effectiveLevel,
+      audience: effectiveAudience,
+      accreditation_context: accreditationContext,
+      course_code: courseCode,
+      module_count: moduleCount,
+      course_type: courseType,
+      design_approach: designApproach,
+      session_duration: sessionDuration === 'other'
+        ? String((parseInt(sessionDurationCustomHours || '0') * 60) + parseInt(sessionDurationCustomMins || '0') || 90)
+        : sessionDuration,
+    };
+
+    pendingParams.current = params;
+    setIsFetchingSources(true);
+    setPreviewSources([]);
+    setShowSourceReview(false);
+    setCurriculum(null);
+
+    try {
+      const res = await fetch('/api/sources/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, level: effectiveLevel, audience: effectiveAudience }),
+      });
+      const data = await res.json();
+      const sources: Source[] = data.sources || [];
+      setPreviewSources(sources);
+      // Default: all sources set to 'optional'
+      const initialPriorities: Record<string, 'required' | 'optional' | 'exclude'> = {};
+      sources.forEach((s: Source) => { initialPriorities[s.url] = 'optional'; });
+      setSourcePriorities(initialPriorities);
+      setShowSourceReview(true);
+      // Scroll to source review panel
+      setTimeout(() => {
+        const el = document.getElementById('source-review');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    } catch (err) {
+      console.error('Failed to fetch sources preview', err);
+      // Fallback: generate directly without source review
+      await runGenerate(params, []);
+    } finally {
+      setIsFetchingSources(false);
+    }
+  };
+
+  // R2 Step 2: generate with approved sources (non-excluded)
+  const handleGenerateWithApproved = async () => {
+    if (!pendingParams.current) return;
+    const approved = previewSources
+      .filter(s => sourcePriorities[s.url] !== 'exclude')
+      .map(s => ({ ...s, priority: sourcePriorities[s.url] ?? 'optional' }));
+    setShowSourceReview(false);
+    await runGenerate(pendingParams.current, approved);
+  };
+
+  const runGenerate = async (params: Record<string, string>, approved: (Source & { priority?: 'required' | 'optional' })[]) => {
     setIsGenerating(true);
     setStreamText('');
     setAgentStatus('');
@@ -220,20 +308,15 @@ const App: React.FC = () => {
     setOpenCitationGroups(new Set([0]));
 
     try {
+      const body: Record<string, unknown> = { ...params };
+      if (approved.length > 0) {
+        body.approved_sources = approved;
+      }
+
       const response = await fetch('/api/curriculum/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic, level: effectiveLevel, audience: effectiveAudience,
-          accreditation_context: accreditationContext,
-          course_code: courseCode,
-          module_count: moduleCount,
-          course_type: courseType,
-          design_approach: designApproach,
-          session_duration: sessionDuration === 'other'
-            ? String((parseInt(sessionDurationCustomHours || '0') * 60) + parseInt(sessionDurationCustomMins || '0') || 90)
-            : sessionDuration,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.body) throw new Error('No response body');
@@ -522,6 +605,22 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  // Load checkin from localStorage when module changes
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`plotark_checkins_${currentModuleIndex}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setModuleCheckins(prev => ({ ...prev, [currentModuleIndex]: parsed }));
+        setCheckinText(parsed.text || '');
+      } else {
+        setCheckinText('');
+      }
+    } catch {
+      // localStorage unavailable
+    }
+  }, [currentModuleIndex]);
+
   const currentModule = editedModules[currentModuleIndex] ?? null;
   const citationGroups = curriculum
     ? Array.from({ length: Math.ceil(curriculum.sources.length / CITATIONS_PER_PAGE) }, (_, i) =>
@@ -560,6 +659,32 @@ const App: React.FC = () => {
           </button>
         </div>
       </nav>
+
+      {/* View Mode Banner */}
+      {viewMode === 'professor' ? (
+        <div className="fixed top-16 left-0 right-0 z-40 bg-stone-50 border-b border-stone-200 px-6 py-2 flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-widest text-stone-500">Professor View</span>
+          <button
+            onClick={() => setViewMode('student')}
+            className="text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors border border-amber-200"
+          >
+            Switch to Student View
+          </button>
+        </div>
+      ) : (
+        <div className="fixed top-16 left-0 right-0 z-40 bg-amber-400 border-b border-amber-500 px-6 py-2.5 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold uppercase tracking-widest text-amber-900">Student View</span>
+            <span className="text-xs text-amber-800 font-medium">— read only</span>
+          </div>
+          <button
+            onClick={() => setViewMode('professor')}
+            className="text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg bg-amber-900 text-amber-100 hover:bg-amber-800 transition-colors"
+          >
+            Back to Professor View
+          </button>
+        </div>
+      )}
 
       {/* Mobile Menu */}
       {menuOpen && (
@@ -607,20 +732,22 @@ const App: React.FC = () => {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="font-medium text-stone-800 group-hover:text-nobel-gold transition-colors truncate flex-1">{entry.topic}</div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={e => toggleFavorite(e, entry.id)}
-                            className={`p-1 rounded transition-colors ${entry.is_favorite ? 'text-nobel-gold' : 'text-stone-300 hover:text-nobel-gold'}`}
-                          >
-                            <Star size={13} fill={entry.is_favorite ? 'currentColor' : 'none'} />
-                          </button>
-                          <button
-                            onClick={e => deleteHistory(e, entry.id)}
-                            className="p-1 rounded text-stone-300 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
+                        {viewMode === 'professor' && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={e => toggleFavorite(e, entry.id)}
+                              className={`p-1 rounded transition-colors ${entry.is_favorite ? 'text-nobel-gold' : 'text-stone-300 hover:text-nobel-gold'}`}
+                            >
+                              <Star size={13} fill={entry.is_favorite ? 'currentColor' : 'none'} />
+                            </button>
+                            <button
+                              onClick={e => deleteHistory(e, entry.id)}
+                              className="p-1 rounded text-stone-300 hover:text-red-400 transition-colors"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div className="text-xs text-stone-400 mt-1 flex items-center gap-2 flex-wrap">
                         <span>{entry.level}</span>
@@ -664,6 +791,7 @@ const App: React.FC = () => {
 
       <main>
         {/* OVERVIEW */}
+        {viewMode === 'professor' && (
         <section id="overview" className="py-24 bg-white">
           <div className="container mx-auto px-6 md:px-12 grid grid-cols-1 md:grid-cols-12 gap-12 items-start">
             <div className="md:col-span-4">
@@ -876,9 +1004,11 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                <button type="submit" disabled={isGenerating}
+                <button type="submit" disabled={isGenerating || isFetchingSources}
                   className="w-full py-4 bg-stone-900 text-white font-bold uppercase tracking-widest rounded-lg hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
-                  {isGenerating ? (
+                  {isFetchingSources ? (
+                    <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>Searching academic sources...</>
+                  ) : isGenerating ? (
                     <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>Generating...</>
                   ) : 'Generate Curriculum'}
                 </button>
@@ -900,6 +1030,209 @@ const App: React.FC = () => {
             </div>
           </div>
         </section>
+        )}
+
+        {/* R2: Source Review Panel */}
+        {showSourceReview && viewMode === 'professor' && (
+          <section id="source-review" className="py-12 bg-white border-t border-amber-100">
+            <div className="container mx-auto px-6 md:px-12">
+              <div className="bg-white border border-amber-100 rounded-xl shadow-sm p-6 md:p-8">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-xs font-bold tracking-widest text-amber-600 uppercase mb-1">Step 2 of 2 — Source Review</div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-serif text-2xl text-stone-900">Review Research Sources</h3>
+                      {/* Credibility info tooltip */}
+                      <div className="relative group flex items-center">
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-stone-200 text-stone-500 text-[10px] font-bold cursor-default select-none leading-none">?</span>
+                        <div className="pointer-events-none absolute left-6 top-1/2 -translate-y-1/2 z-50 w-72 rounded-lg border border-stone-200 bg-white shadow-lg p-3 text-xs text-stone-600 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                          <p className="font-bold text-stone-700 mb-1">Credibility levels</p>
+                          <p className="mb-1"><span className="font-semibold text-emerald-700">High</span> — Academic databases (ResearchGate, Springer, JSTOR, Academia.edu, .edu domains)</p>
+                          <p className="mb-1"><span className="font-semibold text-amber-700">Medium</span> — News media (NYT, HBR, Economist) and educational video (YouTube, Coursera, TED)</p>
+                          <p><span className="font-semibold text-stone-500">Low</span> — Domain not recognized; review manually before including</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowSourceReview(false)}
+                    className="text-xs text-stone-400 hover:text-stone-700 underline underline-offset-2 transition-colors"
+                  >
+                    ← Back to parameters
+                  </button>
+                </div>
+                <p className="text-sm text-stone-500 mb-5">
+                  These sources were found by the research agent. Set each source as Required, Optional, or Excluded before generating.
+                </p>
+
+                {/* Select All / Exclude All + count */}
+                <div className="flex items-center gap-4 mb-4">
+                  <button
+                    onClick={() => {
+                      const next: Record<string, 'required' | 'optional' | 'exclude'> = {};
+                      previewSources.forEach(s => { next[s.url] = 'optional'; });
+                      setSourcePriorities(next);
+                    }}
+                    className="text-xs font-bold text-amber-700 hover:text-amber-900 transition-colors"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-stone-300">|</span>
+                  <button
+                    onClick={() => {
+                      const next: Record<string, 'required' | 'optional' | 'exclude'> = {};
+                      previewSources.forEach(s => { next[s.url] = 'exclude'; });
+                      setSourcePriorities(next);
+                    }}
+                    className="text-xs font-bold text-stone-500 hover:text-stone-700 transition-colors"
+                  >
+                    Exclude All
+                  </button>
+                  <span className="ml-auto text-xs text-stone-400 font-medium">
+                    {(() => {
+                      const req = previewSources.filter(s => sourcePriorities[s.url] === 'required').length;
+                      const opt = previewSources.filter(s => sourcePriorities[s.url] === 'optional').length;
+                      const parts = [];
+                      if (req > 0) parts.push(`${req} required`);
+                      if (opt > 0) parts.push(`${opt} optional`);
+                      return parts.length > 0 ? parts.join(', ') : 'none selected';
+                    })()}
+                  </span>
+                </div>
+
+                {/* Source list */}
+                <div className="space-y-2 mb-6">
+                  {previewSources.length === 0 ? (
+                    <p className="text-sm text-stone-400 italic py-4 text-center">No sources found for this topic.</p>
+                  ) : previewSources.map((s) => {
+                    const priority = sourcePriorities[s.url] ?? 'optional';
+                    const isExcluded = priority === 'exclude';
+                    const credentialBadge =
+                      s.credibility === 'high'
+                        ? { dot: 'bg-emerald-500', label: 'High', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+                        : s.credibility === 'medium'
+                        ? { dot: 'bg-amber-400', label: 'Medium', cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+                        : { dot: 'bg-stone-400', label: 'Low', cls: 'bg-stone-100 text-stone-500 border-stone-200' };
+                    const typeIcon = s.type === 'video' ? '🎬' : s.type === 'news' ? '📰' : '📄';
+                    return (
+                      <div
+                        key={s.url}
+                        className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                          isExcluded
+                            ? 'bg-stone-50 border-stone-200 opacity-50'
+                            : priority === 'required'
+                            ? 'bg-amber-50 border-amber-200'
+                            : 'bg-stone-50 border-stone-200'
+                        }`}
+                      >
+                        {/* 3-state pill selector */}
+                        <div className="flex gap-1 shrink-0 mt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setSourcePriorities(prev => ({ ...prev, [s.url]: 'required' }))}
+                            className={`px-2 py-0.5 rounded-full text-xs font-bold transition-colors border ${
+                              priority === 'required'
+                                ? 'bg-amber-500 text-white border-amber-500'
+                                : 'bg-white text-stone-400 border-stone-200 hover:border-amber-400 hover:text-amber-600'
+                            }`}
+                          >
+                            Required
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSourcePriorities(prev => ({ ...prev, [s.url]: 'optional' }))}
+                            className={`px-2 py-0.5 rounded-full text-xs font-bold transition-colors border ${
+                              priority === 'optional'
+                                ? 'bg-stone-200 text-stone-700 border-stone-300'
+                                : 'bg-white text-stone-400 border-stone-200 hover:border-stone-400 hover:text-stone-600'
+                            }`}
+                          >
+                            Optional
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSourcePriorities(prev => ({ ...prev, [s.url]: 'exclude' }))}
+                            className={`px-2 py-0.5 rounded-full text-xs font-bold transition-colors border ${
+                              priority === 'exclude'
+                                ? 'bg-rose-100 text-rose-600 border-rose-300'
+                                : 'bg-white text-stone-400 border-stone-200 hover:border-rose-300 hover:text-rose-500'
+                            }`}
+                          >
+                            Exclude
+                          </button>
+                        </div>
+                        {/* Credibility badge */}
+                        <span className={`shrink-0 mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs font-bold ${credentialBadge.cls}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${credentialBadge.dot}`}></span>
+                          {credentialBadge.label}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                            <a
+                              href={s.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-semibold text-stone-800 hover:text-amber-700 transition-colors underline underline-offset-2 decoration-stone-300 leading-snug"
+                            >
+                              {s.title || s.url}
+                            </a>
+                            <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-500 shrink-0">
+                              {typeIcon} {s.type}
+                            </span>
+                          </div>
+                          {s.tags && s.tags.length > 0 && (
+                            <div className="flex flex-wrap mt-1">
+                              {s.tags.map((tag, ti) => (
+                                <span key={ti} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-stone-100 text-stone-500 mr-1 mb-1">
+                                  #{tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {s.snippet && (
+                            <div>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedSnippets(prev => {
+                                  const next = new Set(prev);
+                                  next.has(s.url) ? next.delete(s.url) : next.add(s.url);
+                                  return next;
+                                })}
+                                className="text-xs text-stone-400 hover:text-stone-600 cursor-pointer mt-1"
+                              >
+                                {expandedSnippets.has(s.url) ? '▾ Summary' : '▸ Summary'}
+                              </button>
+                              {expandedSnippets.has(s.url) && (
+                                <p className="text-xs text-stone-500 leading-relaxed mt-1">
+                                  {s.snippet}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Generate button */}
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={handleGenerateWithApproved}
+                    disabled={previewSources.every(s => sourcePriorities[s.url] === 'exclude')}
+                    className="px-6 py-3 bg-amber-500 text-white font-bold uppercase tracking-wider rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                  >
+                    Generate with selected sources →
+                  </button>
+                  {previewSources.every(s => sourcePriorities[s.url] === 'exclude') && (
+                    <span className="text-xs text-stone-400">At least one source must not be excluded</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* MODULES */}
         <section id="modules" className="bg-white border-t border-stone-100 min-h-screen">
@@ -914,7 +1247,9 @@ const App: React.FC = () => {
                   <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">Course Structure</span>
                 </div>
                 {editedModules.length > 0 ? (
-                  <p className="text-xs text-stone-500">{editedModules.length} modules · drag to reorder</p>
+                  <p className="text-xs text-stone-500">
+                    {editedModules.length} modules{viewMode === 'professor' ? ' · drag to reorder' : ''}
+                  </p>
                 ) : (
                   <p className="text-xs text-stone-400">Generate a curriculum to begin</p>
                 )}
@@ -927,13 +1262,15 @@ const App: React.FC = () => {
                     {editedModules.map((mod, idx) => (
                       <div
                         key={idx}
-                        draggable
-                        onDragStart={() => handleDragStart(idx)}
-                        onDragOver={e => handleDragOver(e, idx)}
-                        onDrop={e => handleDrop(e, idx)}
-                        onDragEnd={handleDragEnd}
+                        draggable={viewMode === 'professor'}
+                        onDragStart={viewMode === 'professor' ? () => handleDragStart(idx) : undefined}
+                        onDragOver={viewMode === 'professor' ? e => handleDragOver(e, idx) : undefined}
+                        onDrop={viewMode === 'professor' ? e => handleDrop(e, idx) : undefined}
+                        onDragEnd={viewMode === 'professor' ? handleDragEnd : undefined}
                         onClick={() => { setCurrentModuleIndex(idx); setActiveTab('objectives'); setIsEditing(false); }}
-                        className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all flex items-center gap-3 cursor-grab active:cursor-grabbing select-none ${
+                        className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all flex items-center gap-3 select-none ${
+                          viewMode === 'professor' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                        } ${
                           idx === currentModuleIndex ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-100'
                         } ${dragOverIndex === idx && dragIndex.current !== idx ? 'border-2 border-nobel-gold' : 'border-2 border-transparent'}`}
                       >
@@ -990,12 +1327,14 @@ const App: React.FC = () => {
                           </div>
                           <span className="text-xs text-stone-500 font-mono">{currentModule.complexity_level}/5</span>
                         </div>
-                        <button onClick={() => isEditing ? handleSaveEdit() : setIsEditing(true)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
-                            isEditing ? 'bg-stone-900 text-white hover:bg-stone-700' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                          }`}>
-                          {isEditing ? <><Save size={12} /> Save</> : <><Pencil size={12} /> Edit</>}
-                        </button>
+                        {viewMode === 'professor' && (
+                          <button onClick={() => isEditing ? handleSaveEdit() : setIsEditing(true)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                              isEditing ? 'bg-stone-900 text-white hover:bg-stone-700' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                            }`}>
+                            {isEditing ? <><Save size={12} /> Save</> : <><Pencil size={12} /> Edit</>}
+                          </button>
+                        )}
                       </div>
 
                       <div className="text-nobel-gold font-serif text-xl italic mb-2">Module {currentModuleIndex + 1}</div>
@@ -1023,7 +1362,7 @@ const App: React.FC = () => {
                       {/* Tab: Objectives */}
                       {activeTab === 'objectives' && (
                         <>
-                          {isEditing ? (
+                          {isEditing && viewMode === 'professor' ? (
                             <div className="space-y-2 mb-6">
                               {currentModule.learning_objectives.map((obj, i) => (
                                 <div key={i} className="flex gap-2 items-center">
@@ -1051,7 +1390,7 @@ const App: React.FC = () => {
 
                           <div>
                             <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-3">Narrative Preview</h4>
-                            {isEditing ? (
+                            {isEditing && viewMode === 'professor' ? (
                               <textarea value={currentModule.narrative_preview} onChange={e => updateCurrentModule({ narrative_preview: e.target.value })}
                                 rows={4} className={inputCls + ' resize-none italic'} />
                             ) : (
@@ -1064,31 +1403,44 @@ const App: React.FC = () => {
                       {/* Tab: Resources */}
                       {activeTab === 'resources' && (
                         <div className="space-y-4">
-                          {(currentModule.recommended_readings || []).map((r, ri) => (
-                            <div key={ri} className="bg-white rounded-xl p-5 border border-stone-200">
-                              {isEditing ? (
-                                <div className="space-y-3">
-                                  <div className="flex gap-2 items-start">
-                                    <input value={r.title} onChange={e => updateReading(ri, { title: e.target.value })}
-                                      placeholder="Reading title" className={`flex-1 ${inputCls} font-bold`} />
-                                    <button onClick={() => removeReading(ri)} className="text-stone-400 hover:text-red-500 mt-1 transition-colors">
-                                      <Trash2 size={14} />
-                                    </button>
+                          {isEditing && viewMode === 'professor' ? (
+                            <>
+                              {(currentModule.recommended_readings || []).map((r, ri) => (
+                                <div key={ri} className="bg-white rounded-xl p-5 border border-stone-200">
+                                  <div className="space-y-3">
+                                    <div className="flex gap-2 items-start">
+                                      <input value={r.title} onChange={e => updateReading(ri, { title: e.target.value })}
+                                        placeholder="Reading title" className={`flex-1 ${inputCls} font-bold`} />
+                                      <button onClick={() => removeReading(ri)} className="text-stone-400 hover:text-red-500 mt-1 transition-colors">
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      {(r.key_points || []).map((kp, ki) => (
+                                        <div key={ki} className="flex gap-2 items-center">
+                                          <span className="text-nobel-gold font-bold">·</span>
+                                          <input value={kp} onChange={e => updateReadingKeyPoint(ri, ki, e.target.value)}
+                                            placeholder="Key point" className={`flex-1 ${inputCls}`} />
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <input value={r.rationale} onChange={e => updateReading(ri, { rationale: e.target.value })}
+                                      placeholder="Why this reading is essential..." className={inputCls} />
                                   </div>
-                                  <div className="space-y-1.5">
-                                    {(r.key_points || []).map((kp, ki) => (
-                                      <div key={ki} className="flex gap-2 items-center">
-                                        <span className="text-nobel-gold font-bold">·</span>
-                                        <input value={kp} onChange={e => updateReadingKeyPoint(ri, ki, e.target.value)}
-                                          placeholder="Key point" className={`flex-1 ${inputCls}`} />
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <input value={r.rationale} onChange={e => updateReading(ri, { rationale: e.target.value })}
-                                    placeholder="Why this reading is essential..." className={inputCls} />
                                 </div>
-                              ) : (
-                                <>
+                              ))}
+                              <button onClick={addReading} className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors">
+                                <Plus size={14} /> Add reading
+                              </button>
+                            </>
+                          ) : (
+                            (() => {
+                              const readings = currentModule.recommended_readings || [];
+                              const required = readings.filter(r => r.reading_type === 'required');
+                              const optional = readings.filter(r => r.reading_type !== 'required');
+
+                              const renderReadingCard = (r: Reading, ri: number) => (
+                                <div key={ri} className="bg-white rounded-xl p-5 border border-stone-200">
                                   <div className="flex items-center gap-2 mb-2">
                                     <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">
                                       {r.type === 'video' ? '🎬' : r.type === 'news' ? '📰' : '📄'} {r.type || 'academic'}
@@ -1115,17 +1467,29 @@ const App: React.FC = () => {
                                   <div className="text-xs text-stone-500 border-t border-stone-100 pt-3 mt-3">
                                     <span className="font-bold text-stone-400 uppercase tracking-wide mr-1">Why:</span>{r.rationale}
                                   </div>
+                                </div>
+                              );
+
+                              return (
+                                <>
+                                  {required.length > 0 && (
+                                    <div className="space-y-3">
+                                      <div className="text-xs font-bold tracking-widest text-amber-600 uppercase small-caps">Required Readings</div>
+                                      {required.map((r, ri) => renderReadingCard(r, ri))}
+                                    </div>
+                                  )}
+                                  {optional.length > 0 && (
+                                    <div className="space-y-3">
+                                      <div className="text-xs font-bold tracking-widest text-stone-400 uppercase small-caps">Optional Readings</div>
+                                      {optional.map((r, ri) => renderReadingCard(r, required.length + ri))}
+                                    </div>
+                                  )}
+                                  {readings.length === 0 && (
+                                    <p className="text-stone-400 italic text-sm">No readings recommended for this module.</p>
+                                  )}
                                 </>
-                              )}
-                            </div>
-                          ))}
-                          {isEditing && (
-                            <button onClick={addReading} className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors">
-                              <Plus size={14} /> Add reading
-                            </button>
-                          )}
-                          {!isEditing && (currentModule.recommended_readings || []).length === 0 && (
-                            <p className="text-stone-400 italic text-sm">No readings recommended for this module.</p>
+                              );
+                            })()
                           )}
                         </div>
                       )}
@@ -1135,7 +1499,7 @@ const App: React.FC = () => {
                         <div className="space-y-4">
                           {(currentModule.assignments || []).map((a, ai) => (
                             <div key={ai} className="bg-white rounded-xl p-5 border border-stone-200">
-                              {isEditing ? (
+                              {isEditing && viewMode === 'professor' ? (
                                 <div className="space-y-3">
                                   <div className="flex gap-2 items-start">
                                     <input value={a.title} onChange={e => updateAssignment(ai, { title: e.target.value })}
@@ -1193,7 +1557,7 @@ const App: React.FC = () => {
                               )}
                             </div>
                           ))}
-                          {isEditing && (
+                          {isEditing && viewMode === 'professor' && (
                             <button onClick={addAssignment} className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors">
                               <Plus size={14} /> Add assignment
                             </button>
@@ -1203,12 +1567,127 @@ const App: React.FC = () => {
                           )}
                         </div>
                       )}
+
+                      {/* Student Comprehension Check Widget */}
+                      {viewMode === 'student' && (() => {
+                        const checkin = moduleCheckins[currentModuleIndex] ?? { choice: null, text: '', submitted: false };
+                        const choices: { emoji: string; label: string; value: '🟢' | '🟡' | '🔴' | '⚫' }[] = [
+                          { emoji: '🟢', label: 'Got it — I could explain this', value: '🟢' },
+                          { emoji: '🟡', label: 'Mostly got it, but unclear on parts', value: '🟡' },
+                          { emoji: '🔴', label: "Something's off, not sure what", value: '🔴' },
+                          { emoji: '⚫', label: "Didn't really read it", value: '⚫' },
+                        ];
+                        const needsTextBox = checkin.choice === '🟡' || checkin.choice === '🔴';
+
+                        const handleCheckinChoice = (value: '🟢' | '🟡' | '🔴' | '⚫') => {
+                          const updated = { choice: value, text: checkinText, submitted: false };
+                          setModuleCheckins(prev => ({ ...prev, [currentModuleIndex]: updated }));
+                        };
+
+                        const handleCheckinSubmit = () => {
+                          const updated = { choice: checkin.choice!, text: checkinText, submitted: true };
+                          setModuleCheckins(prev => ({ ...prev, [currentModuleIndex]: updated }));
+                          try {
+                            localStorage.setItem(`plotark_checkins_${currentModuleIndex}`, JSON.stringify(updated));
+                          } catch { /* localStorage unavailable */ }
+                        };
+
+                        const handleCheckinSkip = () => {
+                          const updated = { choice: checkin.choice!, text: '', submitted: true };
+                          setModuleCheckins(prev => ({ ...prev, [currentModuleIndex]: updated }));
+                          setCheckinText('');
+                          try {
+                            localStorage.setItem(`plotark_checkins_${currentModuleIndex}`, JSON.stringify(updated));
+                          } catch { /* localStorage unavailable */ }
+                        };
+
+                        const handleSimpleSubmit = (value: '🟢' | '🟡' | '🔴' | '⚫') => {
+                          const updated = { choice: value, text: '', submitted: true };
+                          setModuleCheckins(prev => ({ ...prev, [currentModuleIndex]: updated }));
+                          try {
+                            localStorage.setItem(`plotark_checkins_${currentModuleIndex}`, JSON.stringify(updated));
+                          } catch { /* localStorage unavailable */ }
+                        };
+
+                        return (
+                          <div className="mt-8 pt-6 border-t border-stone-200">
+                            <p className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-4">
+                              How are you feeling about this module?
+                            </p>
+                            <div className="grid grid-cols-2 gap-2 mb-4">
+                              {choices.map(c => (
+                                <button
+                                  key={c.value}
+                                  onClick={() => {
+                                    handleCheckinChoice(c.value);
+                                    if (c.value === '🟢' || c.value === '⚫') {
+                                      handleSimpleSubmit(c.value);
+                                    }
+                                  }}
+                                  className={`flex items-center gap-2 px-3 py-2.5 rounded-full text-sm font-medium transition-all border ${
+                                    checkin.choice === c.value
+                                      ? c.value === '🟢'
+                                        ? 'bg-emerald-100 border-emerald-400 text-emerald-800'
+                                        : c.value === '🟡'
+                                        ? 'bg-amber-100 border-amber-400 text-amber-800'
+                                        : c.value === '🔴'
+                                        ? 'bg-red-100 border-red-400 text-red-700'
+                                        : 'bg-stone-200 border-stone-400 text-stone-700'
+                                      : 'bg-white border-stone-300 text-stone-600 hover:border-stone-400 hover:bg-stone-50'
+                                  }`}
+                                >
+                                  <span className="text-base leading-none">{c.emoji}</span>
+                                  <span className="leading-snug text-left">{c.label}</span>
+                                </button>
+                              ))}
+                            </div>
+
+                            {checkin.submitted && !needsTextBox && checkin.choice !== null && (
+                              <p className="text-xs text-stone-500 font-medium">Recorded ✓</p>
+                            )}
+
+                            {checkin.choice !== null && needsTextBox && !checkin.submitted && (
+                              <div className="mt-2 space-y-2">
+                                <textarea
+                                  value={checkinText}
+                                  onChange={e => setCheckinText(e.target.value)}
+                                  placeholder="Anything on your mind? (optional)"
+                                  rows={3}
+                                  className="w-full p-3 bg-white border border-stone-300 rounded-xl text-sm text-stone-700 placeholder:text-stone-400 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300 resize-none transition-colors"
+                                />
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    onClick={handleCheckinSubmit}
+                                    className="px-4 py-1.5 bg-stone-900 text-white text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-stone-700 transition-colors"
+                                  >
+                                    Submit
+                                  </button>
+                                  <button
+                                    onClick={handleCheckinSkip}
+                                    className="text-xs text-stone-400 hover:text-stone-600 transition-colors underline underline-offset-2"
+                                  >
+                                    Skip
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {checkin.submitted && needsTextBox && (
+                              <p className="text-xs text-stone-500 font-medium mt-2">Recorded ✓</p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-stone-200 rounded-2xl text-stone-400">
                     <BookOpen size={48} className="mb-4 opacity-20" />
-                    <p className="font-serif text-xl">Generate a curriculum to see modules.</p>
+                    {viewMode === 'student' ? (
+                      <p className="font-serif text-xl text-center">No curriculum loaded yet.<br /><span className="text-base font-sans font-normal text-stone-400">Ask your professor to generate one.</span></p>
+                    ) : (
+                      <p className="font-serif text-xl">Generate a curriculum to see modules.</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -1283,7 +1762,7 @@ const App: React.FC = () => {
         </section>
 
         {/* EXPORT */}
-        <section id="export" className="py-24 bg-white border-t border-stone-200">
+        {viewMode === 'professor' && <section id="export" className="py-24 bg-white border-t border-stone-200">
           <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
             <div className="md:col-span-5 relative">
               <div className="aspect-square bg-[#F5F4F0] rounded-xl overflow-hidden relative border border-stone-200 shadow-inner">
@@ -1314,7 +1793,7 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
-        </section>
+        </section>}
 
         {/* Knowledge Graph */}
         <section id="knowledge-graph" className="py-24 bg-stone-900">
