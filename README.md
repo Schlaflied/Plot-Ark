@@ -249,7 +249,7 @@ plot-ark/
 - [x] LightRAG knowledge graph — PDF/PPTX ingestion → interactive force-directed concept map
 - [x] Knowledge graph query — natural language Q&A against course material graph, Redis-cached
 - [ ] Assignment Timeline + Due Date calculator
-- [ ] Human-in-the-loop source review — approve/reject Tavily results before generation
+- [x] Human-in-the-loop source review — approve/reject Tavily results before generation
 - [ ] xAPI statement ingestion
 - [ ] Redis learner state management
 - [ ] Professor LTM — preference learning from edit history
