@@ -171,6 +171,8 @@ const App: React.FC = () => {
   const [expandedSnippets, setExpandedSnippets] = useState<Set<string>>(new Set());
   // Store pending form params while user reviews sources
   const pendingParams = useRef<Record<string, string> | null>(null);
+  // Store topic/level/audience for history-loaded curricula (enables Re-research)
+  const [loadedCurriculumMeta, setLoadedCurriculumMeta] = useState<{ topic: string; level: string; audience: string } | null>(null);
 
   // Module navigation & editing
   const [currentModuleIndex, setCurrentModuleIndex] = useState(0);
@@ -258,6 +260,7 @@ const App: React.FC = () => {
     setPreviewSources([]);
     setShowSourceReview(false);
     setCurriculum(null);
+    setLoadedCurriculumMeta(null);
 
     try {
       const res = await fetch('/api/sources/preview', {
@@ -448,6 +451,8 @@ const App: React.FC = () => {
         ...m,
         complexity_level: Number(m.complexity_level) || Math.max(1, Math.round((i + 1) / arr.length * 5)),
       })));
+      setLoadedCurriculumMeta({ topic: data.topic || '', level: data.level || '', audience: data.audience || '' });
+      setPreviewSources([]);
       setCurrentModuleIndex(0);
       setActiveTab('objectives');
       setIsEditing(false);
@@ -457,6 +462,35 @@ const App: React.FC = () => {
       if (el) el.scrollIntoView({ behavior: 'smooth' });
     } catch (e) {
       console.error('Failed to load history entry', e);
+    }
+  };
+
+  // Re-research sources for a history-loaded curriculum
+  const handleReresearch = async () => {
+    if (!loadedCurriculumMeta) return;
+    const { topic: metaTopic, level: metaLevel, audience: metaAudience } = loadedCurriculumMeta;
+    setIsFetchingSources(true);
+    try {
+      const res = await fetch('/api/sources/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: metaTopic, level: metaLevel, audience: metaAudience }),
+      });
+      const data = await res.json();
+      const sources: Source[] = data.sources || [];
+      setPreviewSources(sources);
+      const initialPriorities: Record<string, 'required' | 'optional' | 'exclude'> = {};
+      sources.forEach((s: Source) => { initialPriorities[s.url] = 'optional'; });
+      setSourcePriorities(initialPriorities);
+      setShowSourceReview(true);
+      setTimeout(() => {
+        const el = document.getElementById('source-review');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    } catch (err) {
+      console.error('Failed to re-research sources', err);
+    } finally {
+      setIsFetchingSources(false);
     }
   };
 
@@ -1709,9 +1743,32 @@ const App: React.FC = () => {
                 <h2 className="font-serif text-4xl md:text-5xl mb-8 text-white">Sources</h2>
                 {curriculum ? (
                   <div className="space-y-3">
-                    <p className="text-xs text-stone-500 uppercase tracking-widest mb-4">
-                      {curriculum.sources.length} sources
-                    </p>
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-xs text-stone-500 uppercase tracking-widest">
+                        {curriculum.sources.length} sources
+                      </p>
+                      {previewSources.length > 0 ? (
+                        <button
+                          onClick={() => {
+                            setShowSourceReview(true);
+                            setTimeout(() => {
+                              document.getElementById('source-review')?.scrollIntoView({ behavior: 'smooth' });
+                            }, 50);
+                          }}
+                          className="text-sm text-amber-500 hover:text-amber-300 underline cursor-pointer transition-colors"
+                        >
+                          ← Regenerate with Different Sources
+                        </button>
+                      ) : loadedCurriculumMeta && (
+                        <button
+                          onClick={handleReresearch}
+                          disabled={isFetchingSources}
+                          className="text-sm px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isFetchingSources ? 'Searching sources...' : 'Re-research this topic →'}
+                        </button>
+                      )}
+                    </div>
                     {citationGroups.map((group, gi) => (
                       <div key={gi} className="border border-stone-700 rounded-xl overflow-hidden">
                         {/* Group header */}
