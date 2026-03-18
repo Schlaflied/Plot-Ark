@@ -100,11 +100,11 @@
 
 **Course Generation Pipeline**
 
-![Course Generation Pipeline](docs/Course%20generation.png)
+<img src="docs/Course generation.png" alt="Course Generation Pipeline" width="800"/>
 
 **RAG & Knowledge Graph Ingestion**
 
-![RAG & Knowledge Graph Ingestion](docs/RAG%20flowchart.png)
+<img src="docs/RAG flowchart.png" alt="RAG & Knowledge Graph Ingestion" width="800"/>
 
 **Planned agentic loop:**
 ```
