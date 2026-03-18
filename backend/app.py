@@ -909,7 +909,15 @@ def _build_graph_response(graphs):
             if key not in merged_edges:
                 merged_edges[key] = dict(attrs)
 
-    # Filter PERSON nodes
+    # Date-noise patterns to suppress
+    _DATE_FULL_RE = re.compile(
+        r'^(January|February|March|April|May|June|July|August|September|October|November|December)'
+        r'\s+\d{1,2},?\s+\d{4}$',
+        re.IGNORECASE,
+    )
+    _DATE_YEAR_RE = re.compile(r'^\d{4}$')
+
+    # Filter PERSON and date nodes
     filtered_node_ids = set()
     nodes = []
     for node_id, attrs in merged_nodes.items():
@@ -925,9 +933,15 @@ def _build_graph_response(graphs):
             filtered_node_ids.add(node_id)
             continue
 
+        # Filter date-only nodes (e.g. "January 24, 2025" or "2025")
+        node_label = attrs.get("label", node_id)
+        if _DATE_FULL_RE.match(str(node_label)) or _DATE_YEAR_RE.match(str(node_label)):
+            filtered_node_ids.add(node_id)
+            continue
+
         nodes.append({
             "id": node_id,
-            "label": attrs.get("label", node_id),
+            "label": node_label,
             "entity_type": entity_type,
             "description": raw_desc,
         })
@@ -1041,12 +1055,29 @@ def query_graph():
         else:
             storage_dir = os.path.normpath(os.path.join(backend_dir, "..", "data", "lightrag_storage"))
 
+        # Expand abbreviation queries (e.g. "DGBLL" → "Digital Game-Based Language Learning (DGBLL)")
+        def _expand_abbreviation(q: str, graphml_path: str) -> str:
+            q_stripped = q.strip()
+            if q_stripped.isupper() and 2 <= len(q_stripped) <= 8:
+                try:
+                    import networkx as nx
+                    G = nx.read_graphml(graphml_path)
+                    for node_id, attrs in G.nodes(data=True):
+                        node_label = attrs.get("label", str(node_id))
+                        if f"({q_stripped})" in node_label:
+                            return f"{node_label} ({q_stripped})"
+                except Exception:
+                    pass
+            return q
+
+        expanded_question = _expand_abbreviation(question, graphml_path)
+
         async def _run_query():
             rag = _get_lightrag_instance(storage_dir)
             if storage_dir not in _initialized_instances:
                 await rag.initialize_storages()
                 _initialized_instances.add(storage_dir)
-            return await rag.aquery(question, param=QueryParam(mode=mode))
+            return await rag.aquery(expanded_question, param=QueryParam(mode=mode))
 
         raw_answer = _run_async(_run_query())
 
@@ -1055,7 +1086,7 @@ def query_graph():
         # --- Layer B: store result in Redis ---
         if _redis_client is not None:
             try:
-                _redis_client.setex(cache_key, 86400, answer)
+                _redis_client.set(cache_key, answer)  # permanent — graph doesn't change
             except Exception as redis_err:
                 print(f"Redis set error (skipping cache store): {redis_err}")
 
