@@ -96,6 +96,8 @@
 
 ## Architecture
 
+<!-- Architecture diagram (Excalidraw) coming soon — drop docs/architecture.png here -->
+
 ```
 Parameters (topic, level, course_code, course_type, module_count)
         ↓
@@ -226,21 +228,24 @@ plot-ark/
 ├── .env.example
 ├── docs/
 │   ├── architecture.md
-│   └── FEEDBACK.md            ← External feedback log (ID practitioners)
-├── frontend/                  ← React + TypeScript + Vite
+│   ├── FEEDBACK.md                  ← External feedback log (ID practitioners)
+│   ├── curriculum generate.gif      ← Demo: generation pipeline
+│   └── knowledge graph.gif          ← Demo: knowledge graph + query
+├── frontend/                        ← React + TypeScript + Vite
 │   ├── Dockerfile
-│   ├── App.tsx                ← Main UI
+│   ├── index.tsx                    ← Entry point
+│   ├── App.tsx                      ← Main UI (curriculum engine + student view)
 │   ├── components/
-│   │   └── GraphViewer.tsx    ← LightRAG knowledge graph viewer
+│   │   └── GraphViewer.tsx          ← LightRAG knowledge graph viewer
 │   └── vite.config.ts
-├── backend/                   ← Flask
+├── backend/                         ← Flask
 │   ├── Dockerfile
-│   ├── app.py                 ← SSE endpoint, Bloom's mapping, graph API
-│   └── ingest.py              ← LightRAG ingestion script (PDF + PPTX)
+│   ├── app.py                       ← SSE endpoint, Bloom's mapping, graph API
+│   └── ingest.py                    ← LightRAG ingestion script (PDF + PPTX)
 └── data/
-    ├── materials/             ← Drop course PDFs/PPTXs here (gitignored)
-    ├── lightrag_storage/      ← Business Law graph (gitignored, regenerate)
-    └── lightrag_storage_call/ ← CALL graph (gitignored, regenerate)
+    ├── materials/                   ← Drop course PDFs/PPTXs here (gitignored)
+    ├── lightrag_storage/            ← Business Law graph (gitignored, regenerate)
+    └── lightrag_storage_call/       ← CALL graph (gitignored, regenerate)
 ```
 
 ---
