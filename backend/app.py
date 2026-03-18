@@ -1010,7 +1010,7 @@ def query_graph():
 
     graphml_path = _get_graphml_path(subject)
     if not os.path.exists(graphml_path):
-        return {"answer": "Knowledge graph not initialized yet."}
+        return {"answer": "Knowledge graph not initialized yet.", "subject": subject, "matched_node_id": None}
 
     def clean_answer(text: str) -> str:
         """Strip markdown formatting and truncate to 3 sentences."""
@@ -1037,7 +1037,7 @@ def query_graph():
             cached = _redis_client.get(cache_key)
             if cached:
                 print(f"Redis cache hit: {cache_key}")
-                return {"answer": cached, "cached": True}
+                return {"answer": cached, "subject": subject, "matched_node_id": None, "cached": True}
         except Exception as redis_err:
             print(f"Redis get error (skipping cache): {redis_err}")
 
@@ -1046,7 +1046,7 @@ def query_graph():
         try:
             from lightrag import QueryParam
         except ImportError:
-            return {"answer": "Query engine not available in this environment. Run the backend locally with lightrag installed."}
+            return {"answer": "Query engine not available in this environment. Run the backend locally with lightrag installed.", "subject": subject, "matched_node_id": None}
 
         # --- Layer A: use cached LightRAG instance (initialize_storages only called once) ---
         backend_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1103,6 +1103,62 @@ def query_graph():
 
         answer = clean_answer(raw_answer)
 
+        # --- Fallback: if LightRAG has no answer, use best-matching node description ---
+        NO_INFO_PHRASES = [
+            "not have enough information",
+            "don't have enough information",
+            "cannot answer",
+            "no information",
+        ]
+        matched_node_id = None
+        answer_lower = answer.lower()
+        if any(phrase in answer_lower for phrase in NO_INFO_PHRASES):
+            try:
+                import networkx as nx
+                G = nx.read_graphml(graphml_path)
+                # Use the same term the expansion logic settled on (question itself as fallback)
+                search_term = (expanded_question if expanded_question != question else question).lower()
+                q_lower = question.lower()
+
+                best_node_id = None
+                best_node_label = None
+                best_node_desc = None
+
+                # Priority 1: exact label match on search_term or original question
+                for node_id, attrs in G.nodes(data=True):
+                    label = attrs.get("label", str(node_id))
+                    if label.lower() == search_term or label.lower() == q_lower:
+                        best_node_id = node_id
+                        best_node_label = label
+                        best_node_desc = attrs.get("description", "")
+                        break
+
+                # Priority 2: starts-with match (shortest wins)
+                if best_node_id is None:
+                    candidates = [
+                        (node_id, attrs.get("label", str(node_id)), attrs.get("description", ""))
+                        for node_id, attrs in G.nodes(data=True)
+                        if attrs.get("label", str(node_id)).lower().startswith(q_lower)
+                    ]
+                    if candidates:
+                        best_node_id, best_node_label, best_node_desc = min(candidates, key=lambda x: len(x[1]))
+
+                # Priority 3: contains match (shortest wins)
+                if best_node_id is None:
+                    candidates = [
+                        (node_id, attrs.get("label", str(node_id)), attrs.get("description", ""))
+                        for node_id, attrs in G.nodes(data=True)
+                        if q_lower in attrs.get("label", str(node_id)).lower()
+                    ]
+                    if candidates:
+                        best_node_id, best_node_label, best_node_desc = min(candidates, key=lambda x: len(x[1]))
+
+                if best_node_id is not None and best_node_desc:
+                    answer = f"Based on the knowledge graph: {best_node_desc}"
+                    matched_node_id = str(best_node_id)
+            except Exception as fallback_err:
+                print(f"Node description fallback error: {fallback_err}")
+
         # --- Layer B: store result in Redis ---
         if _redis_client is not None:
             try:
@@ -1110,7 +1166,7 @@ def query_graph():
             except Exception as redis_err:
                 print(f"Redis set error (skipping cache store): {redis_err}")
 
-        return {"answer": answer}
+        return {"answer": answer, "subject": subject, "matched_node_id": matched_node_id}
     except Exception as e:
         print(f"Graph query error: {e}")
         return {"answer": f"Query failed: {str(e)}"}, 500

@@ -291,6 +291,20 @@ const GraphViewer: React.FC = () => {
       const answer = data.answer ?? JSON.stringify(data);
       setQueryAnswer(answer);
       setQueryHistory(prev => [{ id: Date.now(), question: question.trim(), answer, subject: activeSubject, starred: false }, ...prev].slice(0, 20));
+
+      // Highlight and pan to matched node if backend returned one
+      const matchedNodeId: string | null = data.matched_node_id ?? null;
+      if (matchedNodeId !== null && graphData) {
+        const matchedNode = graphData.nodes.find(n => String(n.id) === matchedNodeId) ?? null;
+        if (matchedNode) {
+          setSelectedNode(matchedNode);
+          const n = matchedNode as FGNode;
+          if (fgRef.current && n.x != null && n.y != null) {
+            fgRef.current.centerAt(n.x, n.y, 1000);
+            fgRef.current.zoom(2, 1000);
+          }
+        }
+      }
     } catch (err) {
       setQueryError(err instanceof Error ? err.message : 'Query failed');
     } finally {
