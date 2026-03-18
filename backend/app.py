@@ -373,7 +373,7 @@ def preview_sources():
             "url": r.get("url", ""),
             "title": r.get("title", ""),
             "type": r.get("type", "other"),
-            "snippet": r.get("content", "")[:150],
+            "snippet": r.get("content", ""),
             "credibility": score_credibility(r.get("url", ""), r.get("type", "")),
             "tags": [],
         })
@@ -381,13 +381,16 @@ def preview_sources():
     # Batch-generate keyword tags for all sources in one GPT call
     if sources:
         try:
-            tag_prompt = f"""For each of the following sources, generate 3-4 short keyword tags (1-3 words each) that describe the main topics covered. Return as JSON only, no explanation.
-
-Sources:
-{json.dumps([{{"title": s["title"], "snippet": s["snippet"]}} for s in sources])}
-
-Return format: {{"tags": [["tag1", "tag2", "tag3"], ["tag1", "tag2"], ...]}}
-Each inner array corresponds to one source in the same order."""
+            sources_for_tags = [{"title": s["title"], "snippet": s["snippet"]} for s in sources]
+            tag_prompt = (
+                "For each of the following academic sources, generate:\n"
+                "1. 3-4 short keyword tags (1-3 words each)\n"
+                "2. A clean one-sentence summary (max 20 words) describing what the source covers — no filler like 'This paper examines', just the actual content\n\n"
+                "Return as JSON only, no explanation.\n\nSources:\n"
+                + json.dumps(sources_for_tags)
+                + '\n\nReturn format: {"results": [{"tags": ["tag1", "tag2"], "summary": "one sentence"}, ...]}\n'
+                "Each object corresponds to one source in the same order."
+            )
 
             tag_response = openai_client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -399,10 +402,11 @@ Each inner array corresponds to one source in the same order."""
             # Strip markdown code fences if present
             raw_tags = raw_tags.replace("```json", "").replace("```", "").strip()
             tag_data = json.loads(raw_tags)
-            tags_list = tag_data.get("tags", [])
+            results_list = tag_data.get("results", [])
             for i, source in enumerate(sources):
-                if i < len(tags_list) and isinstance(tags_list[i], list):
-                    source["tags"] = tags_list[i]
+                if i < len(results_list) and isinstance(results_list[i], dict):
+                    source["tags"] = results_list[i].get("tags", [])
+                    source["snippet"] = results_list[i].get("summary", source["snippet"])
         except Exception as tag_err:
             print(f"Tag generation failed (non-fatal): {tag_err}")
             # Fall back to empty tags — already set above
