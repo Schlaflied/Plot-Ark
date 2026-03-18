@@ -128,6 +128,220 @@ const ASSIGNMENT_TYPES = ['essay', 'project', 'debate', 'lab', 'quiz', 'reflecti
 
 const inputCls = 'w-full p-2 bg-white border border-stone-300 rounded-lg text-sm focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors';
 
+// ---- Query History panel (reads from localStorage written by GraphViewer) ----
+
+type QHSubject = 'all' | 'business-law' | 'call';
+
+interface QueryHistoryItem {
+  id: number;
+  question: string;
+  answer: string;
+  subject: QHSubject;
+  starred: boolean;
+  matchedNodeId: string | null;
+  timestamp?: number;
+}
+
+function formatTimestamp(ts?: number): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) + ', ' +
+    d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+}
+
+const QHPANEL_BG = '#f5f0e8';
+const QHPANEL_CARD = '#ede8de';
+const QHBORDER = '#d4cfc5';
+const QHTEXT = '#1a1a2e';
+const QHMUTED = '#6b6560';
+const QHACCENT = '#8B5E3C';
+
+const subjectLabel = (s: QHSubject) =>
+  s === 'business-law' ? 'Business Law' : s === 'call' ? 'CALL' : 'All';
+
+const subjectPillStyle = (s: QHSubject): React.CSSProperties =>
+  s === 'business-law'
+    ? { background: 'rgba(139,94,60,0.15)', color: '#8B5E3C' }
+    : s === 'call'
+    ? { background: 'rgba(79,120,120,0.15)', color: '#4f7878' }
+    : { background: 'rgba(107,101,96,0.12)', color: '#6b6560' };
+
+const QueryHistorySection: React.FC<{ onGoToGraph: () => void; onCountChange?: (n: number) => void }> = ({ onGoToGraph, onCountChange }) => {
+  const [items, setItems] = useState<QueryHistoryItem[]>(() => {
+    try {
+      const stored = localStorage.getItem('plot_ark_query_history');
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
+
+  // Re-read from localStorage on focus (in case GraphViewer updated it)
+  useEffect(() => {
+    const sync = () => {
+      try {
+        const stored = localStorage.getItem('plot_ark_query_history');
+        const parsed: QueryHistoryItem[] = stored ? JSON.parse(stored) : [];
+        setItems(parsed);
+        onCountChange?.(parsed.length);
+      } catch {}
+    };
+    window.addEventListener('focus', sync);
+    return () => window.removeEventListener('focus', sync);
+  }, [onCountChange]);
+
+  const deleteItem = (id: number) => {
+    setItems(prev => {
+      const next = prev.filter(h => h.id !== id);
+      try { localStorage.setItem('plot_ark_query_history', JSON.stringify(next)); } catch {}
+      onCountChange?.(next.length);
+      return next;
+    });
+  };
+
+  const clearAll = () => {
+    setItems([]);
+    try { localStorage.removeItem('plot_ark_query_history'); } catch {}
+    onCountChange?.(0);
+  };
+
+  return (
+    <section id="query-history" style={{ background: '#1c1917', padding: '6rem 0' }}>
+      <div className="container mx-auto px-6">
+        {/* Header */}
+        <div className="flex items-end justify-between mb-10 flex-wrap gap-4">
+          <div className="max-w-xl">
+            <div style={{ fontSize: '0.7rem', letterSpacing: '0.2em', color: '#a8a29e', textTransform: 'uppercase', fontWeight: 700, marginBottom: '0.75rem' }}>
+              Query History
+            </div>
+            <h2 style={{ fontFamily: 'serif', fontSize: '2.25rem', color: 'white', marginBottom: '0.75rem', lineHeight: 1.2 }}>
+              Past Knowledge Graph Queries
+            </h2>
+            <p style={{ color: '#a8a29e', lineHeight: 1.7 }}>
+              All questions asked in the Knowledge Graph tab — persisted across sessions.
+            </p>
+          </div>
+          {items.length > 0 && (
+            <button
+              onClick={clearAll}
+              style={{
+                background: 'rgba(248,113,113,0.12)',
+                border: '1px solid rgba(248,113,113,0.3)',
+                color: '#fca5a5',
+                borderRadius: '0.5rem',
+                padding: '0.4rem 0.9rem',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Clear All
+            </button>
+          )}
+        </div>
+
+        {/* Empty state */}
+        {items.length === 0 ? (
+          <div style={{
+            background: QHPANEL_BG,
+            border: `1px solid ${QHBORDER}`,
+            borderRadius: '0.75rem',
+            padding: '3rem',
+            textAlign: 'center',
+          }}>
+            <Clock size={32} style={{ color: QHACCENT, opacity: 0.35, margin: '0 auto 0.75rem' }} />
+            <p style={{ color: QHMUTED, fontSize: '0.875rem' }}>
+              No queries yet — ask something in the{' '}
+              <button
+                onClick={onGoToGraph}
+                style={{ color: QHACCENT, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}
+              >
+                Knowledge Graph tab
+              </button>
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {items.map(item => (
+              <div
+                key={item.id}
+                onClick={onGoToGraph}
+                style={{
+                  background: QHPANEL_BG,
+                  border: `1px solid ${item.starred ? QHACCENT : QHBORDER}`,
+                  borderRadius: '0.75rem',
+                  padding: '1rem 1.25rem',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s, border-color 0.15s',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = QHPANEL_CARD; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = QHPANEL_BG; }}
+                title="Click to go to Knowledge Graph"
+              >
+                {/* Top row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+                  {/* Subject pill */}
+                  <span style={{
+                    ...subjectPillStyle(item.subject),
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '9999px',
+                    letterSpacing: '0.03em',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {subjectLabel(item.subject)}
+                  </span>
+                  {/* Timestamp */}
+                  {item.timestamp && (
+                    <span style={{ fontSize: '0.7rem', color: QHMUTED, marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+                      {formatTimestamp(item.timestamp)}
+                    </span>
+                  )}
+                  {/* Delete */}
+                  <button
+                    onClick={e => { e.stopPropagation(); deleteItem(item.id); }}
+                    title="Delete"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: QHMUTED,
+                      fontSize: '1rem',
+                      lineHeight: 1,
+                      padding: '0 2px',
+                      marginLeft: item.timestamp ? '0' : 'auto',
+                      flexShrink: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                {/* Question */}
+                <div style={{ fontWeight: 600, color: QHTEXT, fontSize: '0.875rem', marginBottom: '0.35rem' }}>
+                  {item.question}
+                </div>
+                {/* Answer preview */}
+                <div style={{
+                  color: QHMUTED,
+                  fontSize: '0.78rem',
+                  lineHeight: 1.55,
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }}>
+                  {item.answer}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+};
+
 const App: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -195,10 +409,33 @@ const App: React.FC = () => {
   // Citations — collapsible groups of 5
   const [openCitationGroups, setOpenCitationGroups] = useState<Set<number>>(new Set([0]));
 
-  // History panel
+  // History panel (curriculum)
   const [showHistory, setShowHistory] = useState(false);
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Query history badge count (synced from localStorage)
+  const [queryHistoryCount, setQueryHistoryCount] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem('plot_ark_query_history');
+      return stored ? (JSON.parse(stored) as unknown[]).length : 0;
+    } catch { return 0; }
+  });
+  useEffect(() => {
+    const syncCount = () => {
+      try {
+        const stored = localStorage.getItem('plot_ark_query_history');
+        setQueryHistoryCount(stored ? (JSON.parse(stored) as unknown[]).length : 0);
+      } catch {}
+    };
+    window.addEventListener('storage', syncCount);
+    window.addEventListener('focus', syncCount);
+    return () => {
+      window.removeEventListener('storage', syncCount);
+      window.removeEventListener('focus', syncCount);
+    };
+  }, []);
+
   const toggleCitationGroup = (i: number) => {
     setOpenCitationGroups(prev => {
       const next = new Set(prev);
@@ -682,6 +919,15 @@ const App: React.FC = () => {
             <a href="#knowledge-graph" onClick={scrollToSection('knowledge-graph')} className="flex items-center gap-1.5 hover:text-nobel-gold transition-colors cursor-pointer uppercase">
               <Network size={14} />
               Knowledge Graph
+            </a>
+            <a href="#query-history" onClick={scrollToSection('query-history')} className="flex items-center gap-1.5 hover:text-nobel-gold transition-colors cursor-pointer uppercase relative">
+              <Clock size={14} />
+              Query History
+              {queryHistoryCount > 0 && (
+                <span className="absolute -top-2 -right-3 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold px-1" style={{ background: '#8B5E3C', color: '#f5f0e8' }}>
+                  {queryHistoryCount > 99 ? '99+' : queryHistoryCount}
+                </span>
+              )}
             </a>
             <button onClick={handleOpenHistory} className="flex items-center gap-1.5 text-stone-500 hover:text-nobel-gold transition-colors uppercase">
               <Clock size={14} />
@@ -1759,7 +2005,7 @@ const App: React.FC = () => {
                         >
                           ← Regenerate with Different Sources
                         </button>
-                      ) : loadedCurriculumMeta && (
+                      ) : loadedCurriculumMeta && !isStudentView && (
                         <button
                           onClick={handleReresearch}
                           disabled={isFetchingSources}
@@ -1865,6 +2111,15 @@ const App: React.FC = () => {
             <GraphViewer />
           </div>
         </section>
+
+        {/* Query History */}
+        <QueryHistorySection
+          onGoToGraph={() => {
+            const el = document.getElementById('knowledge-graph');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }}
+          onCountChange={setQueryHistoryCount}
+        />
       </main>
 
       <footer className="bg-stone-900 text-stone-400 py-16">

@@ -105,11 +105,28 @@ const GraphViewer: React.FC = () => {
   const [queryLoading, setQueryLoading] = useState(false);
   const [queryAnswer, setQueryAnswer] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
-  const [queryHistory, setQueryHistory] = useState<{ id: number; question: string; answer: string; subject: SubjectKey; starred: boolean }[]>([]);
+  const [queryHistory, setQueryHistory] = useState<{ id: number; question: string; answer: string; subject: SubjectKey; starred: boolean; matchedNodeId: string | null; timestamp?: number }[]>(() => {
+    try {
+      const stored = localStorage.getItem('plot_ark_query_history');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [showHistory, setShowHistory] = useState(false);
+
+  // Persist queryHistory to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('plot_ark_query_history', JSON.stringify(queryHistory));
+    } catch {
+      // localStorage unavailable
+    }
+  }, [queryHistory]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const fgRef = useRef<any>(null);
+  const hasInitializedZoom = useRef<boolean>(false);
   const [dimensions, setDimensions] = useState({ width: 1200, height: 600 });
 
   // Track cursor for tooltip
@@ -143,6 +160,7 @@ const GraphViewer: React.FC = () => {
       setError(null);
       setNotReady(false);
       setGraphData(null);
+      hasInitializedZoom.current = false;
       try {
         const url = activeSubject === 'all' ? '/api/graph' : `/api/graph?subject=${activeSubject}`;
         const res = await fetch(url);
@@ -290,10 +308,11 @@ const GraphViewer: React.FC = () => {
       const data = await res.json();
       const answer = data.answer ?? JSON.stringify(data);
       setQueryAnswer(answer);
-      setQueryHistory(prev => [{ id: Date.now(), question: question.trim(), answer, subject: activeSubject, starred: false }, ...prev].slice(0, 20));
+      const matchedNodeIdForHistory: string | null = data.matched_node_id ?? null;
+      setQueryHistory(prev => [{ id: Date.now(), question: question.trim(), answer, subject: activeSubject, starred: false, matchedNodeId: matchedNodeIdForHistory, timestamp: Date.now() }, ...prev].slice(0, 20));
 
       // Highlight and pan to matched node if backend returned one
-      const matchedNodeId: string | null = data.matched_node_id ?? null;
+      const matchedNodeId: string | null = matchedNodeIdForHistory;
       if (matchedNodeId !== null && graphData) {
         // Try id match first, fall back to label match
         const matchedNode = (
@@ -316,6 +335,28 @@ const GraphViewer: React.FC = () => {
       setQueryError(err instanceof Error ? err.message : 'Query failed');
     } finally {
       setQueryLoading(false);
+    }
+  };
+
+  const handleHistoryClick = (item: { question: string; answer: string; subject: SubjectKey; matchedNodeId: string | null }) => {
+    setQuestion(item.question);
+    setQueryAnswer(item.answer);
+    setActiveSubject(item.subject);
+    if (item.matchedNodeId !== null && graphData) {
+      const matchedNode = (
+        graphData.nodes.find(n => String(n.id) === item.matchedNodeId) ??
+        graphData.nodes.find(n => (n as FGNode).label?.toLowerCase() === item.question.toLowerCase())
+      ) ?? null;
+      if (matchedNode) {
+        setSelectedNode(matchedNode);
+        setTimeout(() => {
+          const n = matchedNode as FGNode;
+          if (fgRef.current && n.x != null && n.y != null) {
+            fgRef.current.centerAt(n.x, n.y, 800);
+            fgRef.current.zoom(3, 800);
+          }
+        }, 150);
+      }
     }
   };
 
@@ -490,7 +531,12 @@ const GraphViewer: React.FC = () => {
             nodePointerAreaPaint={nodePointerAreaPaint}
             onNodeClick={handleNodeClick}
             onNodeHover={handleNodeHover}
-            onEngineStop={() => fgRef.current?.zoomToFit(400, 30)}
+            onEngineStop={() => {
+              if (!hasInitializedZoom.current) {
+                fgRef.current?.zoomToFit(400, 80);
+                hasInitializedZoom.current = true;
+              }
+            }}
             linkColor={() => 'rgba(139,94,60,0.25)'}
             linkWidth={1}
             linkDirectionalArrowLength={4}
@@ -734,7 +780,11 @@ const GraphViewer: React.FC = () => {
                       <div
                         key={item.id}
                         className="rounded-lg p-3 text-xs"
-                        style={{ background: DARK_BG, border: `1px solid ${item.starred ? ACCENT : BORDER_COLOR}` }}
+                        style={{ background: DARK_BG, border: `1px solid ${item.starred ? ACCENT : BORDER_COLOR}`, cursor: 'pointer', transition: 'background 0.15s' }}
+                        onClick={() => handleHistoryClick(item)}
+                        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = PANEL_BG; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = DARK_BG; }}
+                        title="Click to restore this query"
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <span style={{ color: ACCENT, fontWeight: 600 }}>Q</span>
@@ -755,11 +805,12 @@ const GraphViewer: React.FC = () => {
                           <span style={{ color: TEXT_PRIMARY, fontWeight: 500, flex: 1 }}>{item.question}</span>
                           {/* Star toggle */}
                           <button
-                            onClick={() =>
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setQueryHistory(prev =>
                                 prev.map(h => h.id === item.id ? { ...h, starred: !h.starred } : h)
-                              )
-                            }
+                              );
+                            }}
                             title={item.starred ? 'Unstar' : 'Star'}
                             style={{
                               background: 'none',
@@ -776,9 +827,10 @@ const GraphViewer: React.FC = () => {
                           </button>
                           {/* Delete button */}
                           <button
-                            onClick={() =>
-                              setQueryHistory(prev => prev.filter(h => h.id !== item.id))
-                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setQueryHistory(prev => prev.filter(h => h.id !== item.id));
+                            }}
                             title="Delete"
                             style={{
                               background: 'none',
