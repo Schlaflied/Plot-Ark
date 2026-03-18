@@ -1058,17 +1058,37 @@ def query_graph():
         # Expand abbreviation queries (e.g. "DGBLL" → "Digital Game-Based Language Learning (DGBLL)")
         def _expand_abbreviation(q: str, graphml_path: str) -> str:
             q_stripped = q.strip()
-            if q_stripped.isupper() and 2 <= len(q_stripped) <= 8:
-                try:
-                    import networkx as nx
-                    G = nx.read_graphml(graphml_path)
-                    for node_id, attrs in G.nodes(data=True):
-                        node_label = attrs.get("label", str(node_id))
-                        if f"({q_stripped})" in node_label:
-                            return f"{node_label} ({q_stripped})"
-                except Exception:
-                    pass
-            return q
+            try:
+                import networkx as nx
+                G = nx.read_graphml(graphml_path)
+                node_labels = [attrs.get("label", str(node_id)) for node_id, attrs in G.nodes(data=True)]
+
+                # Check if query already matches a node exactly — no expansion needed
+                if q_stripped in node_labels:
+                    return q_stripped
+
+                q_lower = q_stripped.lower()
+
+                # 1. Look for nodes that START WITH the query (case-insensitive)
+                starts_with = [n for n in node_labels if n.lower().startswith(q_lower)]
+                if starts_with:
+                    best = min(starts_with, key=len)
+                    return f"What is {best}? {q_stripped}"
+
+                # 2. Look for nodes that CONTAIN the query as a word
+                contains = [n for n in node_labels if q_lower in n.lower()]
+                if contains:
+                    best = min(contains, key=len)
+                    return f"What is {best}? {q_stripped}"
+
+                # 3. Original parenthesis match as fallback
+                for n in node_labels:
+                    if f"({q_stripped})" in n or f"({q_stripped.upper()})" in n:
+                        return f"What is {n}? {q_stripped}"
+
+            except Exception:
+                pass
+            return q_stripped
 
         expanded_question = _expand_abbreviation(question, graphml_path)
 
