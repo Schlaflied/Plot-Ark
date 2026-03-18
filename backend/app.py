@@ -366,6 +366,17 @@ def preview_sources():
     if not all([topic, level, audience]):
         return {"error": "Missing required fields: topic, level, audience"}, 400
 
+    # --- Redis cache check ---
+    cache_key = f"sources_preview:{topic}:{level}:{audience}"
+    if _redis_client is not None:
+        try:
+            cached = _redis_client.get(cache_key)
+            if cached:
+                print(f"Redis cache hit: {cache_key}")
+                return json.loads(cached)
+        except Exception as redis_err:
+            print(f"Redis get error (skipping cache check): {redis_err}")
+
     raw = research_sources(topic, level, audience)
     sources = []
     for r in raw:
@@ -410,6 +421,13 @@ def preview_sources():
         except Exception as tag_err:
             print(f"Tag generation failed (non-fatal): {tag_err}")
             # Fall back to empty tags — already set above
+
+    # --- Store result in Redis ---
+    if _redis_client is not None:
+        try:
+            _redis_client.setex(cache_key, 604800, json.dumps({"sources": sources}))  # 7 days
+        except Exception as redis_err:
+            print(f"Redis set error (skipping cache store): {redis_err}")
 
     return {"sources": sources}
 
