@@ -317,10 +317,10 @@ Knowledge graph layer powered by [LightRAG](https://github.com/HKUDS/LightRAG) (
 
 Built with [Claude](https://claude.ai) (Anthropic) as AI pair programmer.
 
-Special thanks to the two chief quality assurance officers who supervised every late-night coding session:
+Special thanks to the two chief quality assurance officers who supervised every late-night coding session — **Icy** (冰糖, white) and **雪梨** (calico):
 
 <p align="center">
-  <img src="docs/cats.jpg" alt="Chief QA Officers" width="400"/>
+  <img src="docs/cats.jpg" alt="Icy and 雪梨 — Chief QA Officers" width="400"/>
 </p>
 
 ---
