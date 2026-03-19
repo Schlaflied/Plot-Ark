@@ -284,6 +284,18 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE)
 
 ---
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=Schlaflied%2FPlot-Ark.git&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=Schlaflied/Plot-Ark.git&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=Schlaflied/Plot-Ark.git&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=Schlaflied/Plot-Ark.git&type=date&legend=top-left" />
+ </picture>
+</a>
+
+---
+
 ## Acknowledgements
 
 Architectural inspiration from [Hive](https://github.com/aden-hive/hive) (YC-backed AI agent infrastructure) — the node pipeline, shared memory, and evolution loop patterns informed the agentic curriculum engine design.
