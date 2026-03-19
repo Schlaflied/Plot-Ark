@@ -28,7 +28,7 @@
 
 ---
 
-## Demo
+## 🎬 Demo
 
 **Curriculum Generation** — research agent → streaming generation → module editor
 
@@ -42,10 +42,10 @@
 
 ---
 
-## Features
+## ✨ Features
 
 <details>
-<summary><strong>Curriculum Generation</strong></summary>
+<summary><strong>🧠 Curriculum Generation</strong></summary>
 
 - **Agentic source research** — Tavily agent runs multi-type queries across academic (JSTOR, Springer, ResearchGate…), video (TED, Coursera, YouTube), and news (HBR, Economist, NYT) domains before generation begins
 - **Grounded citations** — verified real URLs injected into the prompt; sources panel shows full titles, type badges (📄/🎬/📰), and estimated read/watch time
@@ -59,7 +59,7 @@
 </details>
 
 <details>
-<summary><strong>Module Editor</strong></summary>
+<summary><strong>✏️ Module Editor</strong></summary>
 
 - **Single-card navigation** — left/right arrows through modules, or click the sidebar index
 - **Drag-and-drop reordering** — restructure the sequence without regenerating
@@ -71,7 +71,7 @@
 </details>
 
 <details>
-<summary><strong>Export</strong></summary>
+<summary><strong>📦 Export</strong></summary>
 
 - **IMS Common Cartridge (.imscc)** — direct import into Canvas, Moodle, D2L
 - **Markdown export** — full curriculum with readings and assignments as a .md file
@@ -80,21 +80,21 @@
 </details>
 
 <details>
-<summary><strong>Knowledge Graph (LightRAG)</strong></summary>
+<summary><strong>🕸️ Knowledge Graph (LightRAG)</strong></summary>
 
 - **Material ingestion** — upload course PDFs and PPTXs; `ingest.py` processes them into a LightRAG knowledge graph
 - **Subject tabs** — separate graphs per course (Business Law, CALL) or merged All view (994 nodes, 586 edges)
 - **Force-directed visualization** — interactive 2D graph with warm brown palette; node size scales with connection count
 - **Node detail panel** — click any concept to see its definition and connection count
 - **Concept search** — filter and highlight matching nodes across the graph
-- **Knowledge query** — ask natural language questions against the graph; Redis-cached answers (24h TTL)
+- **Knowledge query** — ask natural language questions against the graph; Redis-cached answers (persistent cache)
 - **Query history** — starred + deletable history of past questions with subject tags
 - **Persistent event loop** — LightRAG async engine runs on a dedicated background thread; no cold-start penalty after first query
 
 </details>
 
 <details>
-<summary><strong>Agentic Layer (Roadmap)</strong></summary>
+<summary><strong>🤖 Agentic Layer (Roadmap)</strong></summary>
 
 - **xAPI event collection** — fine-grained learner behavior (watched, skipped, struggled)
 - **Redis learner state** — real-time profile (mastered / struggling / recommended_next)
@@ -105,7 +105,7 @@
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
 **Course Generation Pipeline**
 
@@ -122,7 +122,7 @@ xAPI behavior events → Curriculum Agent → Redis learner state → Narrative 
 
 ---
 
-## Tech Stack
+## 🛠️ Tech Stack
 
 | Layer | Technology | Role |
 |-------|-----------|------|
@@ -133,14 +133,14 @@ xAPI behavior events → Curriculum Agent → Redis learner state → Narrative 
 | **History** | PostgreSQL | Persistent curriculum storage with favorites |
 | **Cache** | Redis | Learner state (roadmap) |
 | **Knowledge Graph** | LightRAG + networkx + react-force-graph-2d | Course material ingestion → interactive concept graph |
-| **Graph Cache** | Redis + in-memory | Query result cache (24h TTL) + rag instance reuse |
+| **Graph Cache** | Redis + in-memory | Query result cache (persistent cache) + rag instance reuse |
 | **Behavior Data** | xAPI + LRS | Learner event stream (roadmap) |
 | **Export** | IMS Common Cartridge | LMS-compatible output |
 | **Dev** | Docker Compose | Single-command local environment |
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 **Prerequisites:** Docker, an OpenAI or Gemini API key, a Tavily API key (free tier at tavily.com)
 
@@ -162,7 +162,7 @@ docker compose up --build
 
 ---
 
-## Using the Knowledge Graph
+## 🕸️ Using the Knowledge Graph
 
 The knowledge graph feature lets you ingest your own course materials (PDFs or PPTXs) and explore them as an interactive concept map.
 
@@ -217,7 +217,7 @@ Navigate to **Knowledge Graph** in the top nav. Select your subject tab, explore
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 plot-ark/
@@ -225,7 +225,6 @@ plot-ark/
 ├── .env.example
 ├── docs/
 │   ├── architecture.md
-│   ├── FEEDBACK.md                  ← External feedback log (ID practitioners)
 │   ├── curriculum generate.gif      ← Demo: generation pipeline
 │   └── knowledge graph.gif          ← Demo: knowledge graph + query
 ├── frontend/                        ← React + TypeScript + Vite
@@ -247,7 +246,7 @@ plot-ark/
 
 ---
 
-## Roadmap
+## 🗺️ Roadmap
 
 - [x] Flask SSE streaming backend
 - [x] React frontend with module card navigation
@@ -273,7 +272,7 @@ plot-ark/
 
 ---
 
-## License
+## 📄 License
 
 GNU Affero General Public License v3.0 — see [LICENSE](LICENSE)
 
@@ -284,7 +283,7 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE)
 
 ---
 
-## Star History
+## ⭐ Star History
 
 <a href="https://www.star-history.com/?repos=Schlaflied%2FPlot-Ark.git&type=date&legend=top-left">
  <picture>
@@ -296,7 +295,7 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE)
 
 ---
 
-## Acknowledgements
+## 🙏 Acknowledgements
 
 Architectural inspiration from [Hive](https://github.com/aden-hive/hive) (YC-backed AI agent infrastructure) — the node pipeline, shared memory, and evolution loop patterns informed the agentic curriculum engine design.
 
