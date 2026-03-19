@@ -38,7 +38,7 @@
 
 ![Knowledge Graph](docs/knowledge%20graph.gif)
 
-▶ [Full demo video (Google Drive)](https://drive.google.com/file/d/1FQlOdrFeK6z3-vcjRDw2cdmhrmC0JI9J/view?usp=drive_link)
+▶ [Full demo video (Google Drive)](https://drive.google.com/file/d/14xBVW0lqy2lpF718XlUqynFn2OurXPgu/view?usp=sharing)
 
 ---
 
