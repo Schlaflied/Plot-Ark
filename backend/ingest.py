@@ -4,8 +4,8 @@ ingest.py — Standalone script to ingest business-law PDF and PPTX materials in
 Usage:
     python ingest.py
 
-Reads all PDFs and PPTX files from ../data/materials/business-law/ using pymupdf (fitz)
-and python-pptx, inserts text into LightRAG (lightrag-hku >= 1.3.8) using OpenAI
+Reads all PDFs, PPTX, and DOCX files from ../data/materials/business-law/ using pymupdf (fitz),
+python-pptx, and python-docx, inserts text into LightRAG (lightrag-hku >= 1.3.8) using OpenAI
 gpt-4o-mini + text-embedding-3-small.
 """
 
@@ -13,6 +13,7 @@ import os
 import asyncio
 import fitz  # pymupdf
 from pptx import Presentation
+from docx import Document
 
 from dotenv import load_dotenv
 from lightrag import LightRAG
@@ -53,6 +54,15 @@ def extract_text_from_pptx(path: str) -> str:
     return "\n".join(slides_text)
 
 
+def extract_text_from_docx(path: str) -> str:
+    """Extract all text from a DOCX file using python-docx."""
+    doc = Document(path)
+    paragraphs_text = []
+    for paragraph in doc.paragraphs:
+        paragraphs_text.append(paragraph.text)
+    return "\n".join(paragraphs_text)
+
+
 async def ingest_all():
     print(f"LightRAG working dir: {os.path.abspath(LIGHTRAG_DIR)}")
     print(f"Materials dir: {os.path.abspath(MATERIALS_DIR)}")
@@ -70,11 +80,11 @@ async def ingest_all():
 
     all_files = sorted([
         f for f in os.listdir(MATERIALS_DIR)
-        if f.lower().endswith(".pdf") or f.lower().endswith(".pptx")
+        if f.lower().endswith(".pdf") or f.lower().endswith(".pptx") or f.lower().endswith(".docx")
     ])
 
     if not all_files:
-        print(f"No PDF or PPTX files found in {MATERIALS_DIR}")
+        print(f"No PDF, PPTX, or DOCX files found in {MATERIALS_DIR}")
         return
 
     print(f"Found {len(all_files)} file(s): {all_files}\n")
@@ -85,8 +95,10 @@ async def ingest_all():
         try:
             if filename.lower().endswith(".pdf"):
                 text = extract_text_from_pdf(file_path)
-            else:
+            elif filename.lower().endswith(".pptx"):
                 text = extract_text_from_pptx(file_path)
+            else:
+                text = extract_text_from_docx(file_path)
             if not text.strip():
                 print(f"  [!] Skipped (empty text): {filename}")
                 continue
