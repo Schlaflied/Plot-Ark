@@ -305,6 +305,12 @@ GNU Affero 通用公共许可证 v3.0 — 详见 [LICENSE](LICENSE)
 
 以 [Claude](https://claude.ai)（Anthropic）为 AI 结对编程伙伴构建完成。
 
+特别感谢两位首席质量保证官，全程监督每一个深夜 coding session —— **Icy**（冰糖，白猫）与**雪梨**（三花猫）：
+
+<p align="center">
+  <img src="docs/cats.jpg" alt="Icy 冰糖与雪梨 — 首席质量保证官" width="400"/>
+</p>
+
 ---
 
 <div align="center">
