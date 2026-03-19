@@ -580,7 +580,7 @@ Return ONLY valid JSON (no markdown, no explanation):
       "narrative_preview": "A compelling 2-3 sentence narrative hook using metaphor, scenario, or challenge framing.",
       "recommended_readings": [
         {{
-          "title": "Full title of reading (article, chapter, or textbook section)",
+          "title": "Full title of reading (article, chapter, or textbook section) — complete, never truncated with '...'",
           "url": "https://real-url-from-sources-above.com",
           "type": "academic | video | news",
           "estimated_time": "15 min read | 20 min video | 10 min read",
@@ -609,7 +609,7 @@ Return ONLY valid JSON (no markdown, no explanation):
   ],
   "sources": [
     {{
-      "title": "Full title of the paper, video, article, or resource",
+      "title": "Full title of the paper, video, article, or resource — complete, never truncated with '...'",
       "url": "https://example.com",
       "domain": "example.com",
       "type": "academic | video | news",
@@ -619,7 +619,13 @@ Return ONLY valid JSON (no markdown, no explanation):
   ]
 }}
 
-Generate exactly {module_count} modules. complexity_level must start at 1 and reach 5 by the last module.
+CRITICAL REQUIREMENT — MODULE COUNT:
+You MUST generate exactly {module_count} modules. No more, no fewer.
+Before finalizing your response, count your modules and verify the count equals {module_count}.
+If your count is wrong, fix it before responding.
+Responses with incorrect module counts will be automatically rejected and regenerated.
+
+complexity_level must start at 1 and reach 5 by the last module.
 
 For sources: use the verified real URLs provided above. Add more real sources you know with confidence. Every URL must be real and accessible.{sources_context}"""
 
@@ -696,9 +702,15 @@ For sources: use the verified real URLs provided above. Add more real sources yo
                     retry_text = retry_response.choices[0].message.content
                 try:
                     parsed = parse_curriculum(retry_text)
+                    retry_valid, retry_reason = validate_structure(parsed, module_count)
                     yield f"data: {json.dumps({'reset': True})}\n\n"
                     yield f"data: {json.dumps({'text': retry_text})}\n\n"
-                    print("Retry succeeded")
+                    if retry_valid:
+                        print("Retry succeeded")
+                    else:
+                        actual_count = len(parsed.get("modules", []))
+                        print(f"Retry also failed validation: {retry_reason}")
+                        yield f"data: {json.dumps({'type': 'warning', 'message': f'Generated {actual_count} modules instead of {module_count} — GPT was being lazy, try regenerating'})}\n\n"
                 except Exception as e:
                     print(f"Retry parse failed: {e}")
             save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed, design_approach)

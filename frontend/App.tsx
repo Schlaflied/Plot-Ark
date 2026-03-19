@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { HeroScene, QuantumComputerScene } from './components/QuantumScene';
 import { SurfaceCodeDiagram, TransformerDecoderDiagram } from './components/Diagrams';
 import GraphViewer from './components/GraphViewer';
-import { ArrowDown, Menu, X, BookOpen, Download, Copy, CheckCircle2, ChevronLeft, ChevronRight, FileText, Pencil, Save, Plus, Trash2, Clock, Star, Network } from 'lucide-react';
+import { ArrowDown, Menu, X, BookOpen, Download, Copy, CheckCircle2, ChevronLeft, ChevronRight, FileText, Pencil, Plus, Trash2, Clock, Star, Network } from 'lucide-react';
 
 interface Reading {
   title: string;
@@ -646,6 +646,14 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAutoSave = () => {
+    try {
+      localStorage.setItem('plot-ark-modules', JSON.stringify(editedModules));
+    } catch {
+      // localStorage unavailable
+    }
+  };
+
   const fetchHistory = async () => {
     setHistoryLoading(true);
     try {
@@ -808,6 +816,28 @@ const App: React.FC = () => {
   };
   const removeAssignment = (ai: number) => {
     updateCurrentModule({ assignments: currentModule!.assignments.filter((_, i) => i !== ai) });
+  };
+
+  const deleteModule = (idx: number) => {
+    if (editedModules.length <= 1) return;
+    const updated = editedModules.filter((_, i) => i !== idx);
+    setEditedModules(updated);
+    setCurrentModuleIndex(Math.min(idx, updated.length - 1));
+  };
+
+  const addModule = () => {
+    const blank: Module = {
+      title: 'New Module',
+      complexity_level: (editedModules[currentModuleIndex]?.complexity_level ?? 1) + 1,
+      learning_objectives: [''],
+      narrative_preview: '',
+      recommended_readings: [],
+      assignments: [],
+    };
+    const updated = [...editedModules];
+    updated.splice(currentModuleIndex + 1, 0, blank);
+    setEditedModules(updated);
+    setCurrentModuleIndex(currentModuleIndex + 1);
   };
 
   const buildMarkdown = () => {
@@ -1531,13 +1561,24 @@ const App: React.FC = () => {
                   <BookOpen size={13} className="text-nobel-gold" />
                   <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">Course Structure</span>
                 </div>
-                {editedModules.length > 0 ? (
-                  <p className="text-xs text-stone-500">
-                    {editedModules.length} modules{viewMode === 'professor' ? ' · drag to reorder' : ''}
-                  </p>
-                ) : (
-                  <p className="text-xs text-stone-400">Generate a curriculum to begin</p>
-                )}
+                <div className="flex items-center justify-between">
+                  {editedModules.length > 0 ? (
+                    <p className="text-xs text-stone-500">
+                      {editedModules.length} modules{viewMode === 'professor' ? ' · drag to reorder' : ''}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-stone-400">Generate a curriculum to begin</p>
+                  )}
+                  {viewMode === 'professor' && editedModules.length > 0 && (
+                    <button
+                      onClick={addModule}
+                      className="text-stone-400 hover:text-stone-700 text-sm font-bold px-1"
+                      title="Add module"
+                    >
+                      +
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Module list */}
@@ -1553,7 +1594,7 @@ const App: React.FC = () => {
                         onDrop={viewMode === 'professor' ? e => handleDrop(e, idx) : undefined}
                         onDragEnd={viewMode === 'professor' ? handleDragEnd : undefined}
                         onClick={() => { setCurrentModuleIndex(idx); setActiveTab('objectives'); setIsEditing(false); }}
-                        className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all flex items-center gap-3 select-none ${
+                        className={`group w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all flex items-center gap-3 select-none ${
                           viewMode === 'professor' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
                         } ${
                           idx === currentModuleIndex ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-100'
@@ -1570,6 +1611,15 @@ const App: React.FC = () => {
                             }`} />
                           ))}
                         </span>
+                        {viewMode === 'professor' && editedModules.length > 1 && (
+                          <button
+                            onClick={e => { e.stopPropagation(); deleteModule(idx); }}
+                            className="opacity-0 group-hover:opacity-100 ml-auto text-stone-400 hover:text-red-500 text-xs px-1"
+                            title="Delete module"
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1613,11 +1663,11 @@ const App: React.FC = () => {
                           <span className="text-xs text-stone-500 font-mono">{currentModule.complexity_level}/5</span>
                         </div>
                         {viewMode === 'professor' && (
-                          <button onClick={() => isEditing ? handleSaveEdit() : setIsEditing(true)}
+                          <button onClick={() => setIsEditing(v => !v)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
                               isEditing ? 'bg-stone-900 text-white hover:bg-stone-700' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                             }`}>
-                            {isEditing ? <><Save size={12} /> Save</> : <><Pencil size={12} /> Edit</>}
+                            <Pencil size={12} /> {isEditing ? 'Done' : 'Edit'}
                           </button>
                         )}
                       </div>
@@ -1627,6 +1677,7 @@ const App: React.FC = () => {
                       {/* Title */}
                       {isEditing ? (
                         <input value={currentModule.title} onChange={e => updateCurrentModule({ title: e.target.value })}
+                          onBlur={handleAutoSave}
                           className="font-serif text-2xl text-stone-900 w-full border-b-2 border-nobel-gold bg-transparent outline-none mb-6 pb-1" />
                       ) : (
                         <h3 className="font-serif text-2xl text-stone-900 mb-6">{currentModule.title}</h3>
@@ -1644,6 +1695,13 @@ const App: React.FC = () => {
                         ))}
                       </div>
 
+                      {isEditing && (
+                        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-1.5 mb-3 flex items-center gap-1.5">
+                          <span>✓</span>
+                          <span>Auto-saving — changes are saved as you type</span>
+                        </div>
+                      )}
+
                       {/* Tab: Objectives */}
                       {activeTab === 'objectives' && (
                         <>
@@ -1652,7 +1710,7 @@ const App: React.FC = () => {
                               {(currentModule.learning_objectives || []).map((obj, i) => (
                                 <div key={i} className="flex gap-2 items-center">
                                   <div className="w-1.5 h-1.5 rounded-full bg-nobel-gold flex-shrink-0" />
-                                  <input value={obj} onChange={e => updateObjective(i, e.target.value)} className={`flex-1 ${inputCls}`} />
+                                  <input value={obj} onChange={e => updateObjective(i, e.target.value)} onBlur={handleAutoSave} className={`flex-1 ${inputCls}`} />
                                   <button onClick={() => removeObjective(i)} className="text-stone-400 hover:text-red-500 transition-colors">
                                     <Trash2 size={14} />
                                   </button>
@@ -1677,6 +1735,7 @@ const App: React.FC = () => {
                             <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-3">Narrative Preview</h4>
                             {isEditing && viewMode === 'professor' ? (
                               <textarea value={currentModule.narrative_preview} onChange={e => updateCurrentModule({ narrative_preview: e.target.value })}
+                                onBlur={handleAutoSave}
                                 rows={4} className={inputCls + ' resize-none italic'} />
                             ) : (
                               <p className="text-stone-600 leading-relaxed italic border-l-2 border-stone-300 pl-4">"{currentModule.narrative_preview}"</p>
@@ -1695,21 +1754,41 @@ const App: React.FC = () => {
                                   <div className="space-y-3">
                                     <div className="flex gap-2 items-start">
                                       <input value={r.title} onChange={e => updateReading(ri, { title: e.target.value })}
+                                        onBlur={handleAutoSave}
                                         placeholder="Reading title" className={`flex-1 ${inputCls} font-bold`} />
                                       <button onClick={() => removeReading(ri)} className="text-stone-400 hover:text-red-500 mt-1 transition-colors">
                                         <Trash2 size={14} />
                                       </button>
                                     </div>
+                                    <input
+                                      className="w-full text-xs text-stone-400 border border-stone-200 rounded px-2 py-1 mt-1 focus:outline-none focus:border-stone-400"
+                                      placeholder="🔗 https:// (optional)"
+                                      value={r.url || ''}
+                                      onChange={e => updateReading(ri, { url: e.target.value })}
+                                      onBlur={handleAutoSave}
+                                    />
+                                    <select
+                                      className="w-full text-xs text-stone-500 border border-stone-200 rounded px-2 py-1 mt-1 focus:outline-none focus:border-stone-400 bg-white"
+                                      value={r.type || 'academic'}
+                                      onChange={e => updateReading(ri, { type: e.target.value as 'academic' | 'video' | 'news' })}
+                                      onBlur={handleAutoSave}
+                                    >
+                                      <option value="academic">📄 Academic</option>
+                                      <option value="video">🎬 Video</option>
+                                      <option value="news">📰 News</option>
+                                    </select>
                                     <div className="space-y-1.5">
                                       {(r.key_points || []).map((kp, ki) => (
                                         <div key={ki} className="flex gap-2 items-center">
                                           <span className="text-nobel-gold font-bold">·</span>
                                           <input value={kp} onChange={e => updateReadingKeyPoint(ri, ki, e.target.value)}
+                                            onBlur={handleAutoSave}
                                             placeholder="Key point" className={`flex-1 ${inputCls}`} />
                                         </div>
                                       ))}
                                     </div>
                                     <input value={r.rationale} onChange={e => updateReading(ri, { rationale: e.target.value })}
+                                      onBlur={handleAutoSave}
                                       placeholder="Why this reading is essential..." className={inputCls} />
                                   </div>
                                 </div>
@@ -1788,6 +1867,7 @@ const App: React.FC = () => {
                                 <div className="space-y-3">
                                   <div className="flex gap-2 items-start">
                                     <input value={a.title} onChange={e => updateAssignment(ai, { title: e.target.value })}
+                                      onBlur={handleAutoSave}
                                       placeholder="Assignment title" className={`flex-1 ${inputCls} font-bold`} />
                                     <button onClick={() => removeAssignment(ai)} className="text-stone-400 hover:text-red-500 mt-1 transition-colors">
                                       <Trash2 size={14} />
@@ -1798,6 +1878,7 @@ const App: React.FC = () => {
                                     {ASSIGNMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                                   </select>
                                   <textarea value={a.coverage} onChange={e => updateAssignment(ai, { coverage: e.target.value })}
+                                    onBlur={handleAutoSave}
                                     placeholder="Which concepts and objectives this covers..." rows={3}
                                     className={inputCls + ' resize-none'} />
                                 </div>
