@@ -733,6 +733,28 @@ For sources: use the verified real URLs provided above. Add more real sources yo
     )
 
 
+@app.route("/api/curriculum/save", methods=["POST"])
+def save_curriculum_endpoint():
+    """Save a fully expanded curriculum (from two-phase generation) to history."""
+    data = request.get_json()
+    topic = data.get("topic", "")
+    level = data.get("level", "")
+    audience = data.get("audience", "")
+    course_code = data.get("course_code", "")
+    course_type = data.get("course_type", "mixed")
+    module_count = data.get("module_count", 0)
+    design_approach = data.get("design_approach", "ADDIE")
+    modules = data.get("modules", [])
+    sources = data.get("sources", [])
+    parsed = {"modules": modules, "sources": sources}
+    try:
+        save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed, design_approach)
+        return jsonify({"status": "saved"})
+    except Exception as e:
+        print(f"Save endpoint error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/curriculum/skeleton", methods=["POST"])
 def generate_skeleton():
     """Phase 1: Generate only module titles + learning_objectives (no readings/assignments)."""

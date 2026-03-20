@@ -711,7 +711,7 @@ const App: React.FC = () => {
                 const skeletonModules = (parsed.modules || []).map((m, i) => ({
                   ...m,
                   module_number: m.module_number ?? i + 1,
-                  learning_objectives: Array.isArray(m.learning_objectives) ? m.learning_objectives : [],
+                  learning_objectives: Array.isArray(m.learning_objectives) ? m.learning_objectives.map((o: string) => o && o.length > 0 ? o[0].toUpperCase() + o.slice(1) : o) : [],
                   complexity_level: Number(m.complexity_level) || Math.max(1, Math.round((i + 1) / (parsed.modules.length) * 5)),
                 }));
                 setSkeleton(skeletonModules);
@@ -816,7 +816,9 @@ const App: React.FC = () => {
                   const normalised: Module = {
                     title: parsed.title || skeleton[i].title || `Module ${i + 1}`,
                     complexity_level: Number(parsed.complexity_level) || Number(skeleton[i].complexity_level) || 1,
-                    learning_objectives: Array.isArray(parsed.learning_objectives) ? parsed.learning_objectives : (skeleton[i].learning_objectives || []),
+                    learning_objectives: Array.isArray(parsed.learning_objectives)
+                      ? parsed.learning_objectives.map((o: string) => o && o.length > 0 ? o[0].toUpperCase() + o.slice(1) : o)
+                      : (skeleton[i].learning_objectives || []).map((o: string) => o && o.length > 0 ? o[0].toUpperCase() + o.slice(1) : o),
                     narrative_preview: parsed.narrative_preview || '',
                     recommended_readings: Array.isArray(parsed.recommended_readings) ? parsed.recommended_readings : [],
                     assignments: Array.isArray(parsed.assignments) ? parsed.assignments : [],
@@ -871,6 +873,27 @@ const App: React.FC = () => {
         setEditedModules([...expandedModules]);
         setExpandProgress(i + 1);
       }
+    }
+
+    // Save to history
+    try {
+      await fetch('/api/curriculum/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: params.topic,
+          level: params.level,
+          audience: params.audience,
+          course_code: params.courseCode || '',
+          course_type: params.courseType || 'mixed',
+          module_count: expandedModules.length,
+          design_approach: params.designApproach || 'ADDIE',
+          modules: expandedModules,
+          sources: approved.map(s => ({ title: s.title, url: s.url, domain: (() => { try { return new URL(s.url).hostname; } catch { return s.url; } })() })),
+        }),
+      });
+    } catch (e) {
+      console.warn('Failed to save curriculum to history:', e);
     }
 
     // All modules expanded — set curriculum with empty sources (sources come from approved list)
@@ -2345,10 +2368,16 @@ const App: React.FC = () => {
                                     className={inputCls}>
                                     {ASSIGNMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                                   </select>
-                                  <textarea value={a.coverage} onChange={e => updateAssignment(ai, { coverage: e.target.value })}
+                                  <textarea value={a.task_description || a.coverage || ''} onChange={e => updateAssignment(ai, { task_description: e.target.value })}
                                     onBlur={handleAutoSave}
-                                    placeholder="Which concepts and objectives this covers..." rows={3}
+                                    placeholder="Task description — what students need to do..." rows={3}
                                     className={inputCls + ' resize-none'} />
+                                  <input value={a.deliverable || ''} onChange={e => updateAssignment(ai, { deliverable: e.target.value })}
+                                    onBlur={handleAutoSave}
+                                    placeholder="Deliverable (e.g. 500-word written reflection)" className={inputCls} />
+                                  <input value={a.estimated_time || ''} onChange={e => updateAssignment(ai, { estimated_time: e.target.value })}
+                                    onBlur={handleAutoSave}
+                                    placeholder="Estimated time (e.g. 60 minutes)" className={inputCls} />
                                 </div>
                               ) : (
                                 <>
