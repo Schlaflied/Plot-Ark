@@ -383,6 +383,26 @@ const App: React.FC = () => {
   const [expandProgress, setExpandProgress] = useState<number>(0);
   const [skeletonExpanded, setSkeletonExpanded] = useState<Set<number>>(new Set());
 
+  const updateSkeleton = (idx: number, updates: Partial<typeof skeleton[0]>) => {
+    setSkeleton(prev => prev.map((m, i) => i === idx ? { ...m, ...updates } : m));
+  };
+
+  const deleteSkeletonModule = (idx: number) => {
+    setSkeleton(prev => prev
+      .filter((_, i) => i !== idx)
+      .map((m, i) => ({ ...m, module_number: i + 1 }))
+    );
+  };
+
+  const addSkeletonModule = () => {
+    setSkeleton(prev => [...prev, {
+      module_number: prev.length + 1,
+      title: 'New Module',
+      complexity_level: (prev[prev.length - 1]?.complexity_level ?? 1) + 1,
+      learning_objectives: ['']
+    }]);
+  };
+
   // R2: Human-in-the-loop source review
   const [isFetchingSources, setIsFetchingSources] = useState(false);
   const [previewSources, setPreviewSources] = useState<Source[]>([]);
@@ -1830,7 +1850,7 @@ const App: React.FC = () => {
                 <p className="text-sm text-stone-500 mb-6">
                   {generationPhase === 'expanding'
                     ? `Expanding modules... ${expandProgress} of ${skeleton.length} complete`
-                    : 'Review the module structure before full expansion. You can go back and adjust parameters if needed.'}
+                    : 'Review and edit titles and objectives below, then click Generate Full Curriculum when ready.'}
                 </p>
 
                 {/* Module list */}
@@ -1850,17 +1870,34 @@ const App: React.FC = () => {
                             : 'border-stone-200 bg-stone-50'
                         }`}
                       >
-                        <button
-                          type="button"
-                          onClick={() => setSkeletonExpanded(prev => {
-                            const next = new Set(prev);
-                            next.has(idx) ? next.delete(idx) : next.add(idx);
-                            return next;
-                          })}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-left"
-                        >
-                          <span className="font-mono text-xs text-stone-400 shrink-0 w-5">{idx + 1}</span>
-                          <span className="flex-1 font-semibold text-stone-800 text-sm leading-snug">{mod.title || `Module ${idx + 1}`}</span>
+                        <div className="w-full flex items-center gap-3 px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => setSkeletonExpanded(prev => {
+                              const next = new Set(prev);
+                              next.has(idx) ? next.delete(idx) : next.add(idx);
+                              return next;
+                            })}
+                            className="font-mono text-xs text-stone-400 shrink-0 w-5 text-left"
+                          >{idx + 1}</button>
+                          {generationPhase === 'skeleton_ready' ? (
+                            <input
+                              className="flex-1 font-bold bg-transparent border-b border-stone-300 focus:border-amber-500 focus:outline-none w-full text-sm text-stone-800 leading-snug"
+                              value={mod.title || ''}
+                              onChange={e => updateSkeleton(idx, { title: e.target.value })}
+                              onClick={e => e.stopPropagation()}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSkeletonExpanded(prev => {
+                                const next = new Set(prev);
+                                next.has(idx) ? next.delete(idx) : next.add(idx);
+                                return next;
+                              })}
+                              className="flex-1 font-semibold text-stone-800 text-sm leading-snug text-left"
+                            >{mod.title || `Module ${idx + 1}`}</button>
+                          )}
                           <span className="flex gap-0.5 shrink-0">
                             {[1, 2, 3, 4, 5].map(n => (
                               <span key={n} className={`w-1.5 h-1.5 rounded-full ${n <= Number(mod.complexity_level) ? 'bg-amber-400' : 'bg-stone-200'}`} />
@@ -1868,24 +1905,77 @@ const App: React.FC = () => {
                           </span>
                           {isDone && <span className="text-emerald-500 text-xs font-bold shrink-0">Done</span>}
                           {isActive && <span className="text-amber-600 text-xs font-bold shrink-0 animate-pulse">...</span>}
-                          <span className={`text-stone-400 text-xs shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
-                        </button>
-                        {isOpen && Array.isArray(mod.learning_objectives) && mod.learning_objectives.length > 0 && (
+                          {generationPhase === 'skeleton_ready' && skeleton.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); deleteSkeletonModule(idx); }}
+                              className="text-stone-300 hover:text-red-400 text-sm px-1 shrink-0 transition-colors"
+                              title="Remove module"
+                            >×</button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setSkeletonExpanded(prev => {
+                              const next = new Set(prev);
+                              next.has(idx) ? next.delete(idx) : next.add(idx);
+                              return next;
+                            })}
+                            className={`text-stone-400 text-xs shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                          >▾</button>
+                        </div>
+                        {isOpen && (
                           <div className="px-4 pb-3 pt-0">
-                            <ul className="space-y-1">
-                              {mod.learning_objectives.map((obj, oi) => (
-                                <li key={oi} className="text-xs text-stone-600 flex gap-2">
-                                  <span className="text-amber-400 shrink-0 mt-0.5">•</span>
-                                  <span>{obj}</span>
-                                </li>
-                              ))}
-                            </ul>
+                            {generationPhase === 'skeleton_ready' ? (
+                              <div className="space-y-1">
+                                {(mod.learning_objectives || []).map((obj, objIdx) => (
+                                  <div key={objIdx} className="flex items-center gap-2">
+                                    <span className="text-amber-400 shrink-0 mt-0.5 text-xs">•</span>
+                                    <input
+                                      className="bg-transparent border-b border-stone-200 focus:border-amber-400 focus:outline-none text-sm w-full text-stone-600"
+                                      value={obj}
+                                      onChange={e => {
+                                        const newObjs = [...(mod.learning_objectives || [])];
+                                        newObjs[objIdx] = e.target.value;
+                                        updateSkeleton(idx, { learning_objectives: newObjs });
+                                      }}
+                                    />
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  className="text-xs text-amber-500 hover:text-amber-700 mt-1 ml-4"
+                                  onClick={() => updateSkeleton(idx, { learning_objectives: [...(mod.learning_objectives || []), ''] })}
+                                >+ Add objective</button>
+                              </div>
+                            ) : (
+                              Array.isArray(mod.learning_objectives) && mod.learning_objectives.length > 0 && (
+                                <ul className="space-y-1">
+                                  {mod.learning_objectives.map((obj, oi) => (
+                                    <li key={oi} className="text-xs text-stone-600 flex gap-2">
+                                      <span className="text-amber-400 shrink-0 mt-0.5">•</span>
+                                      <span>{obj}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )
+                            )}
                           </div>
                         )}
                       </div>
                     );
                   })}
                 </div>
+
+                {/* Add Module button */}
+                {generationPhase === 'skeleton_ready' && (
+                  <div className="mb-6">
+                    <button
+                      type="button"
+                      className="text-stone-400 hover:text-stone-600 text-sm transition-colors"
+                      onClick={addSkeletonModule}
+                    >+ Add Module</button>
+                  </div>
+                )}
 
                 {/* Action buttons */}
                 {generationPhase === 'skeleton_ready' && (
