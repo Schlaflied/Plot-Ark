@@ -1050,6 +1050,7 @@ const App: React.FC = () => {
       const data = await res.json();
       const parsed: CurriculumData = { modules: data.modules || [], sources: data.sources || [] };
       setCurriculum(parsed);
+      setCourseNarrative(data.course_narrative || '');
       setEditedModules(parsed.modules.map((m, i, arr) => ({
         ...m,
         complexity_level: Number(m.complexity_level) || Math.max(1, Math.round((i + 1) / arr.length * 5)),
