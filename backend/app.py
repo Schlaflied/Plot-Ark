@@ -5,6 +5,9 @@ import time
 import asyncio
 import psycopg2
 from flask import Flask, request, Response, stream_with_context, jsonify
+import fitz  # pymupdf
+import docx as _docx_lib
+import io
 from flask_cors import CORS
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -1746,6 +1749,69 @@ def get_xapi_analytics():
 
     conn.close()
     return jsonify({"students": students, "struggling_concepts": struggling_concepts, "modules": modules})
+
+
+@app.route("/api/syllabus/import", methods=["POST"])
+def import_syllabus():
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "No file"}), 400
+
+    filename = file.filename.lower()
+    content = file.read()
+
+    if filename.endswith(".pdf"):
+        doc = fitz.open(stream=content, filetype="pdf")
+        text = "\n".join(page.get_text() for page in doc)
+    elif filename.endswith(".docx"):
+        doc = _docx_lib.Document(io.BytesIO(content))
+        text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+    else:
+        return jsonify({"error": "Only PDF or DOCX supported"}), 400
+
+    # Truncate to ~6000 chars to keep token cost low
+    text = text[:6000]
+
+    prompt = f"""You are an academic curriculum analyst. Extract structured course information from the following syllabus text.
+
+Return ONLY valid JSON with these fields (use null if a field cannot be found):
+{{
+  "topic": "course name/title",
+  "course_code": "e.g. CALL 301",
+  "level": one of ["undergraduate-year-1","undergraduate-year-2","undergraduate-year-3","undergraduate-year-4","graduate","phd","professional"] or null,
+  "audience": "discipline/field e.g. 'Applied Linguistics' or 'Business Administration'",
+  "module_count": number of weeks/modules as integer or null,
+  "references": [
+    {{"title": "...", "url": null, "type": "academic|video|news", "reading_type": "required"}}
+  ]
+}}
+
+Mark ALL extracted references as reading_type "required" — the professor chose them, so they are required.
+Do not include any text outside the JSON object.
+
+Syllabus text:
+{text}"""
+
+    try:
+        if AI_PROVIDER == "gemini":
+            model = genai.GenerativeModel("gemini-2.0-flash-lite")
+            response = model.generate_content(prompt)
+            raw = response.text
+        else:
+            response = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = response.choices[0].message.content or ""
+
+        clean = raw.replace("```json", "").replace("```", "").strip()
+        first = clean.index("{")
+        last = clean.rindex("}")
+        parsed = json.loads(clean[first:last + 1])
+        return jsonify(parsed)
+    except Exception as e:
+        print(f"Syllabus import error: {e}")
+        return jsonify({"error": f"Parsing failed: {str(e)}"}), 500
 
 
 init_db()

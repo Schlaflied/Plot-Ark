@@ -409,6 +409,11 @@ const App: React.FC = () => {
     setSkeletonEdited(true);
   };
 
+  // R6: Syllabus import
+  const [syllabusImporting, setSyllabusImporting] = useState(false);
+  const [syllabusFileName, setSyllabusFileName] = useState<string | null>(null);
+  const [syllabusError, setSyllabusError] = useState<string | null>(null);
+
   // R2: Human-in-the-loop source review
   const [isFetchingSources, setIsFetchingSources] = useState(false);
   const [previewSources, setPreviewSources] = useState<Source[]>([]);
@@ -510,6 +515,41 @@ const App: React.FC = () => {
     if (element) {
       const offsetPosition = element.getBoundingClientRect().top + window.pageYOffset - 100;
       window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+    }
+  };
+
+  // R6: Syllabus import — parse PDF/DOCX and pre-fill form fields
+  const handleSyllabusImport = async (file: File) => {
+    setSyllabusImporting(true);
+    setSyllabusError(null);
+    setSyllabusFileName(null);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch('/api/syllabus/import', { method: 'POST', body: formData });
+      if (!res.ok) { setSyllabusError('Failed to parse syllabus. Try again.'); return; }
+      const data = await res.json();
+      if (data.error) { setSyllabusError(data.error); return; }
+      if (data.topic) setTopic(data.topic);
+      if (data.course_code) setCourseCode(data.course_code);
+      if (data.level) setLevel(data.level);
+      if (data.audience) setAudience(data.audience);
+      if (data.module_count) setModuleCount(String(data.module_count));
+      if (data.references && data.references.length > 0) {
+        setPreviewSources(data.references.map((r: any) => ({
+          title: r.title,
+          url: r.url || '',
+          type: r.type || 'academic',
+          reading_type: 'required',
+          estimated_time: null,
+        })));
+      }
+      setSyllabusFileName(file.name);
+    } catch (e) {
+      setSyllabusError('Failed to parse syllabus. Try again.');
+      console.error('Syllabus import failed', e);
+    } finally {
+      setSyllabusImporting(false);
     }
   };
 
@@ -1559,6 +1599,43 @@ const App: React.FC = () => {
                         </div>
                       )}
                     </div>
+                  </div>
+                  {/* R6: Syllabus Import */}
+                  <div className="col-span-2 mb-2">
+                    <label className="block text-xs font-bold tracking-widest text-stone-500 uppercase mb-2">
+                      Import Syllabus <span className="text-stone-400 font-normal normal-case tracking-normal">(optional — PDF or DOCX)</span>
+                    </label>
+                    <label
+                      className={`flex flex-col items-center justify-center gap-2 w-full border-2 border-dashed rounded-xl px-6 py-8 cursor-pointer transition-colors ${syllabusFileName ? 'border-green-400 bg-green-50' : syllabusError ? 'border-red-300 bg-red-50' : 'border-stone-300 hover:border-amber-400 hover:bg-amber-50'}`}
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleSyllabusImport(f); }}
+                    >
+                      <input type="file" accept=".pdf,.docx" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleSyllabusImport(f); }} />
+                      {syllabusImporting ? (
+                        <>
+                          <svg className="w-8 h-8 text-amber-400 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                          <span className="text-sm text-amber-700 font-medium">Parsing syllabus...</span>
+                        </>
+                      ) : syllabusFileName ? (
+                        <>
+                          <svg className="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                          <span className="text-sm text-green-700 font-medium">{syllabusFileName}</span>
+                          <span className="text-xs text-green-600">Fields auto-filled — click to replace</span>
+                        </>
+                      ) : syllabusError ? (
+                        <>
+                          <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                          <span className="text-sm text-red-600 font-medium">{syllabusError}</span>
+                          <span className="text-xs text-stone-400">Click to try again</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-8 h-8 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                          <span className="text-sm text-stone-500">Drop your syllabus here or <span className="text-amber-700 font-medium">browse</span></span>
+                          <span className="text-xs text-stone-400">PDF or DOCX — fields will auto-fill</span>
+                        </>
+                      )}
+                    </label>
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-2">Design Approach</label>
