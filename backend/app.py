@@ -4,7 +4,7 @@ import json
 import time
 import asyncio
 import psycopg2
-from flask import Flask, request, Response, stream_with_context
+from flask import Flask, request, Response, stream_with_context, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from openai import OpenAI
