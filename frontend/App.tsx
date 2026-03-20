@@ -499,20 +499,9 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const el = document.getElementById('student-data');
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          fetch('/xapi/statements').then(r => r.json()).then(setXapiStatements).catch(() => {});
-          fetch('/xapi/analytics').then(r => r.json()).then(setXapiAnalytics).catch(() => {});
-        }
-      },
-      { threshold: 0.1 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [viewMode]);
+    fetch('/xapi/statements').then(r => r.json()).then(setXapiStatements).catch(() => {});
+    fetch('/xapi/analytics').then(r => r.json()).then(setXapiAnalytics).catch(() => {});
+  }, []);
 
   const scrollToSection = (id: string) => (e: React.MouseEvent) => {
     e.preventDefault();
