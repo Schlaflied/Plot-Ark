@@ -729,6 +729,302 @@ For sources: use the verified real URLs provided above. Add more real sources yo
     )
 
 
+@app.route("/api/curriculum/skeleton", methods=["POST"])
+def generate_skeleton():
+    """Phase 1: Generate only module titles + learning_objectives (no readings/assignments)."""
+    data = request.get_json()
+    topic = data.get("topic", "")
+    level = data.get("level", "")
+    audience = data.get("audience", "")
+    accreditation_context = data.get("accreditation_context", "")
+    course_code = data.get("course_code", "")
+    course_type = data.get("course_type", "mixed")
+    module_count_raw = data.get("module_count", "6")
+    design_approach = data.get("design_approach", "addie").lower()
+    if design_approach not in ("addie", "sam"):
+        design_approach = "addie"
+
+    if not all([topic, level, audience]):
+        return {"error": "Missing required fields"}, 400
+
+    try:
+        module_count = max(3, min(12, int(module_count_raw)))
+    except (ValueError, TypeError):
+        module_count = 6
+
+    blooms_constraint = get_blooms_constraint(level)
+
+    prompt = f"""You are an expert curriculum designer. Generate ONLY the module skeleton for the following course.
+
+Topic: {topic}
+Course Code: {course_code or "Not specified"}
+Level: {level}
+Target Audience: {audience}
+Accreditation Context: {accreditation_context or "None"}
+Course Type: {course_type}
+Number of Modules: {module_count}
+Design Approach: {design_approach}
+
+Bloom's Verb Constraint: {blooms_constraint}
+Difficulty Progression: complexity_level must start at 1 and reach 5 by the final module, increasing evenly.
+
+Generate ONLY the module skeleton. For each module provide: module_number, title, complexity_level, learning_objectives (list of 2-3 objectives using the permitted Bloom's verbs). Nothing else — no readings, no assignments, no narrative_preview.
+
+Return ONLY valid JSON (no markdown, no explanation):
+{{
+  "modules": [
+    {{
+      "module_number": 1,
+      "title": "Module title",
+      "complexity_level": 1,
+      "learning_objectives": ["objective using permitted Bloom's verbs", "objective 2"]
+    }}
+  ]
+}}
+
+CRITICAL: Generate exactly {module_count} modules. complexity_level must start at 1 and end at 5."""
+
+    def event_stream():
+        yield f"data: {json.dumps({'status': 'generating', 'message': f'Generating {module_count}-module skeleton for {topic}...'})}\n\n"
+        full_text = ""
+        try:
+            if AI_PROVIDER == "gemini":
+                model = genai.GenerativeModel("gemini-2.0-flash-lite")
+                response = model.generate_content(prompt, stream=True)
+                for chunk in response:
+                    if chunk.text:
+                        full_text += chunk.text
+                        yield f"data: {json.dumps({'text': chunk.text})}\n\n"
+            else:
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    stream=True,
+                )
+                for chunk in response:
+                    delta = chunk.choices[0].delta.content or ""
+                    if delta:
+                        full_text += delta
+                        yield f"data: {json.dumps({'text': delta})}\n\n"
+        except Exception as e:
+            print(f"Skeleton stream error: {e}")
+            yield "data: [DONE]\n\n"
+            return
+
+        # Validate skeleton structure
+        def parse_skeleton(text):
+            clean = text.replace("```json\n", "").replace("```\n", "").replace("```", "").strip()
+            first = clean.index("{")
+            last = clean.rindex("}")
+            return json.loads(clean[first:last + 1])
+
+        try:
+            parsed = parse_skeleton(full_text)
+            modules = parsed.get("modules", [])
+            # Ensure module_number field exists
+            for i, m in enumerate(modules):
+                if "module_number" not in m:
+                    m["module_number"] = i + 1
+            # Validate count
+            if len(modules) != module_count:
+                print(f"Skeleton count mismatch: expected {module_count}, got {len(modules)}")
+        except Exception as e:
+            print(f"Failed to parse skeleton: {e}")
+
+        yield "data: [DONE]\n\n"
+
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.route("/api/curriculum/expand", methods=["POST"])
+def expand_module():
+    """Phase 2: Expand a single skeleton module with readings, assignments, narrative, etc."""
+    data = request.get_json()
+    skeleton = data.get("skeleton", [])       # full modules array from skeleton phase
+    module_index = data.get("module_index", 0)
+    topic = data.get("topic", "")
+    level = data.get("level", "")
+    audience = data.get("audience", "")
+    course_type = data.get("course_type", "mixed")
+    design_approach = data.get("design_approach", "addie").lower()
+    course_code = data.get("course_code", "")
+    accreditation_context = data.get("accreditation_context", "")
+    approved_sources_raw = data.get("approved_sources", [])
+
+    try:
+        session_duration = max(1, int(data.get("session_duration", 90)))
+    except (ValueError, TypeError):
+        session_duration = 90
+
+    if not all([topic, level, audience]) or not skeleton or module_index >= len(skeleton):
+        return {"error": "Missing required fields or invalid module_index"}, 400
+
+    module = skeleton[module_index]
+    module_title = module.get("title", f"Module {module_index + 1}")
+    module_number = module.get("module_number", module_index + 1)
+    complexity_level = module.get("complexity_level", 1)
+    learning_objectives = module.get("learning_objectives", [])
+    total_modules = len(skeleton)
+
+    blooms_constraint = get_blooms_constraint(level)
+    session_constraint = get_session_constraints(session_duration)
+    assessment_format = ASSESSMENT_FORMATS.get(course_type, ASSESSMENT_FORMATS["mixed"])
+
+    # Build sources context from approved sources
+    sources_context = ""
+    required_sources = []
+    optional_sources = []
+    if approved_sources_raw and isinstance(approved_sources_raw, list):
+        real_sources = [s for s in approved_sources_raw if s.get("url")]
+        if real_sources:
+            sources_context = "\n\nApproved sources from instructor — use these URLs for readings where relevant:\n"
+            for s in real_sources:
+                priority = s.get("priority", "optional")
+                tag = f" [REQUIRED]" if priority == "required" else " [OPTIONAL]"
+                sources_context += f"- [{s.get('type', 'other')}]{tag} {s.get('title', '')} | {s.get('url', '')}\n"
+                if priority == "required":
+                    required_sources.append(s)
+                else:
+                    optional_sources.append(s)
+            sources_context += "Prioritize required sources. Do NOT invent URLs.\n"
+
+    if design_approach == "sam":
+        design_approach_label = "SAM (Successive Approximation Model)"
+        sam_field = '"rapid_prototype_cycle": "Description of the Rapid Prototype → Evaluate → Revise cycle for this module.",'
+    else:
+        design_approach_label = "ADDIE (Analysis → Design → Development → Implementation → Evaluation)"
+        sam_field = ""
+
+    objectives_str = "\n".join(f"  - {obj}" for obj in learning_objectives)
+
+    prompt = f"""You are an expert curriculum designer. Expand the following module skeleton into a full module with all required fields.
+
+Course Context:
+- Topic: {topic}
+- Course Code: {course_code or "Not specified"}
+- Level: {level}
+- Target Audience: {audience}
+- Accreditation: {accreditation_context or "None"}
+- Course Type: {course_type}
+- Design Approach: {design_approach_label}
+- Total Modules in Course: {total_modules}
+
+Module to Expand:
+- Module Number: {module_number} of {total_modules}
+- Title: {module_title}
+- Complexity Level: {complexity_level}/5
+- Learning Objectives:
+{objectives_str}
+
+Constraints:
+- Bloom's Verb Constraint: {blooms_constraint}
+- Session Duration: {session_constraint}
+- Assessment Format: {assessment_format}
+- Max 2 recommended readings. Each must have a clear rationale tied to this module's learning objectives.
+- Assignment task_description: MUST be specific and actionable (e.g. "Write a 500-word reflection comparing two case studies..."), NOT generic.
+- Assignment rubric_highlights: MUST contain exactly 3-4 concrete criteria.
+- Not every module requires an assignment. Only include one if it meaningfully fits this module.
+- narrative_preview: A compelling 2-3 sentence narrative hook using metaphor, scenario, or challenge framing.{sources_context}
+
+Return ONLY valid JSON for this single module (no markdown, no explanation):
+{{
+  "module_number": {module_number},
+  "title": {json.dumps(module_title)},
+  "complexity_level": {complexity_level},
+  "learning_objectives": {json.dumps(learning_objectives)},
+  {sam_field}
+  "narrative_preview": "A compelling 2-3 sentence narrative hook.",
+  "recommended_readings": [
+    {{
+      "title": "Full title of reading",
+      "url": "https://real-url.com",
+      "type": "academic | video | news",
+      "estimated_time": "15 min read",
+      "reading_type": "required | optional",
+      "key_points": ["key point 1", "key point 2"],
+      "rationale": "Why this reading is essential for this module."
+    }}
+  ],
+  "assignments": [
+    {{
+      "type": "project | essay | quiz | discussion | presentation | lab | reflection",
+      "title": "Short assignment title",
+      "task_description": "2-3 sentence specific description of exactly what students must do.",
+      "deliverable": "What they hand in",
+      "estimated_time": "Realistic time given session duration",
+      "covers_objectives": "Which specific learning objectives this addresses",
+      "rubric_highlights": [
+        "Criterion 1 — description of excellent work",
+        "Criterion 2 — description of excellent work",
+        "Criterion 3 — description of excellent work"
+      ]
+    }}
+  ]
+}}"""
+
+    def event_stream():
+        yield f"data: {json.dumps({'status': 'expanding', 'message': f'Expanding module {module_number}: {module_title}...'})}\n\n"
+        full_text = ""
+        try:
+            if AI_PROVIDER == "gemini":
+                model = genai.GenerativeModel("gemini-2.0-flash-lite")
+                response = model.generate_content(prompt, stream=True)
+                for chunk in response:
+                    if chunk.text:
+                        full_text += chunk.text
+                        yield f"data: {json.dumps({'text': chunk.text})}\n\n"
+            else:
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    stream=True,
+                )
+                for chunk in response:
+                    delta = chunk.choices[0].delta.content or ""
+                    if delta:
+                        full_text += delta
+                        yield f"data: {json.dumps({'text': delta})}\n\n"
+        except Exception as e:
+            print(f"Expand module stream error (module {module_index}): {e}")
+            yield "data: [DONE]\n\n"
+            return
+
+        # Validate expanded module
+        try:
+            clean = full_text.replace("```json\n", "").replace("```\n", "").replace("```", "").strip()
+            first = clean.index("{")
+            last = clean.rindex("}")
+            parsed = json.loads(clean[first:last + 1])
+            # Ensure required array fields
+            if not isinstance(parsed.get("recommended_readings"), list):
+                parsed["recommended_readings"] = []
+            if not isinstance(parsed.get("assignments"), list):
+                parsed["assignments"] = []
+            if not isinstance(parsed.get("learning_objectives"), list):
+                parsed["learning_objectives"] = learning_objectives
+            print(f"Expanded module {module_number}: {module_title}")
+        except Exception as e:
+            print(f"Failed to parse expanded module {module_index}: {e}")
+
+        yield "data: [DONE]\n\n"
+
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @app.route("/api/history", methods=["GET"])
 def get_history():
     conn = get_db()

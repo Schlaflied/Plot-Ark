@@ -315,6 +315,8 @@ GNU Affero 通用公共许可证 v3.0 — 详见 [LICENSE](LICENSE)
 
 知识图谱层由 [LightRAG](https://github.com/HKUDS/LightRAG)（HKUDS）驱动——实现跨课程材料的增量知识图谱构建与前置知识推断。
 
+两阶段生成流水线设计灵感来源于 [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC)（清华大学）——先生成大纲骨架、再逐模块展开的模式为 Plot Ark 的课程骨架生成方法提供了参考。
+
 以 [Claude](https://claude.ai)（Anthropic）为 AI 结对编程伙伴构建完成。
 
 特别感谢两位首席质量保证官，全程监督每一个深夜 coding session —— **Icy**（冰糖，白猫）与**雪梨**（三花猫）：

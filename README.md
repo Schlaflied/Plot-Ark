@@ -315,6 +315,8 @@ Architectural inspiration from [Hive](https://github.com/aden-hive/hive) (YC-bac
 
 Knowledge graph layer powered by [LightRAG](https://github.com/HKUDS/LightRAG) (HKUDS) — incremental knowledge graph construction and prerequisite inference across course materials.
 
+Two-phase generation pipeline design inspired by [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) (Tsinghua University) — the outline-first, then expand pattern informed Plot Ark's curriculum skeleton generation approach.
+
 Built with [Claude](https://claude.ai) (Anthropic) as AI pair programmer.
 
 Special thanks to the two chief quality assurance officers who supervised every late-night coding session — **Icy** (冰糖, white) and **雪梨** (calico):

@@ -377,6 +377,12 @@ const App: React.FC = () => {
   const [curriculum, setCurriculum] = useState<CurriculumData | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Two-phase generation state
+  const [skeleton, setSkeleton] = useState<Partial<Module & { module_number?: number; learning_objectives: string[] }>[]>([]);
+  const [generationPhase, setGenerationPhase] = useState<'idle' | 'skeleton' | 'skeleton_ready' | 'expanding' | 'done'>('idle');
+  const [expandProgress, setExpandProgress] = useState<number>(0);
+  const [skeletonExpanded, setSkeletonExpanded] = useState<Set<number>>(new Set());
+
   // R2: Human-in-the-loop source review
   const [isFetchingSources, setIsFetchingSources] = useState(false);
   const [previewSources, setPreviewSources] = useState<Source[]>([]);
@@ -499,6 +505,9 @@ const App: React.FC = () => {
     setShowSourceReview(false);
     setCurriculum(null);
     setLoadedCurriculumMeta(null);
+    setSkeleton([]);
+    setGenerationPhase('idle');
+    setExpandProgress(0);
 
     try {
       const res = await fetch('/api/sources/preview', {
@@ -521,21 +530,21 @@ const App: React.FC = () => {
       }, 100);
     } catch (err) {
       console.error('Failed to fetch sources preview', err);
-      // Fallback: generate directly without source review
-      await runGenerate(params, []);
+      // Fallback: use skeleton phase directly without source review
+      await runSkeleton(params, []);
     } finally {
       setIsFetchingSources(false);
     }
   };
 
-  // R2 Step 2: generate with approved sources (non-excluded)
+  // R2 Step 2: generate skeleton with approved sources (two-phase flow)
   const handleGenerateWithApproved = async () => {
     if (!pendingParams.current) return;
     const approved = previewSources
       .filter(s => sourcePriorities[s.url] !== 'exclude')
       .map(s => ({ ...s, priority: sourcePriorities[s.url] ?? 'optional' }));
     setShowSourceReview(false);
-    await runGenerate(pendingParams.current, approved);
+    await runSkeleton(pendingParams.current, approved);
   };
 
   const runGenerate = async (params: Record<string, string>, approved: (Source & { priority?: 'required' | 'optional' })[]) => {
@@ -618,6 +627,251 @@ const App: React.FC = () => {
       }
     } catch (error) {
       console.error(error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Phase 1: Stream skeleton from /api/curriculum/skeleton
+  const runSkeleton = async (params: Record<string, string>, approved: (Source & { priority?: 'required' | 'optional' })[]) => {
+    setGenerationPhase('skeleton');
+    setIsGenerating(true);
+    setStreamText('');
+    setAgentStatus('');
+    setCurriculum(null);
+    setSkeleton([]);
+    setSkeletonExpanded(new Set());
+    setCurrentModuleIndex(0);
+    setEditedModules([]);
+    setIsEditing(false);
+    setOpenCitationGroups(new Set([0]));
+
+    try {
+      const body: Record<string, unknown> = { ...params };
+      if (approved.length > 0) {
+        body.approved_sources = approved;
+      }
+
+      const response = await fetch('/api/curriculum/skeleton', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.body) throw new Error('No response body');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const rawData = line.slice(6).trim();
+            if (rawData === '[DONE]') {
+              // Parse skeleton
+              try {
+                let cleanText = accumulatedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                const firstBrace = cleanText.indexOf('{');
+                const lastBrace = cleanText.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace !== -1) {
+                  cleanText = cleanText.slice(firstBrace, lastBrace + 1);
+                }
+                const parsed = JSON.parse(cleanText) as { modules: Partial<Module & { module_number?: number; learning_objectives: string[] }>[] };
+                const skeletonModules = (parsed.modules || []).map((m, i) => ({
+                  ...m,
+                  module_number: m.module_number ?? i + 1,
+                  learning_objectives: Array.isArray(m.learning_objectives) ? m.learning_objectives : [],
+                  complexity_level: Number(m.complexity_level) || Math.max(1, Math.round((i + 1) / (parsed.modules.length) * 5)),
+                }));
+                setSkeleton(skeletonModules);
+                setGenerationPhase('skeleton_ready');
+              } catch (err) {
+                console.error('Failed to parse skeleton JSON', err);
+                setGenerationPhase('idle');
+              }
+              break;
+            }
+            try {
+              const parsed = JSON.parse(rawData);
+              if (parsed.status) {
+                setAgentStatus(parsed.message || '');
+                continue;
+              }
+              if (parsed.text) {
+                accumulatedText += parsed.text;
+                setStreamText(accumulatedText);
+              }
+            } catch {
+              // Incomplete chunk
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Skeleton generation error:', error);
+      setGenerationPhase('idle');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Phase 2: Expand all skeleton modules one-by-one
+  const runExpandAll = async () => {
+    if (!pendingParams.current || skeleton.length === 0) return;
+
+    setGenerationPhase('expanding');
+    setExpandProgress(0);
+    setEditedModules([]);
+    setCurriculum(null);
+    setIsGenerating(true);
+    setStreamText('');
+    setAgentStatus('');
+
+    const params = pendingParams.current;
+    // Retrieve approved sources from the last source review
+    const approved = previewSources
+      .filter(s => sourcePriorities[s.url] !== 'exclude')
+      .map(s => ({ ...s, priority: sourcePriorities[s.url] ?? 'optional' }));
+
+    const expandedModules: Module[] = [];
+
+    try {
+    for (let i = 0; i < skeleton.length; i++) {
+      setAgentStatus(`Expanding module ${i + 1} of ${skeleton.length}...`);
+
+      try {
+        const body: Record<string, unknown> = {
+          ...params,
+          skeleton: skeleton,
+          module_index: i,
+        };
+        if (approved.length > 0) {
+          body.approved_sources = approved;
+        }
+
+        const response = await fetch('/api/curriculum/expand', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.body) throw new Error('No response body for module ' + i);
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulatedText = '';
+
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const rawData = line.slice(6).trim();
+              if (rawData === '[DONE]') {
+                // Parse expanded module
+                try {
+                  let cleanText = accumulatedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                  const firstBrace = cleanText.indexOf('{');
+                  const lastBrace = cleanText.lastIndexOf('}');
+                  if (firstBrace !== -1 && lastBrace !== -1) {
+                    cleanText = cleanText.slice(firstBrace, lastBrace + 1);
+                  }
+                  const parsed = JSON.parse(cleanText) as Module;
+                  const normalised: Module = {
+                    title: parsed.title || skeleton[i].title || `Module ${i + 1}`,
+                    complexity_level: Number(parsed.complexity_level) || Number(skeleton[i].complexity_level) || 1,
+                    learning_objectives: Array.isArray(parsed.learning_objectives) ? parsed.learning_objectives : (skeleton[i].learning_objectives || []),
+                    narrative_preview: parsed.narrative_preview || '',
+                    recommended_readings: Array.isArray(parsed.recommended_readings) ? parsed.recommended_readings : [],
+                    assignments: Array.isArray(parsed.assignments) ? parsed.assignments : [],
+                  };
+                  expandedModules.push(normalised);
+                  // Update editedModules incrementally so UI shows progress
+                  setEditedModules([...expandedModules]);
+                } catch (err) {
+                  console.error(`Failed to parse expanded module ${i}`, err);
+                  // Fall back to skeleton data with empty expanded fields
+                  const fallback: Module = {
+                    title: skeleton[i].title || `Module ${i + 1}`,
+                    complexity_level: Number(skeleton[i].complexity_level) || 1,
+                    learning_objectives: skeleton[i].learning_objectives || [],
+                    narrative_preview: '',
+                    recommended_readings: [],
+                    assignments: [],
+                  };
+                  expandedModules.push(fallback);
+                  setEditedModules([...expandedModules]);
+                }
+                break;
+              }
+              try {
+                const parsed = JSON.parse(rawData);
+                if (parsed.status || parsed.expanding) {
+                  // status updates — already shown via agentStatus
+                  continue;
+                }
+                if (parsed.text) {
+                  accumulatedText += parsed.text;
+                }
+              } catch {
+                // Incomplete chunk
+              }
+            }
+          }
+        }
+
+        setExpandProgress(i + 1);
+      } catch (err) {
+        console.error(`Error expanding module ${i}:`, err);
+        // Push skeleton fallback so the loop continues
+        expandedModules.push({
+          title: skeleton[i].title || `Module ${i + 1}`,
+          complexity_level: Number(skeleton[i].complexity_level) || 1,
+          learning_objectives: skeleton[i].learning_objectives || [],
+          narrative_preview: '',
+          recommended_readings: [],
+          assignments: [],
+        });
+        setEditedModules([...expandedModules]);
+        setExpandProgress(i + 1);
+      }
+    }
+
+    // All modules expanded — set curriculum with empty sources (sources come from approved list)
+    const finalCurriculum: CurriculumData = {
+      modules: expandedModules,
+      sources: approved.map(s => ({
+        title: s.title,
+        url: s.url,
+        domain: (() => { try { return new URL(s.url).hostname; } catch { return s.url; } })(),
+        type: s.type,
+        retrieved_at: new Date().toISOString().slice(0, 10),
+      })),
+    };
+    setCurriculum(finalCurriculum);
+    setGenerationPhase('done');
+    setAgentStatus('');
+
+    // Scroll to modules
+    setTimeout(() => {
+      const el = document.getElementById('modules');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 200);
+    } catch (err) {
+      console.error('Expand all error:', err);
+      setGenerationPhase('idle');
     } finally {
       setIsGenerating(false);
     }
@@ -1319,23 +1573,27 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                <button type="submit" disabled={isGenerating || isFetchingSources}
+                <button type="submit" disabled={isGenerating || isFetchingSources || generationPhase === 'expanding'}
                   className="w-full py-4 bg-stone-900 text-white font-bold uppercase tracking-widest rounded-lg hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
                   {isFetchingSources ? (
                     <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>Searching academic sources...</>
+                  ) : generationPhase === 'skeleton' ? (
+                    <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>Building skeleton...</>
+                  ) : generationPhase === 'expanding' ? (
+                    <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>Expanding modules...</>
                   ) : isGenerating ? (
                     <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>Generating...</>
                   ) : 'Generate Curriculum'}
                 </button>
               </form>
 
-              {isGenerating && !curriculum && (
+              {isGenerating && !curriculum && generationPhase !== 'expanding' && (
                 <div className="mt-8 p-6 bg-stone-900 text-stone-300 rounded-xl font-mono text-sm overflow-hidden relative">
                   <div className="absolute top-0 left-0 w-full h-1 bg-nobel-gold/30">
                     <div className="h-full bg-nobel-gold animate-pulse w-1/3"></div>
                   </div>
                   <p className="mb-2 text-nobel-gold uppercase tracking-widest text-xs font-bold">
-                    {agentStatus ? '🔍 Research Agent' : 'Generating...'}
+                    {generationPhase === 'skeleton' ? 'Building module skeleton...' : agentStatus ? 'Research Agent' : 'Generating...'}
                   </p>
                   <div className="whitespace-pre-wrap max-h-60 overflow-y-auto opacity-80">
                     {agentStatus && !streamText ? agentStatus : (streamText || 'Initializing...')}
@@ -1544,6 +1802,116 @@ const App: React.FC = () => {
                     <span className="text-xs text-stone-400">At least one source must not be excluded</span>
                   )}
                 </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* SKELETON PREVIEW — shown after Phase 1 completes */}
+        {(generationPhase === 'skeleton_ready' || generationPhase === 'expanding') && viewMode === 'professor' && skeleton.length > 0 && (
+          <section id="skeleton-preview" className="py-12 bg-[#faf8f2] border-t border-amber-100">
+            <div className="container mx-auto px-6 md:px-12 max-w-3xl">
+              <div className="bg-white border border-amber-100 rounded-2xl shadow-sm p-6 md:p-8">
+                {/* Header */}
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <div className="text-xs font-bold tracking-widest text-amber-600 uppercase mb-1">Step 3 of 3 — Skeleton Review</div>
+                    <h3 className="font-serif text-2xl text-stone-900">Review Module Structure</h3>
+                  </div>
+                  {generationPhase === 'skeleton_ready' && (
+                    <button
+                      onClick={() => setGenerationPhase('idle')}
+                      className="text-xs text-stone-400 hover:text-stone-700 underline underline-offset-2 transition-colors shrink-0 mt-1"
+                    >
+                      ← Back
+                    </button>
+                  )}
+                </div>
+                <p className="text-sm text-stone-500 mb-6">
+                  {generationPhase === 'expanding'
+                    ? `Expanding modules... ${expandProgress} of ${skeleton.length} complete`
+                    : 'Review the module structure before full expansion. You can go back and adjust parameters if needed.'}
+                </p>
+
+                {/* Module list */}
+                <div className="space-y-2 mb-8">
+                  {skeleton.map((mod, idx) => {
+                    const isOpen = skeletonExpanded.has(idx);
+                    const isDone = generationPhase === 'expanding' && idx < expandProgress;
+                    const isActive = generationPhase === 'expanding' && idx === expandProgress;
+                    return (
+                      <div
+                        key={idx}
+                        className={`border rounded-xl transition-colors ${
+                          isDone
+                            ? 'border-emerald-200 bg-emerald-50'
+                            : isActive
+                            ? 'border-amber-300 bg-amber-50'
+                            : 'border-stone-200 bg-stone-50'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSkeletonExpanded(prev => {
+                            const next = new Set(prev);
+                            next.has(idx) ? next.delete(idx) : next.add(idx);
+                            return next;
+                          })}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                        >
+                          <span className="font-mono text-xs text-stone-400 shrink-0 w-5">{idx + 1}</span>
+                          <span className="flex-1 font-semibold text-stone-800 text-sm leading-snug">{mod.title || `Module ${idx + 1}`}</span>
+                          <span className="flex gap-0.5 shrink-0">
+                            {[1, 2, 3, 4, 5].map(n => (
+                              <span key={n} className={`w-1.5 h-1.5 rounded-full ${n <= Number(mod.complexity_level) ? 'bg-amber-400' : 'bg-stone-200'}`} />
+                            ))}
+                          </span>
+                          {isDone && <span className="text-emerald-500 text-xs font-bold shrink-0">Done</span>}
+                          {isActive && <span className="text-amber-600 text-xs font-bold shrink-0 animate-pulse">...</span>}
+                          <span className={`text-stone-400 text-xs shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                        </button>
+                        {isOpen && Array.isArray(mod.learning_objectives) && mod.learning_objectives.length > 0 && (
+                          <div className="px-4 pb-3 pt-0">
+                            <ul className="space-y-1">
+                              {mod.learning_objectives.map((obj, oi) => (
+                                <li key={oi} className="text-xs text-stone-600 flex gap-2">
+                                  <span className="text-amber-400 shrink-0 mt-0.5">•</span>
+                                  <span>{obj}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Action buttons */}
+                {generationPhase === 'skeleton_ready' && (
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <button
+                      onClick={runExpandAll}
+                      className="px-6 py-3 rounded-lg font-bold uppercase tracking-wider text-sm transition-colors flex items-center gap-2"
+                      style={{ background: '#C5A028', color: 'white' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#a8871e'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#C5A028'; }}
+                    >
+                      Generate Full Curriculum →
+                    </button>
+                    <span className="text-xs text-stone-400">
+                      This will expand all {skeleton.length} modules with readings and assignments.
+                    </span>
+                  </div>
+                )}
+                {generationPhase === 'expanding' && (
+                  <div className="flex items-center gap-3">
+                    <div className="w-5 h-5 border-2 border-amber-300 border-t-amber-600 rounded-full animate-spin shrink-0"></div>
+                    <span className="text-sm text-stone-600 font-medium">
+                      Expanding module {expandProgress + 1} of {skeleton.length}...
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </section>
