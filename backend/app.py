@@ -1755,19 +1755,27 @@ def get_xapi_analytics():
 def import_syllabus():
     file = request.files.get("file")
     if not file:
-        return jsonify({"error": "No file"}), 400
+        return jsonify({"error": "No file provided"}), 400
 
-    filename = file.filename.lower()
+    filename = file.filename or ""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in (".pdf", ".docx"):
+        return jsonify({"error": "Invalid file type. Only PDF and DOCX allowed."}), 400
+
+    file.seek(0, 2)  # seek to end
+    size = file.tell()
+    file.seek(0)     # reset
+    if size > 10 * 1024 * 1024:
+        return jsonify({"error": "File too large. Maximum size is 10MB."}), 400
+
     content = file.read()
 
-    if filename.endswith(".pdf"):
+    if ext == ".pdf":
         doc = fitz.open(stream=content, filetype="pdf")
         text = "\n".join(page.get_text() for page in doc)
-    elif filename.endswith(".docx"):
+    elif ext == ".docx":
         doc = _docx_lib.Document(io.BytesIO(content))
         text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-    else:
-        return jsonify({"error": "Only PDF or DOCX supported"}), 400
 
     # Truncate to ~6000 chars to keep token cost low
     text = text[:6000]

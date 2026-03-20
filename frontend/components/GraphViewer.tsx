@@ -78,6 +78,40 @@ type SubjectKey = string;
 
 const GraphViewer: React.FC = () => {
   const [activeSubject, setActiveSubject] = useState<SubjectKey>('all');
+  const [selectedYear, setSelectedYear] = useState<number | null>(1);
+
+  // Undergraduate course data (mutable via CRUD)
+  const [undergraduateCourses, setUndergraduateCourses] = useState<Record<number, { code: string; label: string; fullName: string }[]>>({
+    1: [
+      { code: 'acct-101', label: 'ACCT 101', fullName: 'Introduction to Financial Accounting' },
+      { code: 'econ-101', label: 'ECON 101', fullName: 'Introduction to Microeconomics' },
+      { code: 'bus-101', label: 'BUS 101', fullName: 'Foundations of Business' },
+      { code: 'mgmt-101', label: 'MGMT 101', fullName: 'Principles of Management' },
+      { code: 'hr-101', label: 'HR 101', fullName: 'Human Resources Fundamentals' },
+    ],
+    2: [
+      { code: 'business-law', label: 'Business Law', fullName: 'Business Law and Ethics' },
+      { code: 'info-201', label: 'INFO 201', fullName: 'Information Systems' },
+      { code: 'acct-201', label: 'ACCT 201', fullName: 'Intermediate Accounting' },
+      { code: 'econ-201', label: 'ECON 201', fullName: 'Macroeconomics' },
+    ],
+    3: [
+      { code: 'supply-301', label: 'Supply Chain 301', fullName: 'Supply Chain Management' },
+      { code: 'employ-301', label: 'Employment Law 301', fullName: 'Employment Law' },
+      { code: 'mgmt-301', label: 'MGMT 301', fullName: 'Organizational Behavior' },
+    ],
+    4: [
+      { code: 'nego-401', label: 'Negotiation 401', fullName: 'Negotiation and Conflict Resolution' },
+      { code: 'ihrm-401', label: 'IHRM 401', fullName: 'International Human Resource Management' },
+      { code: 'call', label: 'CALL', fullName: 'Computer-Assisted Language Learning' },
+    ],
+  });
+  const [editingCourseKey, setEditingCourseKey] = useState<string | null>(null);
+  const [courseNameInput, setCourseNameInput] = useState('');
+  const [editingFullName, setEditingFullName] = useState(false);
+  const [fullNameInput, setFullNameInput] = useState('');
+  const [addingCourseYear, setAddingCourseYear] = useState<number | null>(null);
+  const [newCourseInput, setNewCourseInput] = useState('');
 
   // Dynamic subject tabs
   const [subjectTabs, setSubjectTabs] = useState<{ key: string; label: string }[]>([
@@ -135,12 +169,30 @@ const GraphViewer: React.FC = () => {
     }
   }, [queryHistory]);
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Course search
+  const [courseSearch, setCourseSearch] = useState('');
+  const [courseSearchResults, setCourseSearchResults] = useState<{ year: number; code: string; label: string; fullName: string }[]>([]);
+  const courseSearchRef = useRef<HTMLDivElement>(null);
+  const [courseSearchOpen, setCourseSearchOpen] = useState(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const fgRef = useRef<any>(null);
   const hasInitializedZoom = useRef<boolean>(false);
   const dragTabIndex = useRef<number | null>(null);
   const [dragOverTabIndex, setDragOverTabIndex] = useState<number | null>(null);
+  const dragCoursePillIndex = useRef<number | null>(null);
   const [dimensions, setDimensions] = useState({ width: 1200, height: 600 });
+
+  // ESC to exit fullscreen
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) setIsFullscreen(false);
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isFullscreen]);
 
   // Track cursor for tooltip
   useEffect(() => {
@@ -447,6 +499,47 @@ const GraphViewer: React.FC = () => {
     }
   };
 
+  // ---- Course search ----
+
+  const handleCourseSearch = (query: string) => {
+    setCourseSearch(query);
+    if (!query.trim()) {
+      setCourseSearchResults([]);
+      setCourseSearchOpen(false);
+      return;
+    }
+    const q = query.toLowerCase();
+    const results: { year: number; code: string; label: string; fullName: string }[] = [];
+    Object.entries(undergraduateCourses).forEach(([year, courses]) => {
+      courses.forEach(course => {
+        if (course.label.toLowerCase().includes(q) || course.code.toLowerCase().includes(q)) {
+          results.push({ year: Number(year), code: course.code, label: course.label, fullName: course.fullName });
+        }
+      });
+    });
+    setCourseSearchResults(results);
+    setCourseSearchOpen(results.length > 0);
+  };
+
+  const selectCourseResult = (result: { year: number; code: string; label: string; fullName: string }) => {
+    setSelectedYear(result.year);
+    setActiveSubject(result.code);
+    setCourseSearch('');
+    setCourseSearchResults([]);
+    setCourseSearchOpen(false);
+  };
+
+  // Click-outside: close course search dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (courseSearchRef.current && !courseSearchRef.current.contains(e.target as Node)) {
+        setCourseSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // ---- Render states ----
 
   if (loading) {
@@ -496,7 +589,10 @@ const GraphViewer: React.FC = () => {
   const selectedFGNode = selectedNode ? (selectedNode as FGNode) : null;
 
   return (
-    <div className="w-full flex flex-col gap-4">
+    <div
+      className={isFullscreen ? undefined : 'w-full flex flex-col gap-4'}
+      style={isFullscreen ? { position: 'fixed', inset: 0, zIndex: 50, background: DARK_BG, display: 'flex', flexDirection: 'column', overflow: 'hidden', gap: '1rem', padding: '1rem' } : undefined}
+    >
       {/* How to use */}
       <div
         className="rounded-xl px-5 py-4 text-sm grid grid-cols-2 gap-x-8 gap-y-2"
@@ -508,13 +604,80 @@ const GraphViewer: React.FC = () => {
         <div><span style={{ color: TEXT_PRIMARY, fontWeight: 600 }}>💬 Ask a question</span> — type below the graph to query the knowledge base</div>
       </div>
 
-      {/* Main horizontal layout: graph viewer + ingestion panel */}
+      {/* Main horizontal layout: year sidebar + graph viewer + ingestion panel */}
       <div className="flex flex-row" style={{ gap: 0, alignItems: 'stretch' }}>
 
-      {/* Left: graph viewer */}
+      {/* Left: Year navigation sidebar */}
       <div
-        className="flex flex-col rounded-xl overflow-hidden"
-        style={{ flex: '1 1 0', minWidth: 0, background: DARK_BG, border: `1px solid ${BORDER_COLOR}` }}
+        className="flex flex-col p-3"
+        style={{
+          width: '160px',
+          flexShrink: 0,
+          background: PANEL_BG,
+          borderRight: `1px solid ${BORDER_COLOR}`,
+          border: `1px solid ${BORDER_COLOR}`,
+          borderRadius: '0.75rem 0 0 0.75rem',
+        }}
+      >
+        <div
+          className="text-xs font-semibold tracking-widest uppercase mb-3"
+          style={{ color: TEXT_MUTED }}
+        >
+          Undergraduate
+        </div>
+        {[1, 2, 3, 4].map(year => {
+          const isActive = selectedYear === year;
+          return (
+            <button
+              key={year}
+              onClick={() => setSelectedYear(prev => prev === year ? null : year)}
+              className="w-full text-left rounded text-sm"
+              style={{
+                padding: '0.5rem 0.75rem',
+                background: isActive ? ACCENT : 'transparent',
+                color: isActive ? DARK_BG : TEXT_MUTED,
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: isActive ? 600 : 400,
+                transition: 'background 0.15s, color 0.15s',
+              }}
+              onMouseEnter={e => {
+                if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = BORDER_COLOR;
+              }}
+              onMouseLeave={e => {
+                if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+              }}
+            >
+              Year {year}
+            </button>
+          );
+        })}
+        {/* Separator */}
+        <div style={{ borderTop: `1px solid ${BORDER_COLOR}`, margin: '8px 0' }} />
+        {/* All Courses */}
+        <div
+          onClick={() => { setSelectedYear(null); setActiveSubject('all'); }}
+          style={{
+            padding: '6px 12px',
+            borderRadius: '0.375rem',
+            cursor: 'pointer',
+            fontSize: '0.8rem',
+            background: selectedYear === null ? ACCENT : 'transparent',
+            color: selectedYear === null ? DARK_BG : TEXT_MUTED,
+            fontWeight: selectedYear === null ? 600 : 400,
+            transition: 'background 0.15s',
+          }}
+          onMouseEnter={e => { if (selectedYear !== null) (e.currentTarget as HTMLDivElement).style.background = BORDER_COLOR; }}
+          onMouseLeave={e => { if (selectedYear !== null) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
+        >
+          All Courses
+        </div>
+      </div>
+
+      {/* Middle: graph viewer (flex-col: toolbar + banner + graph + query) */}
+      <div
+        className="flex flex-col overflow-hidden"
+        style={{ flex: '1 1 0', minWidth: 0, background: DARK_BG, border: `1px solid ${BORDER_COLOR}`, borderLeft: 'none', borderRadius: '0 0.75rem 0.75rem 0' }}
       >
       {/* Toolbar */}
       <div
@@ -523,8 +686,8 @@ const GraphViewer: React.FC = () => {
       >
         <Network size={16} style={{ color: ACCENT, flexShrink: 0 }} />
 
-        {/* Subject tabs */}
-        <div className="flex items-center gap-1" style={{ background: DARK_BG, borderRadius: '0.5rem', padding: '2px' }}>
+        {/* Subject tabs — hidden when a year is selected */}
+        {selectedYear === null && <div className="flex items-center gap-1" style={{ background: DARK_BG, borderRadius: '0.5rem', padding: '2px' }}>
           {subjectTabs.map((tab, index) => {
             const isActive = activeSubject === tab.key;
             const isDragOver = dragOverTabIndex === index;
@@ -670,12 +833,89 @@ const GraphViewer: React.FC = () => {
               +
             </button>
           )}
-        </div>
+        </div>}
 
         <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: TEXT_MUTED }}>
           {graphData.nodes.length} nodes · {graphData.links.length} edges
         </span>
         <div className="flex-1" />
+
+        {/* Course search */}
+        <div className="relative" ref={courseSearchRef}>
+          <div className="relative flex items-center">
+            <Search
+              size={13}
+              className="absolute left-2.5 pointer-events-none"
+              style={{ color: TEXT_MUTED }}
+            />
+            <input
+              type="text"
+              value={courseSearch}
+              onChange={e => handleCourseSearch(e.target.value)}
+              placeholder="Search courses…"
+              style={{
+                background: DARK_BG,
+                border: `1px solid ${BORDER_COLOR}`,
+                color: TEXT_PRIMARY,
+                borderRadius: '0.5rem',
+                padding: '0.3rem 2rem 0.3rem 2rem',
+                fontSize: '0.75rem',
+                outline: 'none',
+                width: '160px',
+                transition: 'border-color 0.15s',
+              }}
+              onFocus={e => (e.currentTarget.style.borderColor = ACCENT)}
+              onBlur={e => (e.currentTarget.style.borderColor = BORDER_COLOR)}
+            />
+            {courseSearch && (
+              <button
+                onClick={() => { setCourseSearch(''); setCourseSearchResults([]); setCourseSearchOpen(false); }}
+                className="absolute right-2"
+                style={{ color: TEXT_MUTED, lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+          {courseSearchOpen && (
+            <div
+              className="absolute mt-1"
+              style={{
+                top: '100%',
+                left: 0,
+                zIndex: 50,
+                background: PANEL_BG,
+                border: `1px solid ${BORDER_COLOR}`,
+                borderRadius: '0.5rem',
+                minWidth: '200px',
+                maxHeight: '220px',
+                overflowY: 'auto',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              }}
+            >
+              {courseSearchResults.map(result => (
+                <button
+                  key={`${result.year}-${result.code}`}
+                  onClick={() => selectCourseResult(result)}
+                  className="w-full text-left flex items-center gap-2 px-3 py-2"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '0.75rem',
+                    color: TEXT_PRIMARY,
+                    borderBottom: `1px solid ${BORDER_COLOR}`,
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = DARK_BG; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                >
+                  <span style={{ color: TEXT_MUTED, flexShrink: 0 }}>Year {result.year}</span>
+                  <span style={{ fontWeight: 500 }}>{result.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Search input */}
         <div className="relative flex items-center">
@@ -724,6 +964,27 @@ const GraphViewer: React.FC = () => {
             Close panel
           </button>
         )}
+
+        {/* Fullscreen toggle */}
+        {!isFullscreen ? (
+          <button
+            onClick={() => setIsFullscreen(true)}
+            className="text-xs px-2 py-1 rounded"
+            style={{ background: BORDER_COLOR, color: TEXT_MUTED }}
+            title="Enter full screen"
+          >
+            ⛶ Full screen
+          </button>
+        ) : (
+          <button
+            onClick={() => setIsFullscreen(false)}
+            className="text-xs px-2 py-1 rounded"
+            style={{ background: BORDER_COLOR, color: TEXT_MUTED }}
+            title="Exit full screen (Esc)"
+          >
+            ✕ Exit full screen
+          </button>
+        )}
         <button
           onClick={() => fgRef.current?.zoomToFit(400, 40)}
           className="text-xs px-2 py-1 rounded"
@@ -733,6 +994,377 @@ const GraphViewer: React.FC = () => {
           ⊡ Fit view
         </button>
       </div>
+
+      {/* Course banner — shown when a year is selected */}
+      {selectedYear !== null && (
+        <div
+          className="flex items-center gap-2"
+          style={{
+            borderBottom: `1px solid ${BORDER_COLOR}`,
+            background: PANEL_BG,
+            padding: '8px 16px',
+            overflowX: 'auto',
+            flexShrink: 0,
+          }}
+        >
+          <span className="text-xs font-semibold shrink-0" style={{ color: TEXT_MUTED }}>
+            Year {selectedYear}:
+          </span>
+          <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+            {undergraduateCourses[selectedYear]?.map((course, idx) => {
+              const isCoursActive = activeSubject === course.code;
+              const isEditing = editingCourseKey === course.code;
+              return (
+                <div
+                  key={course.code}
+                  className="relative group flex-shrink-0"
+                  draggable={true}
+                  onDragStart={e => { dragCoursePillIndex.current = idx; e.dataTransfer.effectAllowed = 'move'; }}
+                  onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                  onDrop={e => { e.preventDefault(); if (dragCoursePillIndex.current === null || dragCoursePillIndex.current === idx) return; setUndergraduateCourses(prev => { const next = { ...prev }; const arr = [...(next[selectedYear!] || [])]; const [moved] = arr.splice(dragCoursePillIndex.current!, 1); arr.splice(idx, 0, moved); next[selectedYear!] = arr; dragCoursePillIndex.current = null; return next; }); }}
+                  onDragEnd={() => { dragCoursePillIndex.current = null; }}
+                  style={{ cursor: 'grab', userSelect: 'none' }}
+                >
+                  {isEditing ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      value={courseNameInput}
+                      onChange={e => setCourseNameInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          const trimmed = courseNameInput.trim();
+                          if (trimmed) {
+                            setUndergraduateCourses(prev => ({
+                              ...prev,
+                              [selectedYear]: prev[selectedYear].map(c =>
+                                c.code === course.code ? { ...c, label: trimmed } : c
+                              ),
+                            }));
+                          }
+                          setEditingCourseKey(null);
+                          setCourseNameInput('');
+                        }
+                        if (e.key === 'Escape') {
+                          setEditingCourseKey(null);
+                          setCourseNameInput('');
+                        }
+                      }}
+                      onBlur={() => {
+                        const trimmed = courseNameInput.trim();
+                        if (trimmed) {
+                          setUndergraduateCourses(prev => ({
+                            ...prev,
+                            [selectedYear]: prev[selectedYear].map(c =>
+                              c.code === course.code ? { ...c, label: trimmed } : c
+                            ),
+                          }));
+                        }
+                        setEditingCourseKey(null);
+                        setCourseNameInput('');
+                      }}
+                      style={{
+                        background: DARK_BG,
+                        border: `1px solid ${ACCENT}`,
+                        color: TEXT_PRIMARY,
+                        borderRadius: '999px',
+                        padding: '2px 10px',
+                        fontSize: '0.75rem',
+                        outline: 'none',
+                        width: '110px',
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setActiveSubject(course.code)}
+                        className="text-xs rounded-full shrink-0"
+                        style={{
+                          padding: '3px 12px',
+                          background: isCoursActive ? ACCENT : 'transparent',
+                          color: isCoursActive ? DARK_BG : TEXT_MUTED,
+                          border: `1px solid ${isCoursActive ? ACCENT : BORDER_COLOR}`,
+                          cursor: 'pointer',
+                          fontWeight: isCoursActive ? 600 : 400,
+                          transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+                          whiteSpace: 'nowrap',
+                        }}
+                        onMouseEnter={e => {
+                          if (!isCoursActive) {
+                            (e.currentTarget as HTMLButtonElement).style.background = BORDER_COLOR;
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (!isCoursActive) {
+                            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                          }
+                        }}
+                      >
+                        {course.label}
+                      </button>
+                      {/* Hover action buttons */}
+                      <span
+                        className="absolute -top-1.5 -right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{ zIndex: 5 }}
+                      >
+                        <button
+                          title="Rename"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setEditingCourseKey(course.code);
+                            setCourseNameInput(course.label);
+                          }}
+                          style={{
+                            background: PANEL_BG,
+                            border: `1px solid ${BORDER_COLOR}`,
+                            borderRadius: '50%',
+                            width: '16px',
+                            height: '16px',
+                            fontSize: '0.55rem',
+                            cursor: 'pointer',
+                            color: TEXT_MUTED,
+                            lineHeight: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                          }}
+                        >
+                          <span style={{ transform: 'scaleX(-1)', display: 'inline-block' }}>✎</span>
+                        </button>
+                        <button
+                          title="Delete"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setUndergraduateCourses(prev => ({
+                              ...prev,
+                              [selectedYear]: prev[selectedYear].filter(c => c.code !== course.code),
+                            }));
+                            if (activeSubject === course.code) setActiveSubject('all');
+                          }}
+                          style={{
+                            background: PANEL_BG,
+                            border: `1px solid ${BORDER_COLOR}`,
+                            borderRadius: '50%',
+                            width: '16px',
+                            height: '16px',
+                            fontSize: '0.6rem',
+                            cursor: 'pointer',
+                            color: TEXT_MUTED,
+                            lineHeight: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                          }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+            {/* Add course inline */}
+            {addingCourseYear === selectedYear ? (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <input
+                  autoFocus
+                  type="text"
+                  value={newCourseInput}
+                  onChange={e => setNewCourseInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      const trimmed = newCourseInput.trim();
+                      if (trimmed) {
+                        const code = trimmed.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                        setUndergraduateCourses(prev => ({
+                          ...prev,
+                          [selectedYear]: [...(prev[selectedYear] ?? []), { code, label: trimmed, fullName: trimmed }],
+                        }));
+                      }
+                      setAddingCourseYear(null);
+                      setNewCourseInput('');
+                    }
+                    if (e.key === 'Escape') {
+                      setAddingCourseYear(null);
+                      setNewCourseInput('');
+                    }
+                  }}
+                  placeholder="Course name"
+                  style={{
+                    background: DARK_BG,
+                    border: `1px solid ${ACCENT}`,
+                    color: TEXT_PRIMARY,
+                    borderRadius: '999px',
+                    padding: '2px 10px',
+                    fontSize: '0.75rem',
+                    outline: 'none',
+                    width: '110px',
+                  }}
+                />
+                <button
+                  onClick={() => { setAddingCourseYear(null); setNewCourseInput(''); }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: TEXT_MUTED,
+                    cursor: 'pointer',
+                    fontSize: '0.75rem',
+                    lineHeight: 1,
+                    padding: '0 2px',
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAddingCourseYear(selectedYear)}
+                title="Add course"
+                style={{
+                  background: 'none',
+                  border: `1px dashed ${BORDER_COLOR}`,
+                  color: TEXT_MUTED,
+                  borderRadius: '999px',
+                  padding: '2px 8px',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                  flexShrink: 0,
+                }}
+              >
+                +
+              </button>
+            )}
+          </div>
+          <div className="flex-1" />
+          <button
+            onClick={() => setSelectedYear(null)}
+            className="text-xs shrink-0"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: TEXT_MUTED,
+              cursor: 'pointer',
+              padding: '3px 8px',
+            }}
+          >
+            ✕ Clear
+          </button>
+        </div>
+      )}
+
+      {/* Full name tag strip — shown when a course in the current year is active */}
+      {selectedYear !== null && (() => {
+        const activeCourse = undergraduateCourses[selectedYear]?.find(c => c.code === activeSubject);
+        if (!activeCourse) return null;
+        return (
+          <div
+            style={{
+              background: PANEL_BG,
+              borderBottom: `1px solid ${BORDER_COLOR}`,
+              padding: '6px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              flexShrink: 0,
+            }}
+          >
+            {editingFullName ? (
+              <input
+                autoFocus
+                type="text"
+                value={fullNameInput}
+                onChange={e => setFullNameInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const trimmed = fullNameInput.trim();
+                    if (trimmed) {
+                      setUndergraduateCourses(prev => ({
+                        ...prev,
+                        [selectedYear]: prev[selectedYear].map(c =>
+                          c.code === activeCourse.code ? { ...c, fullName: trimmed } : c
+                        ),
+                      }));
+                    }
+                    setEditingFullName(false);
+                    setFullNameInput('');
+                  }
+                  if (e.key === 'Escape') {
+                    setEditingFullName(false);
+                    setFullNameInput('');
+                  }
+                }}
+                onBlur={() => {
+                  const trimmed = fullNameInput.trim();
+                  if (trimmed) {
+                    setUndergraduateCourses(prev => ({
+                      ...prev,
+                      [selectedYear]: prev[selectedYear].map(c =>
+                        c.code === activeCourse.code ? { ...c, fullName: trimmed } : c
+                      ),
+                    }));
+                  }
+                  setEditingFullName(false);
+                  setFullNameInput('');
+                }}
+                style={{
+                  background: DARK_BG,
+                  border: `1px solid ${ACCENT}`,
+                  color: TEXT_PRIMARY,
+                  borderRadius: '999px',
+                  padding: '3px 12px',
+                  fontSize: '0.8rem',
+                  outline: 'none',
+                  width: '320px',
+                }}
+              />
+            ) : (
+              <div
+                className="group"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                onClick={() => { setEditingFullName(true); setFullNameInput(activeCourse.fullName); }}
+              >
+                <span
+                  style={{
+                    background: DARK_BG,
+                    border: `1px solid ${BORDER_COLOR}`,
+                    borderRadius: '999px',
+                    padding: '3px 12px',
+                    fontSize: '0.8rem',
+                    color: TEXT_PRIMARY,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {activeCourse.fullName}
+                </span>
+                <button
+                  title="Rename full name"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setEditingFullName(true);
+                    setFullNameInput(activeCourse.fullName);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: TEXT_MUTED,
+                    fontSize: '0.8rem',
+                    lineHeight: 1,
+                    padding: '2px',
+                    opacity: 1,
+                  }}
+                >
+                  <span style={{ transform: 'scaleX(-1)', display: 'inline-block' }}>✎</span>
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Graph + detail sidebar */}
       <div className="relative" style={{ minHeight: '500px', height: '60vh' }}>
@@ -1080,7 +1712,7 @@ const GraphViewer: React.FC = () => {
         )}
       </div>
     </div>
-    {/* End left graph viewer */}
+    {/* End middle graph viewer */}
 
     {/* Right: Ingestion panel */}
     <div
@@ -1093,7 +1725,7 @@ const GraphViewer: React.FC = () => {
         background: PANEL_BG,
         border: `1px solid ${BORDER_COLOR}`,
         borderRadius: '0.75rem',
-        margin: '0 8px 0 0',
+        margin: '0 0 0 8px',
       }}
     >
       {/* Hidden file input */}
