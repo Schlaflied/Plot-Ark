@@ -98,6 +98,7 @@
 <details>
 <summary><strong>🤖 Agentic Layer (Roadmap)</strong></summary>
 
+- **xAPI mini-LRS** — mock learner behavior (experienced/completed/struggled/passed) feeds a professor-facing Student Data panel; learner state bars, struggling concept insights, statement feed
 - **xAPI event collection** — fine-grained learner behavior (watched, skipped, struggled)
 - **Redis learner state** — real-time profile (mastered / struggling / recommended_next)
 - **Professor LTM** — system learns instructor preferences from edit history (diff-based, no surveys)
@@ -148,7 +149,7 @@ xAPI behavior events → Curriculum Agent → Redis learner state → Narrative 
 | **Cache** | Redis | Learner state (roadmap) |
 | **Knowledge Graph** | LightRAG + networkx + react-force-graph-2d | Course material ingestion → interactive concept graph |
 | **Graph Cache** | Redis + in-memory | Query result cache (persistent cache) + rag instance reuse |
-| **Behavior Data** | xAPI + LRS | Learner event stream (roadmap) |
+| **Behavior Data** | xAPI 1.0.3 + mini-LRS | Statement ingestion → Redis learner state → professor analytics panel (mock data; real LMS integration roadmap) |
 | **Export** | IMS Common Cartridge | LMS-compatible output |
 | **Dev** | Docker Compose | Single-command local environment |
 
@@ -279,7 +280,7 @@ plot-ark/
 - [x] Knowledge graph query — natural language Q&A against course material graph, Redis-cached
 - [ ] Assignment Timeline + Due Date calculator
 - [x] Human-in-the-loop source review — approve/reject Tavily results before generation
-- [ ] xAPI statement ingestion
+- [x] xAPI mini-LRS — statement ingestion, learner state, professor analytics panel (mock data)
 - [ ] Redis learner state management
 - [ ] Professor LTM — preference learning from edit history
 - [ ] LTI 1.3 — push into Canvas / Moodle
