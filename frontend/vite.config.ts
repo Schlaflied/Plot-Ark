@@ -17,6 +17,10 @@ export default defineConfig(({ mode }) => {
             target: 'http://backend:5000',
             changeOrigin: true,
           },
+          '/xapi': {
+            target: 'http://backend:5000',
+            changeOrigin: true,
+          },
         },
       },
       plugins: [react()],
