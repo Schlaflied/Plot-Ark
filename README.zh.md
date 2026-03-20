@@ -32,11 +32,19 @@
 
 ## 🎬 演示
 
-**课程生成** — 研究 Agent → 流式生成 → 模块编辑器
+**research agent&human in the loop** — Tavily 研究 Agent → 人工信源审核 → 批准/拒绝
 
-![Curriculum Generation](docs/curriculum%20generate.gif)
+![research agent&human in the loop](docs/research%20agent%26human%20in%20the%20loop.gif)
 
-**知识图谱** — 概念图、节点详情、自然语言查询与节点高亮
+**module adjuistment** — 拖拽排序、内联编辑、所有字段均可修改
+
+![module adjuistment](docs/module%20adjuistment.gif)
+
+**syllabus upload** — 拖入 PDF/DOCX → 自动填充表单字段 + 提取必读材料
+
+![syllabus upload](docs/syllabus%20upload.gif)
+
+**Knowledge Graph** — 概念图、节点详情、自然语言查询与节点高亮
 
 ![Knowledge Graph](docs/knowledge%20graph.gif)
 
@@ -57,6 +65,8 @@
 - **认知负荷约束** — 每个模块最多 2 篇阅读材料，每篇均附有明确的教学理论依据
 - **课程类型** — 支持项目制、论文、辩论/角色扮演、实验/模拟，或混合评估形式
 - **SSE 流式生成** — 内容逐 token 流式输出；生成开始前显示研究 Agent 状态
+- **大纲导入** — 上传 PDF 或 DOCX；GPT 自动提取主题、课程代码、难度级别、目标受众、模块数量及必读材料，预填充表单
+- **课程叙事** — 在骨架生成阶段自动生成 2–3 句话的"课程故事"；教授可编辑，学生只读
 
 </details>
 
@@ -69,6 +79,7 @@
 - **增删条目** — 学习目标、阅读材料、作业均可自由增删
 - **资源卡片** — 每条阅读材料展示类型标签、预计时长，并直接链接到原始信源
 - **LocalStorage 持久化** — 编辑内容在页面刷新后仍然保留
+- **课程叙事编辑** — 教授可直接内联编辑课程级别的叙事文本；学生端仅展示只读版本
 
 </details>
 
@@ -281,6 +292,8 @@ plot-ark/
 - [ ] 作业时间轴 + 截止日期计算器
 - [x] 人工审核信源 — 在生成前审批/拒绝 Tavily 检索结果
 - [x] xAPI mini-LRS — 语句采集、学习者状态、教授分析面板（mock 数据）
+- [x] 大纲导入 — PDF/DOCX → 自动填充表单 + 提取必读材料
+- [x] 课程叙事 — 骨架生成阶段自动生成课程故事，教授可编辑
 - [ ] Redis 学习者状态管理
 - [ ] Professor LTM — 从编辑历史学习偏好
 - [ ] LTI 1.3 — 推送至 Canvas / Moodle

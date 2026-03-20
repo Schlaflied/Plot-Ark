@@ -32,9 +32,17 @@
 
 ## 🎬 Demo
 
-**Curriculum Generation** — research agent → streaming generation → module editor
+**research agent&human in the loop** — Tavily research agent → human source review → approve/reject
 
-![Curriculum Generation](docs/curriculum%20generate.gif)
+![research agent&human in the loop](docs/research%20agent%26human%20in%20the%20loop.gif)
+
+**module adjuistment** — drag-and-drop reorder, inline editing, all fields editable
+
+![module adjuistment](docs/module%20adjuistment.gif)
+
+**syllabus upload** — drop PDF/DOCX → auto-fill form fields + extract required readings
+
+![syllabus upload](docs/syllabus%20upload.gif)
 
 **Knowledge Graph** — concept map, node detail, natural language query with node highlight
 
@@ -57,6 +65,8 @@
 - **Cognitive Load constraints** — max 2 readings per module, each with explicit pedagogical rationale
 - **Course typology** — project-based, essay, debate/roleplay, lab/simulation, or mixed assessment formats
 - **SSE streaming** — content streams token-by-token; research agent status shown before generation starts
+- **Syllabus import** — upload PDF or DOCX; GPT extracts topic, course code, level, audience, module count, and required readings to pre-fill the form
+- **Course narrative** — a 2–3 sentence "story of the course" generated at the skeleton phase; professor-editable, student read-only
 
 </details>
 
@@ -69,6 +79,7 @@
 - **Add / remove items** — learning objectives, readings, assignments all editable
 - **Resource cards** — each reading shows type badge, estimated time, and links directly to the source
 - **LocalStorage persistence** — edits survive page refresh
+- **Course narrative editing** — professor can edit the course-level narrative inline; students see read-only version
 
 </details>
 
@@ -281,6 +292,8 @@ plot-ark/
 - [ ] Assignment Timeline + Due Date calculator
 - [x] Human-in-the-loop source review — approve/reject Tavily results before generation
 - [x] xAPI mini-LRS — statement ingestion, learner state, professor analytics panel (mock data)
+- [x] Syllabus import — PDF/DOCX → auto-fill form + extract required readings
+- [x] Course narrative — course-level story generated at skeleton phase, professor-editable
 - [ ] Redis learner state management
 - [ ] Professor LTM — preference learning from edit history
 - [ ] LTI 1.3 — push into Canvas / Moodle
