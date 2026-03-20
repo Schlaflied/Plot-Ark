@@ -746,7 +746,8 @@ def save_curriculum_endpoint():
     design_approach = data.get("design_approach", "ADDIE")
     modules = data.get("modules", [])
     sources = data.get("sources", [])
-    parsed = {"modules": modules, "sources": sources}
+    course_narrative = data.get("course_narrative", "")
+    parsed = {"modules": modules, "sources": sources, "course_narrative": course_narrative}
     try:
         save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed, design_approach)
         return jsonify({"status": "saved"})
@@ -794,10 +795,11 @@ Design Approach: {design_approach}
 Bloom's Verb Constraint: {blooms_constraint}
 Difficulty Progression: complexity_level must start at 1 and reach 5 by the final module, increasing evenly.
 
-Generate ONLY the module skeleton. For each module provide: module_number, title, complexity_level, learning_objectives (list of 2-3 objectives using the permitted Bloom's verbs). Nothing else — no readings, no assignments, no narrative_preview.
+Generate the course skeleton. Include a course_narrative (2-3 sentences explaining the central question or theme of this course and why these modules belong together — the "story" of the whole course). For each module provide: module_number, title, complexity_level, learning_objectives (list of 2-3 objectives using the permitted Bloom's verbs). Nothing else — no readings, no assignments, no narrative_preview.
 
 Return ONLY valid JSON (no markdown, no explanation):
 {{
+  "course_narrative": "A 2-3 sentence explanation of the course's central theme and why these modules belong together.",
   "modules": [
     {{
       "module_number": 1,

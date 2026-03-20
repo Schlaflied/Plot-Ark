@@ -383,6 +383,8 @@ const App: React.FC = () => {
   const [expandProgress, setExpandProgress] = useState<number>(0);
   const [skeletonExpanded, setSkeletonExpanded] = useState<Set<number>>(new Set());
   const [skeletonEdited, setSkeletonEdited] = useState<boolean>(false);
+  const [courseNarrative, setCourseNarrative] = useState<string>('');
+  const [editingNarrative, setEditingNarrative] = useState<boolean>(false);
 
   const updateSkeleton = (idx: number, updates: Partial<typeof skeleton[0]>) => {
     setSkeleton(prev => prev.map((m, i) => i === idx ? { ...m, ...updates } : m));
@@ -664,6 +666,7 @@ const App: React.FC = () => {
     setAgentStatus('');
     setCurriculum(null);
     setSkeleton([]);
+    setCourseNarrative('');
     setSkeletonExpanded(new Set());
     setCurrentModuleIndex(0);
     setEditedModules([]);
@@ -707,7 +710,7 @@ const App: React.FC = () => {
                 if (firstBrace !== -1 && lastBrace !== -1) {
                   cleanText = cleanText.slice(firstBrace, lastBrace + 1);
                 }
-                const parsed = JSON.parse(cleanText) as { modules: Partial<Module & { module_number?: number; learning_objectives: string[] }>[] };
+                const parsed = JSON.parse(cleanText) as { course_narrative?: string; modules: Partial<Module & { module_number?: number; learning_objectives: string[] }>[] };
                 const skeletonModules = (parsed.modules || []).map((m, i) => ({
                   ...m,
                   module_number: m.module_number ?? i + 1,
@@ -715,6 +718,9 @@ const App: React.FC = () => {
                   complexity_level: Number(m.complexity_level) || Math.max(1, Math.round((i + 1) / (parsed.modules.length) * 5)),
                 }));
                 setSkeleton(skeletonModules);
+                if (parsed.course_narrative) {
+                  setCourseNarrative(parsed.course_narrative);
+                }
                 setGenerationPhase('skeleton_ready');
               } catch (err) {
                 console.error('Failed to parse skeleton JSON', err);
@@ -890,6 +896,7 @@ const App: React.FC = () => {
           design_approach: params.designApproach || 'ADDIE',
           modules: expandedModules,
           sources: approved.map(s => ({ title: s.title, url: s.url, domain: (() => { try { return new URL(s.url).hostname; } catch { return s.url; } })() })),
+          course_narrative: courseNarrative,
         }),
       });
     } catch (e) {
@@ -2071,6 +2078,52 @@ const App: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              {/* Course narrative */}
+              {viewMode === 'professor' && courseNarrative && (
+                <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e7e5e4' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                    <span style={{ fontSize: '0.6rem', letterSpacing: '0.15em', color: '#a8a29e', textTransform: 'uppercase', fontWeight: 700 }}>Course Narrative</span>
+                    {!editingNarrative && (
+                      <button
+                        onClick={() => setEditingNarrative(true)}
+                        style={{ fontSize: '0.6rem', color: '#a8a29e', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+                      >
+                        ✏️ edit
+                      </button>
+                    )}
+                  </div>
+                  {editingNarrative ? (
+                    <>
+                      <textarea
+                        value={courseNarrative}
+                        onChange={e => setCourseNarrative(e.target.value)}
+                        onBlur={() => { setEditingNarrative(false); handleAutoSave(); }}
+                        autoFocus
+                        rows={4}
+                        style={{
+                          width: '100%',
+                          fontSize: '0.72rem',
+                          color: '#57534e',
+                          lineHeight: 1.5,
+                          border: '1px solid #d6d3d1',
+                          borderRadius: '6px',
+                          padding: '0.4rem 0.5rem',
+                          resize: 'none',
+                          fontFamily: 'inherit',
+                          background: '#fafaf9',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                      <div style={{ fontSize: '0.62rem', color: '#86efac', marginTop: '0.2rem' }}>✓ Auto-saving</div>
+                    </>
+                  ) : (
+                    <p style={{ fontSize: '0.72rem', color: '#78716c', lineHeight: 1.55, margin: 0, fontStyle: 'italic' }}>
+                      {courseNarrative}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Module list */}
               <div className="flex-1 overflow-y-auto p-3">
