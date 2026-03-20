@@ -382,9 +382,11 @@ const App: React.FC = () => {
   const [generationPhase, setGenerationPhase] = useState<'idle' | 'skeleton' | 'skeleton_ready' | 'expanding' | 'done'>('idle');
   const [expandProgress, setExpandProgress] = useState<number>(0);
   const [skeletonExpanded, setSkeletonExpanded] = useState<Set<number>>(new Set());
+  const [skeletonEdited, setSkeletonEdited] = useState<boolean>(false);
 
   const updateSkeleton = (idx: number, updates: Partial<typeof skeleton[0]>) => {
     setSkeleton(prev => prev.map((m, i) => i === idx ? { ...m, ...updates } : m));
+    setSkeletonEdited(true);
   };
 
   const deleteSkeletonModule = (idx: number) => {
@@ -392,6 +394,7 @@ const App: React.FC = () => {
       .filter((_, i) => i !== idx)
       .map((m, i) => ({ ...m, module_number: i + 1 }))
     );
+    setSkeletonEdited(true);
   };
 
   const addSkeletonModule = () => {
@@ -401,6 +404,7 @@ const App: React.FC = () => {
       complexity_level: (prev[prev.length - 1]?.complexity_level ?? 1) + 1,
       learning_objectives: ['']
     }]);
+    setSkeletonEdited(true);
   };
 
   // R2: Human-in-the-loop source review
@@ -1837,6 +1841,9 @@ const App: React.FC = () => {
                   <div>
                     <div className="text-xs font-bold tracking-widest text-amber-600 uppercase mb-1">Step 3 of 3 — Skeleton Review</div>
                     <h3 className="font-serif text-2xl text-stone-900">Review Module Structure</h3>
+                    {skeletonEdited && generationPhase === 'skeleton_ready' && (
+                      <p className="text-xs text-emerald-600 mt-1">✓ Changes will be used in generation</p>
+                    )}
                   </div>
                   {generationPhase === 'skeleton_ready' && (
                     <button
@@ -1851,6 +1858,9 @@ const App: React.FC = () => {
                   {generationPhase === 'expanding'
                     ? `Expanding modules... ${expandProgress} of ${skeleton.length} complete`
                     : 'Review and edit titles and objectives below, then click Generate Full Curriculum when ready.'}
+                </p>
+                <p className="text-xs text-stone-400 mt-1">
+                  <span className="text-amber-400">●</span> = complexity level — more dots means more advanced
                 </p>
 
                 {/* Module list */}
