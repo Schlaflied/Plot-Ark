@@ -283,12 +283,15 @@ def research_sources(topic, level, audience):
         for source_type, config in RESOURCE_TYPES.items():
             for query_template in config["queries"]:
                 query = query_template.format(topic=topic, level=level, audience=audience)
-                response = tavily_client.search(
-                    query=query,
-                    search_depth="basic",
-                    max_results=config["max_per_query"],
-                    include_domains=config["domains"]
-                )
+                search_kwargs = {
+                    "query": query,
+                    "search_depth": "basic",
+                    "max_results": config["max_per_query"],
+                    "include_domains": config["domains"],
+                }
+                if source_type == "news":
+                    search_kwargs["days"] = 365
+                response = tavily_client.search(**search_kwargs)
                 for r in response.get("results", []):
                     results.append({
                         "title": r.get("title", ""),
@@ -556,6 +559,14 @@ Design Approach — ADDIE (linear instructional design model):
 """
         sam_module_field = ""
 
+    resource_priority_prompt = {
+        "project": "RESOURCE PRIORITY: Each module's recommended_readings MUST include at least 1 news or industry source (HBR, Economist, NYT, etc.) alongside academic sources. Real-world cases are essential for project-based courses.",
+        "essay": "RESOURCE PRIORITY: Prioritize academic sources. Add video (TED Talk, lecture) and news sources where they strengthen the argument. Never omit academic sources.",
+        "debate": "RESOURCE PRIORITY: Each module MUST include at least 1 current news or policy source to support debate positions. Mix with academic sources for theoretical grounding.",
+        "lab": "RESOURCE PRIORITY: Each module MUST include at least 1 video resource (tutorial, demonstration, simulation walkthrough). Supplement with academic readings.",
+        "mixed": "RESOURCE PRIORITY: Distribute resource types across modules — not every module should be academic-only. Mix academic, news (current events), and video across the curriculum.",
+    }
+
     prompt = f"""You are an expert curriculum designer applying evidence-based instructional design principles. Generate a rigorous, narrative-driven curriculum.
 
 Topic: {topic}
@@ -579,6 +590,7 @@ Pedagogical Constraints:
 - Assignment rubric_highlights: MUST contain exactly 3-4 concrete criteria describing what excellent work looks like for THIS specific task.
 - Assignment estimated_time: MUST be realistic given the session duration constraint above. A 75-min session cannot have a 3-hour assignment.
 {design_approach_instructions}{reading_priority_instructions}
+{resource_priority_prompt.get(course_type, resource_priority_prompt["mixed"])}
 Return ONLY valid JSON (no markdown, no explanation):
 {{
   "design_approach": "{design_approach}",
@@ -942,6 +954,16 @@ def expand_module():
         design_approach_label = "ADDIE (Analysis → Design → Development → Implementation → Evaluation)"
         sam_field = ""
 
+    # Resource type priority by course type
+    resource_priority_map = {
+        "project": "PRIORITY: recommended_readings should lean toward academic + news sources (real-world cases and current research). Include at least 1 news/industry source per module where relevant.",
+        "essay": "PRIORITY: recommended_readings should lean toward academic sources. Include video (TED/lecture) and news where they support the argument. Minimum 1 academic per module.",
+        "debate": "PRIORITY: recommended_readings should include news/current events AND academic sources to support multiple perspectives. At least 1 news source per module.",
+        "lab": "PRIORITY: recommended_readings should lean heavily toward video resources (tutorials, demonstrations, walkthroughs). At least 1 video per module where possible.",
+        "mixed": "PRIORITY: recommended_readings should include a balanced mix of academic, news, and video sources across modules.",
+    }
+    resource_priority = resource_priority_map.get(course_type, resource_priority_map["mixed"])
+
     objectives_str = "\n".join(f"  - {obj}" for obj in learning_objectives)
 
     prompt = f"""You are an expert curriculum designer. Expand the following module skeleton into a full module with all required fields.
@@ -968,6 +990,7 @@ Constraints:
 - Session Duration: {session_constraint}
 - Assessment Format: {assessment_format}
 - Max 2 recommended readings. Each must have a clear rationale tied to this module's learning objectives.
+- {resource_priority}
 - Assignment task_description: MUST be specific and actionable (e.g. "Write a 500-word reflection comparing two case studies..."), NOT generic.
 - Assignment rubric_highlights: MUST contain exactly 3-4 concrete criteria.
 - Not every module requires an assignment. Only include one if it meaningfully fits this module.
