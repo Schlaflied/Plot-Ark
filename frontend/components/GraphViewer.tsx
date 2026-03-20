@@ -74,16 +74,27 @@ function stripMarkdown(text: string): string {
 
 // ---- Subject tab config ----
 
-type SubjectKey = 'all' | 'business-law' | 'call';
-
-const SUBJECT_TABS: { key: SubjectKey; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'business-law', label: 'Business Law' },
-  { key: 'call', label: 'CALL' },
-];
+type SubjectKey = string;
 
 const GraphViewer: React.FC = () => {
   const [activeSubject, setActiveSubject] = useState<SubjectKey>('all');
+
+  // Dynamic subject tabs
+  const [subjectTabs, setSubjectTabs] = useState<{ key: string; label: string }[]>([
+    { key: 'all', label: 'All' },
+    { key: 'business-law', label: 'Business Law' },
+    { key: 'call', label: 'CALL' },
+  ]);
+  const [addingTab, setAddingTab] = useState(false);
+  const [newTabName, setNewTabName] = useState('');
+
+  // Ingestion panel state
+  const [ingestFiles, setIngestFiles] = useState<{ name: string; status: 'waiting' | 'processing' | 'done' | 'error' }[]>([]);
+  const [ingestSubject, setIngestSubject] = useState('');
+  const [ingestRunning, setIngestRunning] = useState(false);
+  const [ingestOverflow, setIngestOverflow] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dropZoneHovered, setDropZoneHovered] = useState(false);
   const [graphData, setGraphData] = useState<{ nodes: FGNodeObject[]; links: FGLinkObject[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,7 +116,7 @@ const GraphViewer: React.FC = () => {
   const [queryLoading, setQueryLoading] = useState(false);
   const [queryAnswer, setQueryAnswer] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
-  const [queryHistory, setQueryHistory] = useState<{ id: number; question: string; answer: string; subject: SubjectKey; starred: boolean; matchedNodeId: string | null; timestamp?: number }[]>(() => {
+  const [queryHistory, setQueryHistory] = useState<{ id: number; question: string; answer: string; subject: string; starred: boolean; matchedNodeId: string | null; timestamp?: number }[]>(() => {
     try {
       const stored = localStorage.getItem('plot_ark_query_history');
       return stored ? JSON.parse(stored) : [];
@@ -127,6 +138,8 @@ const GraphViewer: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const fgRef = useRef<any>(null);
   const hasInitializedZoom = useRef<boolean>(false);
+  const dragTabIndex = useRef<number | null>(null);
+  const [dragOverTabIndex, setDragOverTabIndex] = useState<number | null>(null);
   const [dimensions, setDimensions] = useState({ width: 1200, height: 600 });
 
   // Track cursor for tooltip
@@ -338,7 +351,81 @@ const GraphViewer: React.FC = () => {
     }
   };
 
-  const handleHistoryClick = (item: { question: string; answer: string; subject: SubjectKey; matchedNodeId: string | null }) => {
+  // ---- Ingestion helpers ----
+
+  const COURSE_CODE_RE = /([A-Z]{2,4}\s?\d{3,4})/;
+
+  const addFilesToIngest = (files: FileList | File[]) => {
+    const fileArr = Array.from(files);
+    setIngestFiles(prev => {
+      const combined = [...prev, ...fileArr.map(f => ({ name: f.name, status: 'waiting' as const }))];
+      if (combined.length > 15) {
+        setIngestOverflow(true);
+        return combined.slice(0, 15);
+      }
+      setIngestOverflow(false);
+      return combined;
+    });
+    // Auto-detect course code from first filename if ingestSubject is empty
+    if (fileArr.length > 0) {
+      setIngestSubject(prev => {
+        if (prev.trim() !== '') return prev;
+        const match = COURSE_CODE_RE.exec(fileArr[0].name);
+        return match ? match[1] : prev;
+      });
+    }
+  };
+
+  const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDropZoneHovered(false);
+    if (e.dataTransfer.files.length > 0) addFilesToIngest(e.dataTransfer.files);
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      addFilesToIngest(e.target.files);
+      e.target.value = '';
+    }
+  };
+
+  const handleBuildGraph = () => {
+    if (ingestRunning || ingestFiles.length === 0 || ingestSubject.trim() === '') return;
+    setIngestRunning(true);
+    // Simulate processing each file sequentially
+    const runNext = (idx: number) => {
+      if (idx >= ingestFiles.length) {
+        setIngestRunning(false);
+        return;
+      }
+      setIngestFiles(prev => prev.map((f, i) => i === idx ? { ...f, status: 'processing' } : f));
+      setTimeout(() => {
+        setIngestFiles(prev => prev.map((f, i) => i === idx ? { ...f, status: 'done' } : f));
+        runNext(idx + 1);
+      }, 800);
+    };
+    // Reset all to waiting first
+    setIngestFiles(prev => prev.map(f => ({ ...f, status: 'waiting' })));
+    setTimeout(() => runNext(0), 50);
+  };
+
+  // ---- Tab helpers ----
+
+  const slugify = (name: string) =>
+    name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+
+  const confirmAddTab = () => {
+    const trimmed = newTabName.trim();
+    if (!trimmed) { setAddingTab(false); setNewTabName(''); return; }
+    const key = slugify(trimmed);
+    if (!subjectTabs.find(t => t.key === key)) {
+      setSubjectTabs(prev => [...prev, { key, label: trimmed }]);
+    }
+    setNewTabName('');
+    setAddingTab(false);
+  };
+
+  const handleHistoryClick = (item: { question: string; answer: string; subject: string; matchedNodeId: string | null }) => {
     setQuestion(item.question);
     setQueryAnswer(item.answer);
     setActiveSubject(item.subject);
@@ -420,10 +507,15 @@ const GraphViewer: React.FC = () => {
         <div><span style={{ color: TEXT_PRIMARY, fontWeight: 600 }}>🔎 Zoom / pan</span> — scroll wheel to zoom, drag to move around</div>
         <div><span style={{ color: TEXT_PRIMARY, fontWeight: 600 }}>💬 Ask a question</span> — type below the graph to query the knowledge base</div>
       </div>
-    <div
-      className="w-full flex flex-col rounded-xl overflow-hidden"
-      style={{ background: DARK_BG, border: `1px solid ${BORDER_COLOR}` }}
-    >
+
+      {/* Main horizontal layout: graph viewer + ingestion panel */}
+      <div className="flex flex-row" style={{ gap: 0, alignItems: 'stretch' }}>
+
+      {/* Left: graph viewer */}
+      <div
+        className="flex flex-col rounded-xl overflow-hidden"
+        style={{ flex: '1 1 0', minWidth: 0, background: DARK_BG, border: `1px solid ${BORDER_COLOR}` }}
+      >
       {/* Toolbar */}
       <div
         className="flex items-center gap-3 px-4 py-3 flex-wrap"
@@ -433,26 +525,151 @@ const GraphViewer: React.FC = () => {
 
         {/* Subject tabs */}
         <div className="flex items-center gap-1" style={{ background: DARK_BG, borderRadius: '0.5rem', padding: '2px' }}>
-          {SUBJECT_TABS.map(tab => {
+          {subjectTabs.map((tab, index) => {
             const isActive = activeSubject === tab.key;
+            const isDragOver = dragOverTabIndex === index;
             return (
-              <button
+              <div
                 key={tab.key}
-                onClick={() => setActiveSubject(tab.key)}
-                className="text-xs font-medium px-3 py-1 rounded transition-all"
-                style={{
-                  background: isActive ? ACCENT : 'transparent',
-                  color: isActive ? DARK_BG : TEXT_MUTED,
-                  border: 'none',
-                  cursor: 'pointer',
-                  borderRadius: '0.375rem',
-                  fontWeight: isActive ? 600 : 400,
+                className="relative flex items-center group"
+                draggable={true}
+                onDragStart={e => { dragTabIndex.current = index; e.dataTransfer.effectAllowed = 'move'; }}
+                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverTabIndex(index); }}
+                onDragLeave={() => setDragOverTabIndex(null)}
+                onDrop={e => {
+                  e.preventDefault();
+                  if (dragTabIndex.current === null || dragTabIndex.current === index) { setDragOverTabIndex(null); return; }
+                  setSubjectTabs(prev => {
+                    const next = [...prev];
+                    const [moved] = next.splice(dragTabIndex.current!, 1);
+                    next.splice(index, 0, moved);
+                    return next;
+                  });
+                  dragTabIndex.current = null;
+                  setDragOverTabIndex(null);
                 }}
+                onDragEnd={() => { dragTabIndex.current = null; setDragOverTabIndex(null); }}
+                style={{ display: 'inline-flex', cursor: 'grab', userSelect: 'none', background: isDragOver ? BORDER_COLOR : undefined, borderRadius: '0.375rem' }}
               >
-                {tab.label}
-              </button>
+                <button
+                  onClick={() => setActiveSubject(tab.key)}
+                  className="text-xs font-medium px-3 py-1 rounded transition-all"
+                  style={{
+                    background: isActive ? ACCENT : 'transparent',
+                    color: isActive ? DARK_BG : TEXT_MUTED,
+                    border: 'none',
+                    cursor: 'inherit',
+                    borderRadius: '0.375rem',
+                    fontWeight: isActive ? 600 : 400,
+                    paddingRight: tab.key !== 'all' ? '1.4rem' : undefined,
+                  }}
+                >
+                  {tab.label}
+                </button>
+                {tab.key !== 'all' && (
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      setSubjectTabs(prev => prev.filter(t => t.key !== tab.key));
+                      if (activeSubject === tab.key) setActiveSubject('all');
+                    }}
+                    title="Remove tab"
+                    className="absolute"
+                    style={{
+                      right: '3px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: isActive ? DARK_BG : TEXT_MUTED,
+                      fontSize: '0.65rem',
+                      lineHeight: 1,
+                      padding: '1px',
+                      opacity: 0,
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0'; }}
+                    onFocus={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}
+                    onBlur={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0'; }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             );
           })}
+          {/* + button to add new tab */}
+          {addingTab ? (
+            <div className="flex items-center gap-1 px-1">
+              <input
+                autoFocus
+                type="text"
+                value={newTabName}
+                onChange={e => setNewTabName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') confirmAddTab();
+                  if (e.key === 'Escape') { setAddingTab(false); setNewTabName(''); }
+                }}
+                placeholder="Subject name"
+                style={{
+                  background: DARK_BG,
+                  border: `1px solid ${ACCENT}`,
+                  color: TEXT_PRIMARY,
+                  borderRadius: '0.375rem',
+                  padding: '0.15rem 0.4rem',
+                  fontSize: '0.75rem',
+                  outline: 'none',
+                  width: '110px',
+                }}
+              />
+              <button
+                onClick={confirmAddTab}
+                style={{
+                  background: ACCENT,
+                  color: DARK_BG,
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  padding: '0.15rem 0.4rem',
+                  fontSize: '0.7rem',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                Add
+              </button>
+              <button
+                onClick={() => { setAddingTab(false); setNewTabName(''); }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: TEXT_MUTED,
+                  cursor: 'pointer',
+                  fontSize: '0.75rem',
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setAddingTab(true)}
+              title="Add subject tab"
+              style={{
+                background: 'none',
+                border: `1px dashed ${BORDER_COLOR}`,
+                color: TEXT_MUTED,
+                borderRadius: '0.375rem',
+                padding: '0.1rem 0.45rem',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                lineHeight: 1,
+              }}
+            >
+              +
+            </button>
+          )}
         </div>
 
         <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: TEXT_MUTED }}>
@@ -766,16 +983,21 @@ const GraphViewer: React.FC = () => {
                 {[...queryHistory]
                   .sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0))
                   .map((item) => {
+                    const knownTab = subjectTabs.find(t => t.key === item.subject);
                     const subjectLabel =
                       item.subject === 'business-law' ? 'Business Law'
                       : item.subject === 'call' ? 'CALL'
-                      : 'All';
+                      : item.subject === 'all' ? 'All'
+                      : knownTab ? knownTab.label
+                      : item.subject;
                     const subjectStyle: React.CSSProperties =
                       item.subject === 'business-law'
                         ? { background: 'rgba(139,94,60,0.15)', color: '#8B5E3C' }
                         : item.subject === 'call'
                         ? { background: 'rgba(79,120,120,0.15)', color: '#4f7878' }
-                        : { background: 'rgba(107,101,96,0.12)', color: TEXT_MUTED };
+                        : item.subject === 'all'
+                        ? { background: 'rgba(107,101,96,0.12)', color: TEXT_MUTED }
+                        : { background: 'rgba(107,101,96,0.1)', color: TEXT_MUTED };
                     return (
                       <div
                         key={item.id}
@@ -858,6 +1080,190 @@ const GraphViewer: React.FC = () => {
         )}
       </div>
     </div>
+    {/* End left graph viewer */}
+
+    {/* Right: Ingestion panel */}
+    <div
+      className="flex flex-col"
+      style={{
+        width: '288px',
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        background: PANEL_BG,
+        border: `1px solid ${BORDER_COLOR}`,
+        borderRadius: '0.75rem',
+        margin: '0 8px 0 0',
+      }}
+    >
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.pptx,.docx"
+        multiple
+        style={{ display: 'none' }}
+        onChange={handleFileInput}
+      />
+
+      {/* Panel header */}
+      <div
+        className="px-4 pt-4 pb-2"
+        style={{ borderBottom: `1px solid ${BORDER_COLOR}` }}
+      >
+        <div
+          className="text-xs font-semibold tracking-widest uppercase"
+          style={{ color: ACCENT }}
+        >
+          Upload Materials
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 p-4" style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
+        {/* Subject name input */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium" style={{ color: TEXT_MUTED }}>
+            Subject name
+          </label>
+          <input
+            type="text"
+            value={ingestSubject}
+            onChange={e => setIngestSubject(e.target.value)}
+            placeholder="e.g. CALL 201"
+            disabled={ingestRunning}
+            style={{
+              background: DARK_BG,
+              border: `1px solid ${BORDER_COLOR}`,
+              color: TEXT_PRIMARY,
+              borderRadius: '0.5rem',
+              padding: '0.35rem 0.6rem',
+              fontSize: '0.8rem',
+              outline: 'none',
+              transition: 'border-color 0.15s',
+              opacity: ingestRunning ? 0.6 : 1,
+            }}
+            onFocus={e => (e.currentTarget.style.borderColor = ACCENT)}
+            onBlur={e => (e.currentTarget.style.borderColor = BORDER_COLOR)}
+          />
+        </div>
+
+        {/* Drop zone */}
+        <div
+          onClick={() => !ingestRunning && fileInputRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); setDropZoneHovered(true); }}
+          onDragLeave={() => setDropZoneHovered(false)}
+          onDrop={handleFileDrop}
+          style={{
+            flex: '1 1 0',
+            minHeight: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: `2px dashed ${dropZoneHovered ? ACCENT : BORDER_COLOR}`,
+            borderRadius: '0.5rem',
+            padding: '1.25rem 0.75rem',
+            textAlign: 'center',
+            cursor: ingestRunning ? 'not-allowed' : 'pointer',
+            background: dropZoneHovered ? 'rgba(139,94,60,0.05)' : DARK_BG,
+            transition: 'border-color 0.15s, background 0.15s',
+            opacity: ingestRunning ? 0.6 : 1,
+          }}
+        >
+          <div className="text-xs" style={{ color: TEXT_MUTED, lineHeight: 1.6 }}>
+            <div style={{ fontSize: '1.25rem', marginBottom: '0.35rem' }}>📂</div>
+            <div>Drop PDF, PPTX, DOCX</div>
+            <div>or click to browse</div>
+            <div className="mt-1" style={{ fontSize: '0.875rem', color: TEXT_PRIMARY, fontWeight: 600 }}>Max 15 files</div>
+          </div>
+        </div>
+
+        {/* Overflow warning */}
+        {ingestOverflow && (
+          <div className="text-xs" style={{ color: '#f87171' }}>
+            Only the first 15 files were added.
+          </div>
+        )}
+
+        {/* File list */}
+        {ingestFiles.length > 0 && (
+          <div className="flex flex-col gap-1">
+            {ingestFiles.map((file, idx) => (
+              <div
+                key={idx}
+                className="flex items-center gap-2 rounded px-2 py-1.5 text-xs"
+                style={{ background: DARK_BG, border: `1px solid ${BORDER_COLOR}` }}
+              >
+                <span style={{ flexShrink: 0 }}>📄</span>
+                <span
+                  className="flex-1 truncate"
+                  style={{ color: TEXT_PRIMARY }}
+                  title={file.name}
+                >
+                  {file.name}
+                </span>
+                <span style={{ flexShrink: 0, fontSize: '0.8rem' }}>
+                  {file.status === 'waiting' && '⏳'}
+                  {file.status === 'processing' && (
+                    <span style={{ color: ACCENT }}>🔄</span>
+                  )}
+                  {file.status === 'done' && '✅'}
+                  {file.status === 'error' && '❌'}
+                </span>
+                {file.status === 'processing' && (
+                  <span style={{ color: TEXT_MUTED, fontSize: '0.65rem', flexShrink: 0 }}>
+                    processing...
+                  </span>
+                )}
+                {!ingestRunning && (
+                  <button
+                    onClick={() => setIngestFiles(prev => prev.filter((_, i) => i !== idx))}
+                    title="Remove"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: TEXT_MUTED,
+                      fontSize: '0.75rem',
+                      lineHeight: 1,
+                      padding: '0 1px',
+                      flexShrink: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>
+
+      {/* Build Graph button — pinned at bottom of panel */}
+      <div className="px-4 pb-4 pt-2">
+        <button
+          onClick={handleBuildGraph}
+          disabled={ingestFiles.length === 0 || ingestSubject.trim() === '' || ingestRunning}
+          className="flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold transition-opacity w-full"
+          style={{
+            background: ACCENT,
+            color: DARK_BG,
+            border: 'none',
+            cursor: ingestFiles.length === 0 || ingestSubject.trim() === '' || ingestRunning ? 'not-allowed' : 'pointer',
+            opacity: ingestFiles.length === 0 || ingestSubject.trim() === '' || ingestRunning ? 0.45 : 1,
+          }}
+        >
+          {ingestRunning && (
+            <Loader2 size={14} className="animate-spin" />
+          )}
+          {ingestRunning ? 'Building…' : 'Build Graph'}
+        </button>
+      </div>
+    </div>
+    {/* End ingestion panel */}
+
+    </div>
+    {/* End main horizontal row */}
     </div>
   );
 };

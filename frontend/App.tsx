@@ -371,6 +371,8 @@ const App: React.FC = () => {
   const designApproachDropdownRef = useRef<HTMLDivElement>(null);
   const [courseSlotOpen, setCourseSlotOpen] = useState(false);
   const courseSlotDropdownRef = useRef<HTMLDivElement>(null);
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+  const exportDropdownRef = useRef<HTMLDivElement>(null);
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -514,6 +516,7 @@ const App: React.FC = () => {
       if (courseTypeDropdownRef.current && !courseTypeDropdownRef.current.contains(e.target as Node)) setCourseTypeOpen(false);
       if (designApproachDropdownRef.current && !designApproachDropdownRef.current.contains(e.target as Node)) setDesignApproachOpen(false);
       if (courseSlotDropdownRef.current && !courseSlotDropdownRef.current.contains(e.target as Node)) setCourseSlotOpen(false);
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target as Node)) setExportDropdownOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -3114,28 +3117,38 @@ const App: React.FC = () => {
                   ))}
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-3 gap-3">
                 <button onClick={handleDownloadIMSCC} disabled={!curriculum}
                   className="flex items-center justify-center gap-2 px-5 py-4 bg-stone-900 text-white rounded-xl hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
-                  <Download size={16} /> .imscc
-                </button>
-                <button onClick={handleExportMarkdown} disabled={!curriculum}
-                  className="flex items-center justify-center gap-2 px-5 py-4 bg-white border-2 border-stone-200 text-stone-900 rounded-xl hover:border-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
-                  <FileText size={16} /> Export .md
+                  <Download size={16} /> IMSCC
                 </button>
                 <button onClick={handleCopyMarkdown} disabled={!curriculum}
                   className="flex items-center justify-center gap-2 px-5 py-4 bg-white border-2 border-stone-200 text-stone-900 rounded-xl hover:border-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
                   {copied ? <CheckCircle2 size={16} className="text-green-600" /> : <Copy size={16} />}
-                  {copied ? 'Copied!' : 'Copy .md'}
+                  {copied ? 'Copied!' : 'COPY'}
                 </button>
-                <button onClick={handleExportPDF} disabled={!curriculum}
-                  className="flex items-center justify-center gap-2 px-5 py-4 bg-white border-2 border-stone-200 text-stone-900 rounded-xl hover:border-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
-                  <FileText size={16} /> Export .pdf
-                </button>
-                <button onClick={handleExportDOCX} disabled={!curriculum}
-                  className="flex items-center justify-center gap-2 px-5 py-4 bg-white border-2 border-stone-200 text-stone-900 rounded-xl hover:border-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
-                  <Download size={16} /> Export .docx
-                </button>
+                <div ref={exportDropdownRef} className="relative">
+                  <button onClick={() => setExportDropdownOpen(v => !v)} disabled={!curriculum}
+                    className="w-full flex items-center justify-center gap-2 px-5 py-4 bg-white border-2 border-stone-200 text-stone-900 rounded-xl hover:border-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
+                    <Download size={16} /> EXPORT {exportDropdownOpen ? '▴' : '▾'}
+                  </button>
+                  {exportDropdownOpen && (
+                    <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden z-50">
+                      <button onClick={() => { handleExportPDF(); setExportDropdownOpen(false); }} disabled={!curriculum}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest text-stone-700 hover:bg-stone-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <FileText size={14} /> Export PDF
+                      </button>
+                      <button onClick={() => { handleExportDOCX(); setExportDropdownOpen(false); }} disabled={!curriculum}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest text-stone-700 hover:bg-stone-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <Download size={14} /> Export DOCX
+                      </button>
+                      <button onClick={() => { handleExportMarkdown(); setExportDropdownOpen(false); }} disabled={!curriculum}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest text-stone-700 hover:bg-stone-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <FileText size={14} /> Export Markdown
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
