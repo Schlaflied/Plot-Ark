@@ -1822,6 +1822,24 @@ def export_docx():
     data = request.get_json()
     doc = DocxDocument()
 
+    citation_format = data.get("citation_format", "apa")
+
+    def fmt_citation(title, url, fmt):
+        from datetime import date
+        today = date.today().strftime("%Y-%m-%d")
+        try:
+            from urllib.parse import urlparse
+            domain = urlparse(url).netloc.replace("www.", "")
+        except:
+            domain = url
+        if fmt == "apa":
+            return f"{title}. Retrieved from {url}"
+        elif fmt == "mla":
+            return f'"{title}." {domain}, {url}'
+        elif fmt == "chicago":
+            return f'"{title}." Accessed {today}. {url}'
+        return title
+
     # Title
     topic = data.get("topic", "Curriculum")
     title_para = doc.add_heading(topic, level=1)
@@ -1860,9 +1878,7 @@ def export_docx():
             if rp.runs:
                 rp.runs[0].bold = True
             for r in readings:
-                r_title = r.get("title", "")
-                r_url = r.get("url", "")
-                text = f"{r_title} — {r_url}" if r_url else r_title
+                text = fmt_citation(r.get('title', ''), r.get('url', ''), citation_format)
                 doc.add_paragraph(text, style="List Bullet")
 
         assignments = mod.get("assignments", [])

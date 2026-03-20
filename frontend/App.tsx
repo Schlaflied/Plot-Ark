@@ -369,6 +369,8 @@ const App: React.FC = () => {
   const courseTypeDropdownRef = useRef<HTMLDivElement>(null);
   const [designApproachOpen, setDesignApproachOpen] = useState(false);
   const designApproachDropdownRef = useRef<HTMLDivElement>(null);
+  const [courseSlotOpen, setCourseSlotOpen] = useState(false);
+  const courseSlotDropdownRef = useRef<HTMLDivElement>(null);
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -376,6 +378,7 @@ const App: React.FC = () => {
   const [agentStatus, setAgentStatus] = useState('');
   const [curriculum, setCurriculum] = useState<CurriculumData | null>(null);
   const [copied, setCopied] = useState(false);
+  const [citationFormat, setCitationFormat] = useState<'apa' | 'mla' | 'chicago'>('apa');
 
   // Two-phase generation state
   const [skeleton, setSkeleton] = useState<Partial<Module & { module_number?: number; learning_objectives: string[] }>[]>([]);
@@ -413,6 +416,17 @@ const App: React.FC = () => {
   const [syllabusImporting, setSyllabusImporting] = useState(false);
   const [syllabusFileName, setSyllabusFileName] = useState<string | null>(null);
   const [syllabusError, setSyllabusError] = useState<string | null>(null);
+  const [courseSlots, setCourseSlots] = useState<Record<number, {
+    topic: string; courseCode: string; level: string; audience: string;
+    accreditationContext: string; moduleCount: string; courseType: string;
+    designApproach: string; courseNarrative: string;
+  }>>({});
+  const [activeCourseSlot, setActiveCourseSlot] = useState<number | null>(null);
+  const [courseSlotNames, setCourseSlotNames] = useState<Record<number, string>>({});
+  const [editingSlotName, setEditingSlotName] = useState<number | null>(null);
+  const [slotNameInput, setSlotNameInput] = useState('');
+  const [courseSlotIds, setCourseSlotIds] = useState<number[]>([1, 2, 3, 4, 5]);
+  const nextSlotId = useRef(6);
 
   // R2: Human-in-the-loop source review
   const [isFetchingSources, setIsFetchingSources] = useState(false);
@@ -451,6 +465,7 @@ const App: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [showMyCourses, setShowMyCourses] = useState(false);
 
   // xAPI Student Data
   const [xapiStatements, setXapiStatements] = useState<any[]>([]);
@@ -498,6 +513,7 @@ const App: React.FC = () => {
       if (audienceDropdownRef.current && !audienceDropdownRef.current.contains(e.target as Node)) setAudienceOpen(false);
       if (courseTypeDropdownRef.current && !courseTypeDropdownRef.current.contains(e.target as Node)) setCourseTypeOpen(false);
       if (designApproachDropdownRef.current && !designApproachDropdownRef.current.contains(e.target as Node)) setDesignApproachOpen(false);
+      if (courseSlotDropdownRef.current && !courseSlotDropdownRef.current.contains(e.target as Node)) setCourseSlotOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -530,6 +546,20 @@ const App: React.FC = () => {
       if (!res.ok) { setSyllabusError('Failed to parse syllabus. Try again.'); return; }
       const data = await res.json();
       if (data.error) { setSyllabusError(data.error); return; }
+      const slotData = {
+        topic: data.topic || '',
+        courseCode: data.course_code || '',
+        level: data.level || '',
+        audience: data.audience || '',
+        accreditationContext: '',
+        moduleCount: data.module_count ? String(data.module_count) : '6',
+        courseType: 'mixed',
+        designApproach: 'addie',
+        courseNarrative: '',
+      };
+      if (activeCourseSlot !== null) {
+        setCourseSlots(prev => ({ ...prev, [activeCourseSlot]: slotData }));
+      }
       if (data.topic) setTopic(data.topic);
       if (data.course_code) setCourseCode(data.course_code);
       if (data.level) setLevel(data.level);
@@ -1026,6 +1056,7 @@ const App: React.FC = () => {
 
   const handleOpenHistory = () => {
     setShowHistory(true);
+    setShowMyCourses(false);
     fetchHistory();
   };
 
@@ -1066,6 +1097,7 @@ const App: React.FC = () => {
       setIsEditing(false);
       setOpenCitationGroups(new Set([0]));
       setShowHistory(false);
+      setShowMyCourses(false);
       const el = document.getElementById('modules');
       if (el) el.scrollIntoView({ behavior: 'smooth' });
     } catch (e) {
@@ -1198,6 +1230,15 @@ const App: React.FC = () => {
     setCurrentModuleIndex(currentModuleIndex + 1);
   };
 
+  const formatCitation = (title: string, url: string, format: 'apa' | 'mla' | 'chicago'): string => {
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+    const domain = (() => { try { return new URL(url).hostname.replace('www.', ''); } catch { return url; } })();
+    if (format === 'apa') return `${title}. Retrieved from ${url}`;
+    if (format === 'mla') return `"${title}." ${domain}, ${url}`;
+    if (format === 'chicago') return `"${title}." Accessed ${today}. ${url}`;
+    return title;
+  };
+
   const buildMarkdown = () => {
     if (!curriculum) return '';
     let md = `# Curriculum: ${topic}\n`;
@@ -1212,7 +1253,7 @@ const App: React.FC = () => {
       if (m.recommended_readings?.length > 0) {
         md += `**Recommended Readings:**\n`;
         m.recommended_readings.forEach(r => {
-          md += `- **${r.title}**\n`;
+          md += `- ${formatCitation(r.title, r.url || '', citationFormat)}\n`;
           r.key_points?.forEach(kp => (md += `  - ${kp}\n`));
           md += `  - *Why:* ${r.rationale}\n`;
         });
@@ -1310,7 +1351,7 @@ const App: React.FC = () => {
       }
       if (m.recommended_readings?.length) {
         addText('Readings', 10, true);
-        m.recommended_readings.forEach(r => addText(`• ${r.title}`, 9));
+        m.recommended_readings.forEach(r => addText(`• ${formatCitation(r.title || '', r.url || '', citationFormat)}`, 9));
       }
       if (m.assignments?.length) {
         addText('Assessment', 10, true);
@@ -1339,6 +1380,7 @@ const App: React.FC = () => {
         course_narrative: courseNarrative,
         modules: editedModules,
         sources: curriculum?.sources || [],
+        citation_format: citationFormat,
       }),
     });
     const blob = await res.blob();
@@ -1411,6 +1453,9 @@ const App: React.FC = () => {
               <Clock size={14} />
               History
             </button>
+            {viewMode === 'professor' && (
+              <button onClick={() => { setShowMyCourses(true); setShowHistory(false); fetchHistory(); }} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">My Courses</button>
+            )}
           </div>
           <button className="md:hidden text-stone-900 p-2" onClick={() => setMenuOpen(!menuOpen)}>
             {menuOpen ? <X /> : <Menu />}
@@ -1518,6 +1563,71 @@ const App: React.FC = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* My Courses Overlay */}
+      {showMyCourses && (
+        <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
+          <div className="container mx-auto px-6 py-12">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h1 className="text-3xl font-bold text-stone-900">My Courses</h1>
+                <p className="text-stone-500 mt-1">{historyEntries.length} curriculum{historyEntries.length !== 1 ? 's' : ''} saved</p>
+              </div>
+              <button onClick={() => setShowMyCourses(false)}
+                className="flex items-center gap-2 text-sm text-stone-500 hover:text-stone-800 transition-colors">
+                <X size={18} /> Close
+              </button>
+            </div>
+
+            {/* Cards grid */}
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-24 text-stone-400 text-sm">Loading...</div>
+            ) : historyEntries.length === 0 ? (
+              <div className="text-center py-24 text-stone-400">
+                <p className="text-lg">No courses yet.</p>
+                <p className="text-sm mt-2">Generate your first curriculum to get started.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {historyEntries.map((entry) => (
+                  <div key={entry.id}
+                    className="relative bg-[#F5F4F0] rounded-xl border border-stone-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer group"
+                    onClick={() => loadFromHistory(entry)}>
+                    {/* Delete button */}
+                    <button
+                      onClick={e => deleteHistory(e, entry.id)}
+                      className="absolute top-3 right-3 z-10 p-1 rounded-full bg-white/70 text-stone-300 hover:text-red-400 hover:bg-white opacity-0 group-hover:opacity-100 transition-all"
+                      title="Delete">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                    {/* Card color band */}
+                    <div className="h-2 bg-gradient-to-r from-amber-400 to-amber-600" />
+                    <div className="p-5">
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <h3 className="font-bold text-stone-900 text-sm leading-snug line-clamp-2 group-hover:text-amber-800 transition-colors">
+                          {entry.topic}
+                        </h3>
+                        {entry.is_favorite && <span className="text-amber-500 text-xs flex-shrink-0">★</span>}
+                      </div>
+                      {entry.course_code && (
+                        <p className="text-xs text-stone-500 font-mono mb-1">{entry.course_code}</p>
+                      )}
+                      <p className="text-xs text-stone-400 mb-4">{entry.level} · {entry.course_type}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-stone-400">
+                          {new Date(entry.created_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                        <span className="text-xs font-bold text-amber-700 group-hover:underline">Load →</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1679,6 +1789,103 @@ const App: React.FC = () => {
                               {ct.label}
                             </button>
                           ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {/* Course Slot */}
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold tracking-widest text-stone-500 uppercase mb-2">
+                      Course Slot <span className="text-stone-400 font-normal normal-case tracking-normal">(optional — import multiple syllabi)</span>
+                    </label>
+                    <div ref={courseSlotDropdownRef} className="relative">
+                      <button type="button" onClick={() => setCourseSlotOpen(o => !o)}
+                        className="w-full p-3 bg-white border border-stone-300 rounded-lg text-left text-sm focus:outline-none focus:border-nobel-gold focus:ring-1 focus:ring-nobel-gold transition-colors flex items-center justify-between">
+                        <span className="text-stone-800">
+                          {activeCourseSlot
+                            ? `${courseSlotNames[activeCourseSlot] || `Course ${activeCourseSlot}`}${courseSlots[activeCourseSlot]?.topic ? ` — ${courseSlots[activeCourseSlot].topic}` : ''}`
+                            : 'Select a course slot...'}
+                        </span>
+                        <svg className={`w-4 h-4 text-stone-400 transition-transform ${courseSlotOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                      </button>
+                      {courseSlotOpen && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg overflow-hidden">
+                          {courseSlotIds.map(n => (
+                            <div key={n} className="flex items-center group">
+                              {editingSlotName === n ? (
+                                <div className="flex items-center gap-2 w-full px-4 py-2">
+                                  <input
+                                    autoFocus
+                                    value={slotNameInput}
+                                    onChange={e => setSlotNameInput(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        setCourseSlotNames(prev => ({ ...prev, [n]: slotNameInput }));
+                                        setEditingSlotName(null);
+                                      }
+                                      if (e.key === 'Escape') setEditingSlotName(null);
+                                    }}
+                                    className="flex-1 text-sm border border-stone-300 rounded px-2 py-1 focus:outline-none focus:border-amber-400"
+                                    placeholder={`Course name...`}
+                                  />
+                                  <button type="button" onClick={() => { setCourseSlotNames(prev => ({ ...prev, [n]: slotNameInput })); setEditingSlotName(null); }}
+                                    className="text-xs text-amber-700 font-medium">Save</button>
+                                </div>
+                              ) : (
+                                <button type="button"
+                                  onClick={() => {
+                                    setActiveCourseSlot(n);
+                                    const slot = courseSlots[n];
+                                    if (slot) {
+                                      if (slot.topic) setTopic(slot.topic);
+                                      if (slot.courseCode) setCourseCode(slot.courseCode);
+                                      if (slot.level) setLevel(slot.level);
+                                      if (slot.audience) setAudience(slot.audience);
+                                      if (slot.moduleCount) setModuleCount(slot.moduleCount);
+                                    }
+                                    setSyllabusFileName(null);
+                                    setSyllabusError(null);
+                                    setCourseSlotOpen(false);
+                                  }}
+                                  className={`flex-1 text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${activeCourseSlot === n ? 'bg-amber-50 text-amber-800 font-medium' : 'hover:bg-amber-50 hover:text-amber-800 text-stone-700'}`}>
+                                  <span>{courseSlotNames[n] || `Course ${courseSlotIds.indexOf(n) + 1}`}{courseSlots[n]?.topic ? ` — ${courseSlots[n].topic}` : ''}</span>
+                                  {courseSlots[n] && <span className="text-xs text-amber-600">filled</span>}
+                                </button>
+                              )}
+                              {editingSlotName !== n && (
+                                <div className="flex items-center gap-1 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button type="button" title="Rename"
+                                    onClick={e => { e.stopPropagation(); setEditingSlotName(n); setSlotNameInput(courseSlotNames[n] || ''); }}
+                                    className="p-1 text-stone-400 hover:text-stone-700">
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                                  </button>
+                                  <button type="button" title="Delete slot"
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      setCourseSlotIds(prev => prev.filter(id => id !== n));
+                                      setCourseSlots(prev => { const next = {...prev}; delete next[n]; return next; });
+                                      setCourseSlotNames(prev => { const next = {...prev}; delete next[n]; return next; });
+                                      if (activeCourseSlot === n) setActiveCourseSlot(null);
+                                    }}
+                                    className="p-1 text-stone-400 hover:text-red-500">
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          {/* Add new slot */}
+                          <div className="border-t border-stone-100">
+                            <button type="button"
+                              onClick={() => {
+                                const newId = nextSlotId.current++;
+                                setCourseSlotIds(prev => [...prev, newId]);
+                              }}
+                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 transition-colors">
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+                              Add course slot
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -2895,6 +3102,18 @@ const App: React.FC = () => {
               <p className="text-lg text-stone-600 mb-8 leading-relaxed">
                 Export as an IMS Common Cartridge for direct LMS import, download as Markdown, or copy to clipboard.
               </p>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-xs font-bold tracking-widest text-stone-500 uppercase">Citation Format</span>
+                <div className="flex gap-2">
+                  {(['apa', 'mla', 'chicago'] as const).map(fmt => (
+                    <button key={fmt} type="button"
+                      onClick={() => setCitationFormat(fmt)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${citationFormat === fmt ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}>
+                      {fmt.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <button onClick={handleDownloadIMSCC} disabled={!curriculum}
                   className="flex items-center justify-center gap-2 px-5 py-4 bg-stone-900 text-white rounded-xl hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
