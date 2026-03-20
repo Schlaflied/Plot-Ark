@@ -32,6 +32,10 @@
 
 ## 🎬 演示
 
+**syllabus upload** — 拖入 PDF/DOCX → 自动填充表单字段 + 提取必读材料
+
+![syllabus upload](docs/syllabus%20upload.gif)
+
 **research agent&human in the loop** — Tavily 研究 Agent → 人工信源审核 → 批准/拒绝
 
 ![research agent&human in the loop](docs/research%20agent%26human%20in%20the%20loop.gif)
@@ -39,10 +43,6 @@
 **module adjuistment** — 拖拽排序、内联编辑、所有字段均可修改
 
 ![module adjuistment](docs/module%20adjuistment.gif)
-
-**syllabus upload** — 拖入 PDF/DOCX → 自动填充表单字段 + 提取必读材料
-
-![syllabus upload](docs/syllabus%20upload.gif)
 
 **Knowledge Graph** — 概念图、节点详情、自然语言查询与节点高亮
 

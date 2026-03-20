@@ -32,6 +32,10 @@
 
 ## 🎬 Demo
 
+**syllabus upload** — drop PDF/DOCX → auto-fill form fields + extract required readings
+
+![syllabus upload](docs/syllabus%20upload.gif)
+
 **research agent&human in the loop** — Tavily research agent → human source review → approve/reject
 
 ![research agent&human in the loop](docs/research%20agent%26human%20in%20the%20loop.gif)
@@ -39,10 +43,6 @@
 **module adjuistment** — drag-and-drop reorder, inline editing, all fields editable
 
 ![module adjuistment](docs/module%20adjuistment.gif)
-
-**syllabus upload** — drop PDF/DOCX → auto-fill form fields + extract required readings
-
-![syllabus upload](docs/syllabus%20upload.gif)
 
 **Knowledge Graph** — concept map, node detail, natural language query with node highlight
 
