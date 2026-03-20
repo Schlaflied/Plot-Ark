@@ -447,6 +447,10 @@ const App: React.FC = () => {
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // xAPI Student Data
+  const [xapiStatements, setXapiStatements] = useState<any[]>([]);
+  const [xapiAnalytics, setXapiAnalytics] = useState<{students: any[], struggling_concepts: any[], modules: any[]} | null>(null);
+
   // Query history badge count (synced from localStorage)
   const [queryHistoryCount, setQueryHistoryCount] = useState<number>(() => {
     try {
@@ -493,6 +497,22 @@ const App: React.FC = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    const el = document.getElementById('student-data');
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          fetch('/xapi/statements').then(r => r.json()).then(setXapiStatements).catch(() => {});
+          fetch('/xapi/analytics').then(r => r.json()).then(setXapiAnalytics).catch(() => {});
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [viewMode]);
 
   const scrollToSection = (id: string) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -1259,6 +1279,9 @@ const App: React.FC = () => {
             <a href="#modules" onClick={scrollToSection('modules')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Modules</a>
             <a href="#sources" onClick={scrollToSection('sources')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Sources</a>
             <a href="#export" onClick={scrollToSection('export')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Export</a>
+            {viewMode === 'professor' && (
+              <a href="#student-data" onClick={scrollToSection('student-data')} className="hover:text-nobel-gold transition-colors cursor-pointer uppercase">Student Data</a>
+            )}
             <a href="#knowledge-graph" onClick={scrollToSection('knowledge-graph')} className="flex items-center gap-1.5 hover:text-nobel-gold transition-colors cursor-pointer uppercase">
               <Network size={14} />
               Knowledge Graph
@@ -2079,7 +2102,15 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Course narrative */}
+              {/* Course narrative — student view (read-only) */}
+              {viewMode === 'student' && courseNarrative && (
+                <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e7e5e4' }}>
+                  <span style={{ fontSize: '0.6rem', letterSpacing: '0.15em', color: '#a8a29e', textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: '0.35rem' }}>Course Narrative</span>
+                  <p style={{ fontSize: '0.72rem', color: '#78716c', lineHeight: 1.55, margin: 0, fontStyle: 'italic' }}>{courseNarrative}</p>
+                </div>
+              )}
+
+              {/* Course narrative — professor view (editable) */}
               {viewMode === 'professor' && courseNarrative && (
                 <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e7e5e4' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
@@ -2733,6 +2764,84 @@ const App: React.FC = () => {
             </div>
           </div>
         </section>}
+
+        {/* Student Data — professor only */}
+        {viewMode === 'professor' && (
+          <section id="student-data" className="py-24 bg-[#F9F8F4] border-t border-stone-200">
+            <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 1.5rem' }}>
+              <h2 style={{ fontFamily: 'serif', fontSize: '1.8rem', fontWeight: 700, color: '#1c1917', marginBottom: '0.5rem' }}>Student Data</h2>
+              <p style={{ color: '#78716c', fontSize: '0.9rem', marginBottom: '2rem' }}>xAPI learning behavior — 20 mock statements across 4 students</p>
+
+              {/* Panel 1: Learner State */}
+              <div style={{ marginBottom: '2rem' }}>
+                <h3 style={{ fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#a8a29e', fontWeight: 700, marginBottom: '1rem' }}>Learner State</h3>
+                <div style={{ display: 'grid', gap: '0.75rem' }}>
+                  {(xapiAnalytics?.students || []).map((s: any) => {
+                    const total = s.mastered + s.struggling + s.viewed;
+                    const pct = total > 0 ? Math.round((s.mastered / Math.max(total, 1)) * 100) : 0;
+                    return (
+                      <div key={s.email} style={{ background: 'white', border: '1px solid #e7e5e4', borderRadius: '10px', padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f5f0e8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#C5A028', fontSize: '0.85rem', flexShrink: 0 }}>
+                          {s.name.charAt(0)}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#1c1917' }}>{s.name}</div>
+                          <div style={{ fontSize: '0.72rem', color: '#a8a29e' }}>{s.email}</div>
+                          <div style={{ marginTop: '0.4rem', height: 4, background: '#f5f5f4', borderRadius: 2, overflow: 'hidden' }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: '#C5A028', borderRadius: 2 }} />
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.72rem', flexShrink: 0 }}>
+                          <span style={{ color: '#22c55e' }}>✅ {s.mastered}</span>
+                          <span style={{ color: '#ef4444' }}>⚠️ {s.struggling}</span>
+                          <span style={{ color: '#a8a29e' }}>👁 {s.viewed}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {(!xapiAnalytics || xapiAnalytics.students.length === 0) && (
+                    <div style={{ color: '#a8a29e', fontSize: '0.85rem', padding: '1rem 0' }}>Loading learner data...</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Panel 2: AI Insights */}
+              {xapiAnalytics && xapiAnalytics.struggling_concepts.length > 0 && (
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#a8a29e', fontWeight: 700, marginBottom: '1rem' }}>AI Insights</h3>
+                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '1.25rem' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#92400e', marginBottom: '0.75rem' }}>⚠️ Concepts students are struggling with</div>
+                    {xapiAnalytics.struggling_concepts.map((c: any) => (
+                      <div key={c.concept} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#78350f', padding: '0.3rem 0', borderBottom: '1px solid #fde68a' }}>
+                        <span>{c.concept}</span>
+                        <span style={{ fontWeight: 600 }}>{c.count} student{c.count > 1 ? 's' : ''}</span>
+                      </div>
+                    ))}
+                    <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: '#92400e', fontStyle: 'italic' }}>
+                      💡 Consider adding a bridging reading before the module covering these concepts.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Panel 3: Statement Feed */}
+              <div>
+                <h3 style={{ fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#a8a29e', fontWeight: 700, marginBottom: '1rem' }}>Recent Statements</h3>
+                <div style={{ background: '#1c1917', borderRadius: '10px', padding: '1rem', fontFamily: 'monospace', fontSize: '0.72rem', maxHeight: 280, overflowY: 'auto' }}>
+                  {xapiStatements.length === 0 && (
+                    <div style={{ color: '#78716c', padding: '0.5rem 0' }}>Loading statements...</div>
+                  )}
+                  {xapiStatements.slice(0, 20).map((s: any, i: number) => (
+                    <div key={i} style={{ color: s.verb === 'struggled' ? '#fca5a5' : s.verb === 'completed' || s.verb === 'passed' ? '#86efac' : '#d6d3d1', padding: '0.2rem 0', borderBottom: '1px solid #292524' }}>
+                      <span style={{ color: '#78716c' }}>[{new Date(s.timestamp).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}]</span>
+                      {' '}{s.actor_name} → <span style={{ fontWeight: 700 }}>{s.verb}</span> → {s.object_name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Knowledge Graph */}
         <section id="knowledge-graph" className="py-24 bg-stone-900">
