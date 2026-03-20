@@ -251,7 +251,9 @@ plot-ark/
 ├── .env.example
 ├── docs/
 │   ├── architecture.md
-│   ├── curriculum generate.gif      ← 演示：课程生成流水线
+│   ├── syllabus upload.gif          ← 演示：大纲导入 → 表单自动填充
+│   ├── research agent&human in the loop.gif  ← 演示：研究 Agent + 人工信源审核
+│   ├── module adjuistment.gif       ← 演示：模块编辑 + 拖拽排序
 │   └── knowledge graph.gif          ← 演示：知识图谱与查询
 ├── frontend/                        ← React + TypeScript + Vite
 │   ├── Dockerfile

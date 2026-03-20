@@ -251,7 +251,9 @@ plot-ark/
 ├── .env.example
 ├── docs/
 │   ├── architecture.md
-│   ├── curriculum generate.gif      ← Demo: generation pipeline
+│   ├── syllabus upload.gif          ← Demo: syllabus import → form auto-fill
+│   ├── research agent&human in the loop.gif  ← Demo: research agent + source review
+│   ├── module adjuistment.gif       ← Demo: module editing + drag-and-drop
 │   └── knowledge graph.gif          ← Demo: knowledge graph + query
 ├── frontend/                        ← React + TypeScript + Vite
 │   ├── Dockerfile
