@@ -1926,6 +1926,7 @@ const App: React.FC = () => {
                           <svg className="w-8 h-8 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
                           <span className="text-sm text-stone-500">Drop your syllabus here or <span className="text-amber-700 font-medium">browse</span></span>
                           <span className="text-xs text-stone-400">PDF or DOCX — fields will auto-fill</span>
+                          <span className="text-xs text-stone-400">PDF or DOCX · Max 10 MB</span>
                         </>
                       )}
                     </label>

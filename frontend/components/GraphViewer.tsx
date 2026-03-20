@@ -1806,6 +1806,7 @@ const GraphViewer: React.FC = () => {
             <div>Drop PDF, PPTX, DOCX</div>
             <div>or click to browse</div>
             <div className="mt-1" style={{ fontSize: '0.875rem', color: TEXT_PRIMARY, fontWeight: 600 }}>Max 15 files</div>
+            <div style={{ fontSize: '0.75rem', color: TEXT_MUTED }}>Max 50 MB per file</div>
           </div>
         </div>
 
