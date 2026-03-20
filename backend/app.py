@@ -713,6 +713,10 @@ For sources: use the verified real URLs provided above. Add more real sources yo
                         yield f"data: {json.dumps({'type': 'warning', 'message': f'Generated {actual_count} modules instead of {module_count} — GPT was being lazy, try regenerating'})}\n\n"
                 except Exception as e:
                     print(f"Retry parse failed: {e}")
+            for m in (parsed.get("modules") or []):
+                m["learning_objectives"] = [
+                    o[0].upper() + o[1:] if o else o for o in (m.get("learning_objectives") or [])
+                ]
             save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed, design_approach)
             print(f"Saved curriculum: {topic}")
         except Exception as e:
@@ -1009,6 +1013,9 @@ Return ONLY valid JSON for this single module (no markdown, no explanation):
                 parsed["assignments"] = []
             if not isinstance(parsed.get("learning_objectives"), list):
                 parsed["learning_objectives"] = learning_objectives
+            parsed["learning_objectives"] = [
+                o[0].upper() + o[1:] if o else o for o in parsed["learning_objectives"]
+            ]
             print(f"Expanded module {module_number}: {module_title}")
         except Exception as e:
             print(f"Failed to parse expanded module {module_index}: {e}")
