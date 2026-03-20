@@ -1269,6 +1269,88 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportPDF = async () => {
+    const { jsPDF } = await import('jspdf');
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const maxWidth = pageWidth - margin * 2;
+    let y = 20;
+
+    const addText = (text: string, size: number, bold: boolean = false, color: [number, number, number] = [30, 30, 30]) => {
+      doc.setFontSize(size);
+      doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      doc.setTextColor(...color);
+      const lines = doc.splitTextToSize(text, maxWidth);
+      if (y + lines.length * (size * 0.4) > 280) { doc.addPage(); y = 20; }
+      doc.text(lines, margin, y);
+      y += lines.length * (size * 0.4) + 3;
+    };
+
+    // Title
+    addText(topic, 22, true, [30, 20, 10]);
+    if (courseCode) addText(courseCode, 11, false, [120, 100, 80]);
+    addText(`${level} · ${audience}`, 10, false, [150, 130, 110]);
+    y += 4;
+
+    // Course narrative
+    if (courseNarrative) {
+      addText('Course Narrative', 13, true);
+      addText(courseNarrative, 10);
+      y += 3;
+    }
+
+    // Modules
+    editedModules.forEach((m, i) => {
+      const modNum = (m as any).module_number ?? i + 1;
+      addText(`Module ${modNum}: ${m.title}`, 13, true, [80, 60, 40]);
+      if (m.learning_objectives?.length) {
+        addText('Learning Objectives', 10, true);
+        m.learning_objectives.forEach(o => addText(`• ${o}`, 9));
+      }
+      if (m.recommended_readings?.length) {
+        addText('Readings', 10, true);
+        m.recommended_readings.forEach(r => addText(`• ${r.title}`, 9));
+      }
+      if (m.assignments?.length) {
+        addText('Assessment', 10, true);
+        m.assignments.forEach(a => {
+          addText(a.title, 9, true);
+          if (a.task_description) addText(a.task_description, 9);
+        });
+      }
+      y += 4;
+    });
+
+    const filename = `${topic.replace(/\s+/g, '_').toLowerCase()}_curriculum.pdf`;
+    doc.save(filename);
+  };
+
+  const handleExportDOCX = async () => {
+    const res = await fetch('/api/curriculum/export/docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic,
+        level,
+        audience,
+        course_code: courseCode,
+        course_type: courseType,
+        course_narrative: courseNarrative,
+        modules: editedModules,
+        sources: curriculum?.sources || [],
+      }),
+    });
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${topic.replace(/\s+/g, '_').toLowerCase()}_curriculum.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   // Load checkin from localStorage when module changes
   useEffect(() => {
     try {
@@ -2813,7 +2895,7 @@ const App: React.FC = () => {
               <p className="text-lg text-stone-600 mb-8 leading-relaxed">
                 Export as an IMS Common Cartridge for direct LMS import, download as Markdown, or copy to clipboard.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <button onClick={handleDownloadIMSCC} disabled={!curriculum}
                   className="flex items-center justify-center gap-2 px-5 py-4 bg-stone-900 text-white rounded-xl hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
                   <Download size={16} /> .imscc
@@ -2826,6 +2908,14 @@ const App: React.FC = () => {
                   className="flex items-center justify-center gap-2 px-5 py-4 bg-white border-2 border-stone-200 text-stone-900 rounded-xl hover:border-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
                   {copied ? <CheckCircle2 size={16} className="text-green-600" /> : <Copy size={16} />}
                   {copied ? 'Copied!' : 'Copy .md'}
+                </button>
+                <button onClick={handleExportPDF} disabled={!curriculum}
+                  className="flex items-center justify-center gap-2 px-5 py-4 bg-white border-2 border-stone-200 text-stone-900 rounded-xl hover:border-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
+                  <FileText size={16} /> Export .pdf
+                </button>
+                <button onClick={handleExportDOCX} disabled={!curriculum}
+                  className="flex items-center justify-center gap-2 px-5 py-4 bg-white border-2 border-stone-200 text-stone-900 rounded-xl hover:border-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold uppercase tracking-widest text-xs">
+                  <Download size={16} /> Export .docx
                 </button>
               </div>
             </div>

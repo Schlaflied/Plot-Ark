@@ -4,7 +4,7 @@ import json
 import time
 import asyncio
 import psycopg2
-from flask import Flask, request, Response, stream_with_context, jsonify
+from flask import Flask, request, Response, stream_with_context, jsonify, send_file
 import fitz  # pymupdf
 import docx as _docx_lib
 import io
@@ -1812,6 +1812,84 @@ Syllabus text:
     except Exception as e:
         print(f"Syllabus import error: {e}")
         return jsonify({"error": f"Parsing failed: {str(e)}"}), 500
+
+
+@app.route("/api/curriculum/export/docx", methods=["POST"])
+def export_docx():
+    from docx import Document as DocxDocument
+    from docx.shared import Pt
+
+    data = request.get_json()
+    doc = DocxDocument()
+
+    # Title
+    topic = data.get("topic", "Curriculum")
+    title_para = doc.add_heading(topic, level=1)
+    title_para.runs[0].bold = True
+
+    # Course code / level / audience
+    meta_parts = [p for p in [data.get("course_code"), data.get("level"), data.get("audience")] if p]
+    if meta_parts:
+        doc.add_paragraph(" / ".join(meta_parts))
+
+    # Course narrative
+    course_narrative = data.get("course_narrative", "")
+    if course_narrative:
+        doc.add_heading("Course Narrative", level=2)
+        doc.add_paragraph(course_narrative)
+
+    # Modules
+    for mod in data.get("modules", []):
+        mod_num = mod.get("module_number", "")
+        mod_title = mod.get("title", "")
+        heading_text = f"Module {mod_num}: {mod_title}" if mod_num else mod_title
+        doc.add_heading(heading_text, level=2)
+
+        objectives = mod.get("learning_objectives", [])
+        if objectives:
+            doc.add_paragraph("Learning Objectives", style="Normal").runs[0].bold = True if doc.paragraphs[-1].runs else None
+            p = doc.paragraphs[-1]
+            if p.runs:
+                p.runs[0].bold = True
+            for obj in objectives:
+                doc.add_paragraph(obj, style="List Bullet")
+
+        readings = mod.get("recommended_readings", [])
+        if readings:
+            rp = doc.add_paragraph("Readings")
+            if rp.runs:
+                rp.runs[0].bold = True
+            for r in readings:
+                r_title = r.get("title", "")
+                r_url = r.get("url", "")
+                text = f"{r_title} — {r_url}" if r_url else r_title
+                doc.add_paragraph(text, style="List Bullet")
+
+        assignments = mod.get("assignments", [])
+        if assignments:
+            ap = doc.add_paragraph("Assessment")
+            if ap.runs:
+                ap.runs[0].bold = True
+            for a in assignments:
+                a_name = a.get("title") or a.get("name", "")
+                a_desc = a.get("task_description", "")
+                name_para = doc.add_paragraph(a_name)
+                if name_para.runs:
+                    name_para.runs[0].bold = True
+                if a_desc:
+                    doc.add_paragraph(a_desc)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+
+    filename = topic.lower().replace(" ", "_") + "_curriculum.docx"
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        as_attachment=True,
+        download_name=filename,
+    )
 
 
 init_db()
