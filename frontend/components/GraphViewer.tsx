@@ -670,7 +670,7 @@ const GraphViewer: React.FC = () => {
       </div>
 
       {/* Main horizontal layout: year sidebar + graph viewer + ingestion panel */}
-      <div className="flex flex-row" style={{ gap: 0, alignItems: 'stretch' }}>
+      <div className="flex flex-row" style={{ gap: 0, alignItems: 'stretch', ...(isFullscreen ? { flex: '1 1 0', minHeight: 0 } : {}) }}>
 
       {/* Left: Year navigation sidebar */}
       <div
@@ -1720,6 +1720,7 @@ const GraphViewer: React.FC = () => {
         border: `1px solid ${BORDER_COLOR}`,
         borderRadius: '0.75rem',
         margin: '0 0 0 8px',
+        ...(isFullscreen ? { minHeight: 0, overflow: 'hidden' } : {}),
       }}
     >
       {/* Hidden file input */}
@@ -1745,7 +1746,7 @@ const GraphViewer: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 p-4" style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
+      <div className="flex flex-col gap-3 p-4" style={{ flex: '1 1 0', minHeight: 0, overflowY: 'auto' }}>
         {/* Subject name input */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium" style={{ color: TEXT_MUTED }}>
