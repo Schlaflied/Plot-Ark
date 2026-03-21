@@ -197,56 +197,16 @@ docker compose up --build
 
 ## 🕸️ 使用知识图谱
 
-知识图谱功能让你导入自己的课程材料（PDF 或 PPTX），并将其呈现为交互式概念图谱进行探索。
+知识图谱功能支持上传课程材料（PDF、PPTX 或 DOCX），并将其可视化为交互式概念地图。
 
-### 1. 添加材料
-
-将课程 PDF 和/或 PPTX 放入 `data/materials/` 下对应的学科文件夹：
-
-```
-data/materials/
-├── your-subject/          ← 每个学科一个文件夹
-│   ├── week1.pdf
-│   ├── week2.pptx
-│   └── ...
-└── another-subject/
-    └── ...
-```
-
-### 2. 运行导入脚本
-
-```bash
-# 先设置 OpenAI Key（用于 gpt-4o-mini + text-embedding-3-small）
-export OPENAI_API_KEY=sk-...
-
-# 在 backend 容器内执行
-docker compose exec backend python ingest.py \
-  --input data/materials/your-subject \
-  --storage data/lightrag_storage_yoursubject
-```
-
-导入费用估算：约 $0.10–0.30 / 每 10 个 PDF（gpt-4o-mini 计费标准）。
-
-### 3. 在后端注册学科
-
-在 `backend/app.py` 中，参照 `lightrag_storage_call` 的现有模式，将你的学科添加到 `SUBJECT_MAP`。
-
-### 4. 在前端添加标签页
-
-在 `frontend/components/GraphViewer.tsx` 中，将你的学科添加到 `SUBJECT_TABS`：
-
-```tsx
-const SUBJECT_TABS = [
-  { key: 'all', label: 'All' },
-  { key: 'business-law', label: 'Business Law' },
-  { key: 'call', label: 'CALL' },
-  { key: 'your-subject', label: 'Your Subject' },  // ← 在此添加
-];
-```
-
-### 5. 打开知识图谱标签页
-
-在顶部导航栏切换到**知识图谱**。选择你的学科标签，探索概念图，并使用查询栏对材料提出自然语言问题。
+1. 点击顶部导航栏的 **Knowledge Graph** 标签
+2. 在右侧 **Upload Materials** 面板中填写：
+   - **Subject name**（必填）— 例如 "Organizational Behavior"
+   - **Course code**（选填）— 例如 "ADMS 2400"
+   - **Year**（必填）— 该课程所属学年
+3. 将 PDF / PPTX / DOCX 文件拖入上传区域
+4. 点击 **Build Graph** — 后台自动运行知识图谱构建（约 $0.10–0.30 / 每 10 个 PDF，gpt-4o-mini 计费）
+5. 构建完成后，图谱自动出现在对应学年和课程标签下
 
 ---
 
