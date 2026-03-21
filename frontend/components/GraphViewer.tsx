@@ -136,9 +136,16 @@ const GraphViewer: React.FC = () => {
 
   // Ingestion panel state
   const [ingestFiles, setIngestFiles] = useState<{ name: string; status: 'waiting' | 'processing' | 'done' | 'error' }[]>([]);
+  const ingestFileObjects = useRef<File[]>([]);  // parallel array of actual File objects
   const [ingestSubject, setIngestSubject] = useState('');
+  const [ingestCourseCode, setIngestCourseCode] = useState('');
+  const [ingestYear, setIngestYear] = useState<number | null>(null);
+  const [ingestSubjectError, setIngestSubjectError] = useState(false);
+  const [ingestYearError, setIngestYearError] = useState(false);
   const [ingestRunning, setIngestRunning] = useState(false);
   const [ingestOverflow, setIngestOverflow] = useState(false);
+  const [ingestError, setIngestError] = useState<string | null>(null);
+  const [ingestSuccess, setIngestSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dropZoneHovered, setDropZoneHovered] = useState(false);
   const [graphData, setGraphData] = useState<{ nodes: FGNodeObject[]; links: FGLinkObject[] } | null>(null);
@@ -240,57 +247,58 @@ const GraphViewer: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
-  // Fetch graph
-  useEffect(() => {
-    const fetchGraph = async () => {
-      setLoading(true);
-      setError(null);
-      setNotReady(false);
-      setGraphData(null);
-      hasInitializedZoom.current = false;
-      try {
-        const url = activeSubject === 'all' ? '/api/graph' : `/api/graph?subject=${activeSubject}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data: GraphData = await res.json();
+  // Fetch graph (extracted as useCallback so it can be called after ingestion completes)
+  const fetchGraph = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setNotReady(false);
+    setGraphData(null);
+    hasInitializedZoom.current = false;
+    try {
+      const url = activeSubject === 'all' ? '/api/graph' : `/api/graph?subject=${activeSubject}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: GraphData = await res.json();
 
-        if (data.status === 'not_ready') {
-          setNotReady(true);
-          setLoading(false);
-          return;
-        }
-
-        // Compute degree map
-        const degreeMap: Record<string, number> = {};
-        data.nodes.forEach(n => { degreeMap[n.id] = 0; });
-        data.edges.forEach(e => {
-          degreeMap[e.source] = (degreeMap[e.source] ?? 0) + 1;
-          degreeMap[e.target] = (degreeMap[e.target] ?? 0) + 1;
-        });
-        const max = Math.max(1, ...Object.values(degreeMap));
-        setMaxDegree(max);
-
-        const nodes: FGNodeObject[] = data.nodes.map(n => ({
-          ...n,
-          degree: degreeMap[n.id] ?? 0,
-          val: Math.max(1, (degreeMap[n.id] ?? 0) * 0.5 + 1),
-        }));
-
-        const links: FGLinkObject[] = data.edges.map(e => ({
-          source: e.source,
-          target: e.target,
-          label: e.label,
-        }));
-
-        setGraphData({ nodes, links });
+      if (data.status === 'not_ready') {
+        setNotReady(true);
         setLoading(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load graph');
-        setLoading(false);
+        return;
       }
-    };
-    fetchGraph();
+
+      // Compute degree map
+      const degreeMap: Record<string, number> = {};
+      data.nodes.forEach(n => { degreeMap[n.id] = 0; });
+      data.edges.forEach(e => {
+        degreeMap[e.source] = (degreeMap[e.source] ?? 0) + 1;
+        degreeMap[e.target] = (degreeMap[e.target] ?? 0) + 1;
+      });
+      const max = Math.max(1, ...Object.values(degreeMap));
+      setMaxDegree(max);
+
+      const nodes: FGNodeObject[] = data.nodes.map(n => ({
+        ...n,
+        degree: degreeMap[n.id] ?? 0,
+        val: Math.max(1, (degreeMap[n.id] ?? 0) * 0.5 + 1),
+      }));
+
+      const links: FGLinkObject[] = data.edges.map(e => ({
+        source: e.source,
+        target: e.target,
+        label: e.label,
+      }));
+
+      setGraphData({ nodes, links });
+      setLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load graph');
+      setLoading(false);
+    }
   }, [activeSubject]);
+
+  useEffect(() => {
+    fetchGraph();
+  }, [fetchGraph]);
 
   // Highlighted node ids from search
   const highlightedIds: Set<string> | null = searchQuery.trim()
@@ -432,12 +440,16 @@ const GraphViewer: React.FC = () => {
   const addFilesToIngest = (files: FileList | File[]) => {
     const fileArr = Array.from(files);
     setIngestFiles(prev => {
-      const combined = [...prev, ...fileArr.map(f => ({ name: f.name, status: 'waiting' as const }))];
+      const newEntries = fileArr.map(f => ({ name: f.name, status: 'waiting' as const }));
+      const combined = [...prev, ...newEntries];
+      const newFileObjects = [...ingestFileObjects.current, ...fileArr];
       if (combined.length > 15) {
         setIngestOverflow(true);
+        ingestFileObjects.current = newFileObjects.slice(0, 15);
         return combined.slice(0, 15);
       }
       setIngestOverflow(false);
+      ingestFileObjects.current = newFileObjects;
       return combined;
     });
     // Auto-detect course code from first filename if ingestSubject is empty
@@ -463,24 +475,99 @@ const GraphViewer: React.FC = () => {
     }
   };
 
-  const handleBuildGraph = () => {
-    if (ingestRunning || ingestFiles.length === 0 || ingestSubject.trim() === '') return;
+  const handleBuildGraph = async () => {
+    // Validate required fields
+    const subjectMissing = ingestSubject.trim() === '';
+    const yearMissing = ingestYear === null;
+    setIngestSubjectError(subjectMissing);
+    setIngestYearError(yearMissing);
+    if (ingestRunning || ingestFiles.length === 0 || subjectMissing || yearMissing) return;
     setIngestRunning(true);
-    // Simulate processing each file sequentially
-    const runNext = (idx: number) => {
-      if (idx >= ingestFiles.length) {
-        setIngestRunning(false);
-        return;
+    setIngestError(null);
+    setIngestSuccess(false);
+    // Reset all file statuses to waiting
+    setIngestFiles(prev => prev.map(f => ({ ...f, status: 'waiting' as const })));
+
+    try {
+      // Build multipart form with actual File objects
+      const formData = new FormData();
+      formData.append('subject', ingestSubject.trim());
+      ingestFileObjects.current.forEach(file => formData.append('files[]', file));
+
+      const startRes = await fetch('/api/materials/ingest', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!startRes.ok) {
+        const err = await startRes.json().catch(() => ({}));
+        throw new Error(err.error ?? `HTTP ${startRes.status}`);
       }
-      setIngestFiles(prev => prev.map((f, i) => i === idx ? { ...f, status: 'processing' } : f));
-      setTimeout(() => {
-        setIngestFiles(prev => prev.map((f, i) => i === idx ? { ...f, status: 'done' } : f));
-        runNext(idx + 1);
-      }, 800);
-    };
-    // Reset all to waiting first
-    setIngestFiles(prev => prev.map(f => ({ ...f, status: 'waiting' })));
-    setTimeout(() => runNext(0), 50);
+      const { job_id } = await startRes.json();
+
+      // Poll for completion
+      const poll = async (): Promise<void> => {
+        const statusRes = await fetch(`/api/materials/ingest/status/${job_id}`);
+        if (!statusRes.ok) throw new Error(`Status check failed: HTTP ${statusRes.status}`);
+        const status = await statusRes.json();
+
+        if (status.status === 'running') {
+          // Update the first "waiting" file to "processing" as a progress hint
+          const progressText: string = status.progress ?? '';
+          const fileMatch = progressText.match(/(\d+)\/\d+/);
+          if (fileMatch) {
+            const idx = parseInt(fileMatch[1], 10) - 1;
+            setIngestFiles(prev => prev.map((f, i) => ({
+              ...f,
+              status: i < idx ? 'done' : i === idx ? 'processing' : f.status,
+            })));
+          }
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          return poll();
+        }
+        if (status.status === 'done') {
+          setIngestFiles(prev => prev.map(f => ({ ...f, status: 'done' as const })));
+          setIngestSuccess(true);
+          setIngestRunning(false);
+          // tabKey always uses the subject slug so it matches the backend storage dir
+          // (e.g. "organization-behavior"), but tabLabel shows the course code when
+          // available (e.g. "ADMS 2400") for a friendlier display.
+          const rawCode = ingestCourseCode.trim();
+          const tabKey = slugify(ingestSubject);
+          const tabLabel = rawCode || ingestSubject.trim();
+          const tabYear = ingestYear!;
+          // Add a tab for the subject if one doesn't already exist
+          setSubjectTabs(prev => {
+            if (prev.find(t => t.key === tabKey)) return prev;
+            return [...prev, { key: tabKey, label: tabLabel }];
+          });
+          // Register course in the correct year's sidebar
+          setUndergraduateCourses(prev => {
+            const yearCourses = prev[tabYear] ?? [];
+            if (yearCourses.find(c => c.code === tabKey)) return prev;
+            return {
+              ...prev,
+              [tabYear]: [...yearCourses, { code: tabKey, label: tabLabel, fullName: ingestSubject.trim() }],
+            };
+          });
+          // Switch to the correct year in the sidebar
+          setSelectedYear(tabYear);
+          // Switching activeSubject triggers the useEffect → fetchGraph automatically
+          setActiveSubject(tabKey);
+          // Clear success banner after 3s
+          setTimeout(() => setIngestSuccess(false), 3000);
+          return;
+        }
+        // error
+        throw new Error(status.message ?? 'Ingestion failed');
+      };
+
+      await poll();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Ingestion failed';
+      setIngestError(msg);
+      setIngestFiles(prev => prev.map(f => f.status === 'processing' ? { ...f, status: 'error' as const } : f));
+      setIngestRunning(false);
+    }
   };
 
   // ---- Tab helpers ----
@@ -563,50 +650,6 @@ const GraphViewer: React.FC = () => {
   }, []);
 
   // ---- Render states ----
-
-  if (loading) {
-    return (
-      <div
-        className="flex items-center justify-center"
-        style={{ background: DARK_BG, borderRadius: '0.75rem', minHeight: '16rem' }}
-      >
-        <div className="flex flex-col items-center gap-3" style={{ color: TEXT_MUTED }}>
-          <Loader2 size={28} className="animate-spin" style={{ color: ACCENT }} />
-          <span className="text-sm">Loading knowledge graph…</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (notReady) {
-    return (
-      <div
-        className="flex items-center justify-center"
-        style={{ background: DARK_BG, borderRadius: '0.75rem', minHeight: '16rem' }}
-      >
-        <div className="flex flex-col items-center gap-3 text-center px-8" style={{ color: TEXT_MUTED }}>
-          <Network size={32} style={{ color: ACCENT, opacity: 0.5 }} />
-          <p className="text-sm">Knowledge graph not initialized. Run the ingestion script first.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div
-        className="flex items-center justify-center"
-        style={{ background: DARK_BG, borderRadius: '0.75rem', minHeight: '16rem' }}
-      >
-        <div className="flex flex-col items-center gap-3 text-center px-8" style={{ color: '#f87171' }}>
-          <AlertCircle size={28} />
-          <p className="text-sm">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!graphData) return null;
 
   const selectedFGNode = selectedNode ? (selectedNode as FGNode) : null;
 
@@ -858,7 +901,7 @@ const GraphViewer: React.FC = () => {
         </div>}
 
         <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: TEXT_MUTED }}>
-          {graphData.nodes.length} nodes · {graphData.links.length} edges
+          {graphData ? `${graphData.nodes.length} nodes · ${graphData.links.length} edges` : '— nodes · — edges'}
         </span>
         <div className="flex-1" />
 
@@ -1307,6 +1350,19 @@ const GraphViewer: React.FC = () => {
       <div className="relative" style={{ minHeight: '500px', height: '60vh' }}>
         {/* Canvas area — always full width */}
         <div ref={containerRef} className="w-full h-full overflow-hidden">
+          {(notReady || error || !graphData) ? (
+            <div
+              className="flex items-center justify-center w-full h-full"
+              style={{ background: DARK_BG }}
+            >
+              <div className="flex flex-col items-center gap-3 text-center px-8" style={{ color: TEXT_MUTED }}>
+                <Network size={32} style={{ color: ACCENT, opacity: 0.5 }} />
+                <p className="text-sm">
+                  {error ? error : 'No knowledge graph yet. Upload your course materials using the dropbox on the right first.'}
+                </p>
+              </div>
+            </div>
+          ) : (
           <ForceGraph2D
             ref={fgRef}
             width={dimensions.width}
@@ -1332,6 +1388,7 @@ const GraphViewer: React.FC = () => {
             d3AlphaDecay={0.02}
             d3VelocityDecay={0.3}
           />
+          )}
         </div>
 
         {/* Detail panel — floats over the graph in the top-right corner */}
@@ -1692,13 +1749,43 @@ const GraphViewer: React.FC = () => {
         {/* Subject name input */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium" style={{ color: TEXT_MUTED }}>
-            Subject name
+            Subject name <span style={{ color: '#f87171' }}>*</span>
           </label>
           <input
             type="text"
             value={ingestSubject}
-            onChange={e => setIngestSubject(e.target.value)}
-            placeholder="e.g. CALL 201"
+            onChange={e => { setIngestSubject(e.target.value); if (e.target.value.trim()) setIngestSubjectError(false); }}
+            placeholder="e.g. Organizational Behavior"
+            disabled={ingestRunning}
+            style={{
+              background: DARK_BG,
+              border: `1px solid ${ingestSubjectError ? '#f87171' : BORDER_COLOR}`,
+              color: TEXT_PRIMARY,
+              borderRadius: '0.5rem',
+              padding: '0.35rem 0.6rem',
+              fontSize: '0.8rem',
+              outline: 'none',
+              transition: 'border-color 0.15s',
+              opacity: ingestRunning ? 0.6 : 1,
+            }}
+            onFocus={e => (e.currentTarget.style.borderColor = ingestSubjectError ? '#f87171' : ACCENT)}
+            onBlur={e => (e.currentTarget.style.borderColor = ingestSubjectError ? '#f87171' : BORDER_COLOR)}
+          />
+          {ingestSubjectError && (
+            <span style={{ color: '#f87171', fontSize: '0.7rem' }}>Subject name is required</span>
+          )}
+        </div>
+
+        {/* Course code input */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium" style={{ color: TEXT_MUTED }}>
+            Course code <span style={{ color: TEXT_MUTED, fontWeight: 400 }}>(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={ingestCourseCode}
+            onChange={e => setIngestCourseCode(e.target.value)}
+            placeholder="e.g. ADMS 2400"
             disabled={ingestRunning}
             style={{
               background: DARK_BG,
@@ -1714,6 +1801,49 @@ const GraphViewer: React.FC = () => {
             onFocus={e => (e.currentTarget.style.borderColor = ACCENT)}
             onBlur={e => (e.currentTarget.style.borderColor = BORDER_COLOR)}
           />
+        </div>
+
+        {/* Year dropdown */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium" style={{ color: TEXT_MUTED }}>
+            Year <span style={{ color: '#f87171' }}>*</span>
+          </label>
+          <select
+            value={ingestYear ?? ''}
+            onChange={e => {
+              const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+              setIngestYear(val);
+              if (val !== null) setIngestYearError(false);
+            }}
+            disabled={ingestRunning}
+            style={{
+              background: DARK_BG,
+              border: `1px solid ${ingestYearError ? '#f87171' : BORDER_COLOR}`,
+              color: ingestYear === null ? TEXT_MUTED : TEXT_PRIMARY,
+              borderRadius: '0.5rem',
+              padding: '0.35rem 0.6rem',
+              fontSize: '0.8rem',
+              outline: 'none',
+              transition: 'border-color 0.15s',
+              opacity: ingestRunning ? 0.6 : 1,
+              cursor: ingestRunning ? 'not-allowed' : 'pointer',
+              appearance: 'none',
+              WebkitAppearance: 'none',
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236b6560' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E")`,
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 0.6rem center',
+              paddingRight: '1.8rem',
+            }}
+          >
+            <option value="">Select year</option>
+            <option value="1">Year 1</option>
+            <option value="2">Year 2</option>
+            <option value="3">Year 3</option>
+            <option value="4">Year 4</option>
+          </select>
+          {ingestYearError && (
+            <span style={{ color: '#f87171', fontSize: '0.7rem' }}>Year is required</span>
+          )}
         </div>
 
         {/* Drop zone */}
@@ -1754,6 +1884,11 @@ const GraphViewer: React.FC = () => {
           </div>
         )}
 
+        {/* Phase hint */}
+        <div style={{ color: TEXT_MUTED, fontSize: '0.7rem', lineHeight: 1.5 }}>
+          Drop files to queue them → click <strong style={{ color: TEXT_PRIMARY }}>Build Graph</strong> to generate the knowledge graph.
+        </div>
+
         {/* File list */}
         {ingestFiles.length > 0 && (
           <div className="flex flex-col gap-1">
@@ -1786,7 +1921,10 @@ const GraphViewer: React.FC = () => {
                 )}
                 {!ingestRunning && (
                   <button
-                    onClick={() => setIngestFiles(prev => prev.filter((_, i) => i !== idx))}
+                    onClick={() => {
+                      ingestFileObjects.current = ingestFileObjects.current.filter((_, i) => i !== idx);
+                      setIngestFiles(prev => prev.filter((_, i) => i !== idx));
+                    }}
                     title="Remove"
                     style={{
                       background: 'none',
@@ -1810,23 +1948,36 @@ const GraphViewer: React.FC = () => {
       </div>
 
       {/* Build Graph button — pinned at bottom of panel */}
-      <div className="px-4 pb-4 pt-2">
+      <div className="px-4 pb-4 pt-2 flex flex-col gap-2">
+        {ingestError && (
+          <div className="text-xs rounded px-2 py-1.5 flex items-center gap-1.5"
+            style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
+            <AlertCircle size={12} />
+            {ingestError}
+          </div>
+        )}
+        {ingestSuccess && (
+          <div className="text-xs rounded px-2 py-1.5"
+            style={{ background: 'rgba(34,197,94,0.12)', color: '#16a34a', border: '1px solid rgba(34,197,94,0.3)' }}>
+            Graph built successfully!
+          </div>
+        )}
         <button
           onClick={handleBuildGraph}
-          disabled={ingestFiles.length === 0 || ingestSubject.trim() === '' || ingestRunning}
+          disabled={ingestFiles.length === 0 || ingestRunning}
           className="flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold transition-opacity w-full"
           style={{
             background: ACCENT,
             color: DARK_BG,
             border: 'none',
-            cursor: ingestFiles.length === 0 || ingestSubject.trim() === '' || ingestRunning ? 'not-allowed' : 'pointer',
-            opacity: ingestFiles.length === 0 || ingestSubject.trim() === '' || ingestRunning ? 0.45 : 1,
+            cursor: ingestFiles.length === 0 || ingestRunning ? 'not-allowed' : 'pointer',
+            opacity: ingestFiles.length === 0 || ingestRunning ? 0.45 : 1,
           }}
         >
           {ingestRunning && (
             <Loader2 size={14} className="animate-spin" />
           )}
-          {ingestRunning ? 'Building…' : 'Build Graph'}
+          {ingestRunning ? 'Building graph…' : 'Build Graph'}
         </button>
       </div>
     </div>

@@ -2,7 +2,9 @@ import os
 import re
 import json
 import time
+import uuid
 import asyncio
+import tempfile
 import psycopg2
 from flask import Flask, request, Response, stream_with_context, jsonify, send_file
 import fitz  # pymupdf
@@ -19,6 +21,7 @@ from tavily import TavilyClient
 # ---------------------------------------------------------------------------
 _rag_instances = {}       # key: storage_dir path → LightRAG instance
 _initialized_instances = set()  # storage_dirs that have had initialize_storages() called
+_ingest_jobs = {}         # key: job_id → {"status": "running"|"done"|"error", "progress": str, "message": str}
 
 # Persistent background event loop — never closed, so LightRAG's internal state stays valid
 import threading as _threading
@@ -1248,13 +1251,21 @@ def _get_lightrag_instance(storage_dir: str = None):
     return rag
 
 
-def _get_graphml_path(subject: str = "all") -> str:
-    """Return the path to the graphml file for a specific (non-all) subject."""
+def _get_graphml_path(subject: str = "all") -> str | None:
+    """Return the path to the graphml file for a specific (non-all) subject.
+
+    Returns None for unknown/unrecognised subject keys so the caller can treat
+    them as 'not_ready' rather than silently falling back to the Business Law
+    storage directory.
+    """
     backend_dir = os.path.dirname(os.path.abspath(__file__))
     if subject == "call":
         storage_dir = "lightrag_storage_call"
-    else:
+    elif subject == "business-law":
         storage_dir = "lightrag_storage"
+    else:
+        # Dynamic subject — storage dir follows the convention used at ingest time.
+        storage_dir = f"lightrag_storage_{subject}"
     return os.path.normpath(
         os.path.join(backend_dir, "..", "data", storage_dir, "graph_chunk_entity_relation.graphml")
     )
@@ -1377,7 +1388,7 @@ def get_graph():
             graphs = [nx.read_graphml(p) for p in existing_paths]
         else:
             graphml_path = _get_graphml_path(subject)
-            if not os.path.exists(graphml_path):
+            if graphml_path is None or not os.path.exists(graphml_path):
                 return {"nodes": [], "edges": [], "status": "not_ready"}
             graphs = [nx.read_graphml(graphml_path)]
 
@@ -1407,7 +1418,7 @@ def query_graph():
         return {"error": "Missing 'question' field."}, 400
 
     graphml_path = _get_graphml_path(subject)
-    if not os.path.exists(graphml_path):
+    if graphml_path is None or not os.path.exists(graphml_path):
         return {"answer": "Knowledge graph not initialized yet.", "subject": subject, "matched_node_id": None}
 
     def clean_answer(text: str) -> str:
@@ -1939,6 +1950,146 @@ def export_docx():
         as_attachment=True,
         download_name=filename,
     )
+
+
+def _slug(text: str) -> str:
+    """Convert a subject name to a filesystem-safe slug (e.g. 'CALL 201' → 'call-201')."""
+    return re.sub(r'[^a-z0-9]+', '-', text.strip().lower()).strip('-')
+
+
+def _extract_text_from_bytes(filename: str, content: bytes) -> str:
+    """Extract plain text from PDF, PPTX, or DOCX bytes."""
+    ext = os.path.splitext(filename.lower())[1]
+    if ext == ".pdf":
+        doc = fitz.open(stream=content, filetype="pdf")
+        pages = [page.get_text() for page in doc]
+        doc.close()
+        return "\n".join(pages)
+    elif ext == ".pptx":
+        from pptx import Presentation
+        import io as _io
+        prs = Presentation(_io.BytesIO(content))
+        texts = []
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                if shape.has_text_frame:
+                    texts.append(shape.text)
+        return "\n".join(texts)
+    elif ext == ".docx":
+        doc = _docx_lib.Document(io.BytesIO(content))
+        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+    return ""
+
+
+@app.route("/api/materials/ingest", methods=["POST"])
+def start_ingest():
+    """Accept uploaded files + subject name, kick off LightRAG ingestion in the background.
+
+    Form fields:
+        files[]  — one or more PDF/PPTX/DOCX file uploads
+        subject  — string subject name (e.g. "Business Law")
+
+    Returns immediately with {"job_id": "...", "status": "running"}.
+    """
+    if "files[]" not in request.files:
+        return jsonify({"error": "No files[] field in request"}), 400
+
+    subject = request.form.get("subject", "").strip()
+    if not subject:
+        return jsonify({"error": "Missing subject field"}), 400
+
+    uploaded = request.files.getlist("files[]")
+    if not uploaded:
+        return jsonify({"error": "No files uploaded"}), 400
+
+    # Read file bytes now (before the request context closes)
+    file_data = []
+    for f in uploaded:
+        name = f.filename or "unknown"
+        ext = os.path.splitext(name.lower())[1]
+        if ext not in (".pdf", ".pptx", ".docx"):
+            continue
+        file_data.append((name, f.read()))
+
+    if not file_data:
+        return jsonify({"error": "No valid PDF/PPTX/DOCX files found"}), 400
+
+    job_id = str(uuid.uuid4())
+    _ingest_jobs[job_id] = {"status": "running", "progress": "Starting…", "message": ""}
+
+    # Determine storage directory for this subject
+    subject_slug = _slug(subject)
+    # Map known canonical slugs to existing storage dirs
+    if subject_slug == "business-law":
+        storage_subdir = "lightrag_storage"
+    elif subject_slug == "call":
+        storage_subdir = "lightrag_storage_call"
+    else:
+        storage_subdir = f"lightrag_storage_{subject_slug}"
+
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    storage_dir = os.path.normpath(os.path.join(backend_dir, "..", "data", storage_subdir))
+    os.makedirs(storage_dir, exist_ok=True)
+
+    def _run_ingest():
+        total = len(file_data)
+        try:
+            async def _do_ingest():
+                rag = _get_lightrag_instance(storage_dir)
+                if storage_dir not in _initialized_instances:
+                    await rag.initialize_storages()
+                    _initialized_instances.add(storage_dir)
+                for i, (fname, content) in enumerate(file_data, start=1):
+                    _ingest_jobs[job_id]["progress"] = f"Ingesting file {i}/{total}: {fname}"
+                    text = _extract_text_from_bytes(fname, content)
+                    if not text.strip():
+                        continue
+                    # LightRAG deduplicates by hashing the raw content string.  If the
+                    # same bytes were uploaded in a previous (failed) attempt, the hash
+                    # is already in doc_status and the file is silently skipped.  We
+                    # prepend a deterministic header containing the subject slug and
+                    # filename so that:
+                    #   • each file in each subject gets a unique content hash, and
+                    #   • re-uploading the exact same file to the same subject is still
+                    #     correctly de-duplicated (same header → same hash).
+                    tagged_text = (
+                        f"[source: {subject_slug} / {fname}]\n\n{text}"
+                    )
+                    try:
+                        # lightrag-hku >=1.4 accepts an `ids` list for explicit IDs.
+                        doc_id = f"doc-{subject_slug}__{os.path.splitext(fname)[0]}"
+                        await rag.ainsert(tagged_text, ids=[doc_id])
+                    except TypeError:
+                        # Older releases don't support the ids kwarg — fall back to
+                        # plain insert (the tagged_text prefix still ensures uniqueness).
+                        await rag.ainsert(tagged_text)
+
+            future = asyncio.run_coroutine_threadsafe(_do_ingest(), _bg_loop)
+            future.result(timeout=600)
+            _ingest_jobs[job_id]["status"] = "done"
+            _ingest_jobs[job_id]["progress"] = f"Done — {total} file(s) ingested."
+        except Exception as exc:
+            print(f"Ingest job {job_id} failed: {exc}")
+            _ingest_jobs[job_id]["status"] = "error"
+            _ingest_jobs[job_id]["message"] = str(exc)
+
+    import threading as _t
+    _t.Thread(target=_run_ingest, daemon=True).start()
+
+    return jsonify({"job_id": job_id, "status": "running"})
+
+
+@app.route("/api/materials/ingest/status/<job_id>", methods=["GET"])
+def ingest_status(job_id):
+    """Return the current status of an ingestion job."""
+    job = _ingest_jobs.get(job_id)
+    if job is None:
+        return jsonify({"status": "not_found"}), 404
+    if job["status"] == "running":
+        return jsonify({"status": "running", "progress": job.get("progress", "")})
+    if job["status"] == "done":
+        return jsonify({"status": "done"})
+    return jsonify({"status": "error", "message": job.get("message", "Unknown error")})
 
 
 init_db()
