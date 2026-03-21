@@ -34,7 +34,7 @@
 
 **syllabus upload** — drop PDF/DOCX → auto-fill form fields + extract required readings
 
-![syllabus upload](docs/syllabus%20upload.gif)
+![syllabus upload](docs/Syllabus%20Upload.gif)
 
 **research agent&human in the loop** — Tavily research agent → human source review → approve/reject
 
@@ -46,9 +46,9 @@
 
 **Knowledge Graph** — concept map, node detail, natural language query with node highlight
 
-![Knowledge Graph](docs/knowledge%20graph.gif)
+![Knowledge Graph](docs/Knowledge%20graph%20.gif)
 
-▶ [Full demo video (Google Drive)](https://drive.google.com/file/d/14xBVW0lqy2lpF718XlUqynFn2OurXPgu/view?usp=sharing)
+▶ [Full demo video (Google Drive)](https://drive.google.com/file/d/14SLOJFImW9TqyyXipJL1wumkptir7WuU/view?usp=sharing)
 
 ---
 
@@ -87,7 +87,10 @@
 <summary><strong>📦 Export</strong></summary>
 
 - **IMS Common Cartridge (.imscc)** — direct import into Canvas, Moodle, D2L
+- **PDF export** — client-side jsPDF; readings listed as inline titles per module, full citations collected in a References section at the end
+- **DOCX export** — python-docx backend; same structure as PDF
 - **Markdown export** — full curriculum with readings and assignments as a .md file
+- **Citation format selector** — APA / MLA / Chicago, applied across all export formats
 - **Copy to clipboard** — paste into any editor
 
 </details>
@@ -95,10 +98,14 @@
 <details>
 <summary><strong>🕸️ Knowledge Graph (LightRAG)</strong></summary>
 
-- **Material ingestion** — upload course PDFs and PPTXs; `ingest.py` processes them into a LightRAG knowledge graph
-- **Subject tabs** — separate graphs per course (Business Law, CALL) or merged All view (994 nodes, 586 edges)
+- **Material ingestion** — right-side panel always visible; drag-and-drop PDF/PPTX upload (max 15 files, 50MB each); per-file progress tracking; Build Graph button triggers LightRAG ingestion
+- **Undergraduate year sidebar** — Year 1–4 + All Courses navigation; courses organized by academic year
+- **Course management** — course banner with pill navigation per year; add/delete/rename/drag-reorder course pills; each course has an editable full name tag; changes auto-saved to localStorage
+- **Dynamic subject tabs** — add/delete/rename/drag-reorder subject tabs; tab state persists across sessions
 - **Force-directed visualization** — interactive 2D graph with warm brown palette; node size scales with connection count
 - **Node detail panel** — click any concept to see its definition and connection count
+- **Fullscreen mode** — fullscreen toggle with ESC key support
+- **Course search** — search courses by name or code across all years; auto-navigates to correct year
 - **Concept search** — filter and highlight matching nodes across the graph
 - **Knowledge query** — ask natural language questions against the graph; Redis-cached answers (persistent cache)
 - **Query history** — starred + deletable history of past questions with subject tags
@@ -251,10 +258,10 @@ plot-ark/
 ├── .env.example
 ├── docs/
 │   ├── architecture.md
-│   ├── syllabus upload.gif          ← Demo: syllabus import → form auto-fill
+│   ├── Syllabus Upload.gif          ← Demo: syllabus import → form auto-fill
 │   ├── research agent&human in the loop.gif  ← Demo: research agent + source review
 │   ├── module adjuistment.gif       ← Demo: module editing + drag-and-drop
-│   └── knowledge graph.gif          ← Demo: knowledge graph + query
+│   └── Knowledge graph .gif         ← Demo: year sidebar, course management, fullscreen, query
 ├── frontend/                        ← React + TypeScript + Vite
 │   ├── Dockerfile
 │   ├── index.tsx                    ← Entry point
@@ -296,6 +303,12 @@ plot-ark/
 - [x] xAPI mini-LRS — statement ingestion, learner state, professor analytics panel (mock data)
 - [x] Syllabus import — PDF/DOCX → auto-fill form + extract required readings
 - [x] Course narrative — course-level story generated at skeleton phase, professor-editable
+- [x] Citation format selector — APA / MLA / Chicago across all exports
+- [x] PDF + DOCX export — client-side jsPDF and python-docx backend
+- [x] Multi-course management — dynamic course slots with add/delete/rename/drag-reorder
+- [x] My Courses dashboard — card grid with course history overview
+- [x] Knowledge Graph course management — year sidebar, course banner, dynamic subject tabs, fullscreen, course search
+- [x] Knowledge Graph ingestion panel — drag-and-drop material upload, always-visible right panel
 - [ ] Redis learner state management
 - [ ] Professor LTM — preference learning from edit history
 - [ ] LTI 1.3 — push into Canvas / Moodle

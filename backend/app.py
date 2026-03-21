@@ -1848,13 +1848,25 @@ def export_docx():
             return f'"{title}." Accessed {today}. {url}'
         return title
 
+    LEVEL_LABELS = {
+        'undergraduate-year-1': 'Undergraduate — Year 1',
+        'undergraduate-year-2': 'Undergraduate — Year 2',
+        'undergraduate-year-3': 'Undergraduate — Year 3',
+        'undergraduate-year-4': 'Undergraduate — Year 4',
+        'graduate': 'Graduate',
+        'phd': 'PhD',
+        'professional': 'Professional',
+    }
+    raw_level = data.get("level", "")
+    level_label = LEVEL_LABELS.get(raw_level, raw_level)
+
     # Title
     topic = data.get("topic", "Curriculum")
     title_para = doc.add_heading(topic, level=1)
     title_para.runs[0].bold = True
 
     # Course code / level / audience
-    meta_parts = [p for p in [data.get("course_code"), data.get("level"), data.get("audience")] if p]
+    meta_parts = [p for p in [data.get("course_code"), level_label, data.get("audience")] if p]
     if meta_parts:
         doc.add_paragraph(" / ".join(meta_parts))
 
@@ -1865,6 +1877,9 @@ def export_docx():
         doc.add_paragraph(course_narrative)
 
     # Modules
+    all_readings = []
+    seen_urls = set()
+
     for mod in data.get("modules", []):
         mod_num = mod.get("module_number", "")
         mod_title = mod.get("title", "")
@@ -1886,8 +1901,11 @@ def export_docx():
             if rp.runs:
                 rp.runs[0].bold = True
             for r in readings:
-                text = fmt_citation(r.get('title', ''), r.get('url', ''), citation_format)
-                doc.add_paragraph(text, style="List Bullet")
+                doc.add_paragraph(r.get('title', ''), style="List Bullet")
+                key = r.get('url') or r.get('title', '')
+                if key and key not in seen_urls:
+                    seen_urls.add(key)
+                    all_readings.append(r)
 
         assignments = mod.get("assignments", [])
         if assignments:
@@ -1902,6 +1920,13 @@ def export_docx():
                     name_para.runs[0].bold = True
                 if a_desc:
                     doc.add_paragraph(a_desc)
+
+    # References section
+    if all_readings:
+        doc.add_heading("References", level=2)
+        for i, r in enumerate(all_readings, start=1):
+            text = fmt_citation(r.get('title', ''), r.get('url', ''), citation_format)
+            doc.add_paragraph(f"[{i}] {text}")
 
     buf = io.BytesIO()
     doc.save(buf)

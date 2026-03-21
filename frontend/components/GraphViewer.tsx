@@ -81,30 +81,36 @@ const GraphViewer: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState<number | null>(1);
 
   // Undergraduate course data (mutable via CRUD)
-  const [undergraduateCourses, setUndergraduateCourses] = useState<Record<number, { code: string; label: string; fullName: string }[]>>({
-    1: [
-      { code: 'acct-101', label: 'ACCT 101', fullName: 'Introduction to Financial Accounting' },
-      { code: 'econ-101', label: 'ECON 101', fullName: 'Introduction to Microeconomics' },
-      { code: 'bus-101', label: 'BUS 101', fullName: 'Foundations of Business' },
-      { code: 'mgmt-101', label: 'MGMT 101', fullName: 'Principles of Management' },
-      { code: 'hr-101', label: 'HR 101', fullName: 'Human Resources Fundamentals' },
-    ],
-    2: [
-      { code: 'business-law', label: 'Business Law', fullName: 'Business Law and Ethics' },
-      { code: 'info-201', label: 'INFO 201', fullName: 'Information Systems' },
-      { code: 'acct-201', label: 'ACCT 201', fullName: 'Intermediate Accounting' },
-      { code: 'econ-201', label: 'ECON 201', fullName: 'Macroeconomics' },
-    ],
-    3: [
-      { code: 'supply-301', label: 'Supply Chain 301', fullName: 'Supply Chain Management' },
-      { code: 'employ-301', label: 'Employment Law 301', fullName: 'Employment Law' },
-      { code: 'mgmt-301', label: 'MGMT 301', fullName: 'Organizational Behavior' },
-    ],
-    4: [
-      { code: 'nego-401', label: 'Negotiation 401', fullName: 'Negotiation and Conflict Resolution' },
-      { code: 'ihrm-401', label: 'IHRM 401', fullName: 'International Human Resource Management' },
-      { code: 'call', label: 'CALL', fullName: 'Computer-Assisted Language Learning' },
-    ],
+  const [undergraduateCourses, setUndergraduateCourses] = useState<Record<number, { code: string; label: string; fullName: string }[]>>(() => {
+    try {
+      const stored = localStorage.getItem('plot_ark_undergraduate_courses');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return {
+      1: [
+        { code: 'acct-101', label: 'ACCT 101', fullName: 'Introduction to Financial Accounting' },
+        { code: 'econ-101', label: 'ECON 101', fullName: 'Introduction to Microeconomics' },
+        { code: 'bus-101', label: 'BUS 101', fullName: 'Foundations of Business' },
+        { code: 'mgmt-101', label: 'MGMT 101', fullName: 'Principles of Management' },
+        { code: 'hr-101', label: 'HR 101', fullName: 'Human Resources Fundamentals' },
+      ],
+      2: [
+        { code: 'business-law', label: 'Business Law', fullName: 'Business Law and Ethics' },
+        { code: 'info-201', label: 'INFO 201', fullName: 'Information Systems' },
+        { code: 'acct-201', label: 'ACCT 201', fullName: 'Intermediate Accounting' },
+        { code: 'econ-201', label: 'ECON 201', fullName: 'Macroeconomics' },
+      ],
+      3: [
+        { code: 'supply-301', label: 'Supply Chain 301', fullName: 'Supply Chain Management' },
+        { code: 'employ-301', label: 'Employment Law 301', fullName: 'Employment Law' },
+        { code: 'mgmt-301', label: 'MGMT 301', fullName: 'Organizational Behavior' },
+      ],
+      4: [
+        { code: 'nego-401', label: 'Negotiation 401', fullName: 'Negotiation and Conflict Resolution' },
+        { code: 'ihrm-401', label: 'IHRM 401', fullName: 'International Human Resource Management' },
+        { code: 'call', label: 'CALL', fullName: 'Computer-Assisted Language Learning' },
+      ],
+    };
   });
   const [editingCourseKey, setEditingCourseKey] = useState<string | null>(null);
   const [courseNameInput, setCourseNameInput] = useState('');
@@ -114,11 +120,17 @@ const GraphViewer: React.FC = () => {
   const [newCourseInput, setNewCourseInput] = useState('');
 
   // Dynamic subject tabs
-  const [subjectTabs, setSubjectTabs] = useState<{ key: string; label: string }[]>([
-    { key: 'all', label: 'All' },
-    { key: 'business-law', label: 'Business Law' },
-    { key: 'call', label: 'CALL' },
-  ]);
+  const [subjectTabs, setSubjectTabs] = useState<{ key: string; label: string }[]>(() => {
+    try {
+      const stored = localStorage.getItem('plot_ark_subject_tabs');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return [
+      { key: 'all', label: 'All' },
+      { key: 'business-law', label: 'Business Law' },
+      { key: 'call', label: 'CALL' },
+    ];
+  });
   const [addingTab, setAddingTab] = useState(false);
   const [newTabName, setNewTabName] = useState('');
 
@@ -168,6 +180,16 @@ const GraphViewer: React.FC = () => {
       // localStorage unavailable
     }
   }, [queryHistory]);
+
+  // Persist undergraduateCourses to localStorage whenever it changes
+  useEffect(() => {
+    try { localStorage.setItem('plot_ark_undergraduate_courses', JSON.stringify(undergraduateCourses)); } catch {}
+  }, [undergraduateCourses]);
+
+  // Persist subjectTabs to localStorage whenever it changes
+  useEffect(() => {
+    try { localStorage.setItem('plot_ark_subject_tabs', JSON.stringify(subjectTabs)); } catch {}
+  }, [subjectTabs]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -1168,57 +1190,38 @@ const GraphViewer: React.FC = () => {
             })}
             {/* Add course inline */}
             {addingCourseYear === selectedYear ? (
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <input
-                  autoFocus
-                  type="text"
-                  value={newCourseInput}
-                  onChange={e => setNewCourseInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      const trimmed = newCourseInput.trim();
-                      if (trimmed) {
-                        const code = trimmed.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-                        setUndergraduateCourses(prev => ({
-                          ...prev,
-                          [selectedYear]: [...(prev[selectedYear] ?? []), { code, label: trimmed, fullName: trimmed }],
-                        }));
-                      }
-                      setAddingCourseYear(null);
-                      setNewCourseInput('');
-                    }
-                    if (e.key === 'Escape') {
-                      setAddingCourseYear(null);
-                      setNewCourseInput('');
-                    }
-                  }}
-                  placeholder="Course name"
-                  style={{
-                    background: DARK_BG,
-                    border: `1px solid ${ACCENT}`,
-                    color: TEXT_PRIMARY,
-                    borderRadius: '999px',
-                    padding: '2px 10px',
-                    fontSize: '0.75rem',
-                    outline: 'none',
-                    width: '110px',
-                  }}
-                />
-                <button
-                  onClick={() => { setAddingCourseYear(null); setNewCourseInput(''); }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: TEXT_MUTED,
-                    cursor: 'pointer',
-                    fontSize: '0.75rem',
-                    lineHeight: 1,
-                    padding: '0 2px',
-                  }}
-                >
-                  ×
-                </button>
-              </div>
+              <input
+                autoFocus
+                type="text"
+                value={newCourseInput}
+                onChange={e => setNewCourseInput(e.target.value)}
+                onBlur={() => {
+                  const trimmed = newCourseInput.trim();
+                  if (trimmed) {
+                    const code = trimmed.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                    setUndergraduateCourses(prev => ({
+                      ...prev,
+                      [selectedYear]: [...(prev[selectedYear] ?? []), { code, label: trimmed, fullName: '' }],
+                    }));
+                    setActiveSubject(code);
+                  }
+                  setAddingCourseYear(null);
+                  setNewCourseInput('');
+                }}
+                onKeyDown={e => { if (e.key === 'Escape') { setAddingCourseYear(null); setNewCourseInput(''); } }}
+                placeholder="Course code…"
+                style={{
+                  background: DARK_BG,
+                  border: `1px dashed ${ACCENT}`,
+                  color: TEXT_PRIMARY,
+                  borderRadius: '999px',
+                  padding: '2px 10px',
+                  fontSize: '0.75rem',
+                  outline: 'none',
+                  width: '110px',
+                  flexShrink: 0,
+                }}
+              />
             ) : (
               <button
                 onClick={() => setAddingCourseYear(selectedYear)}
@@ -1272,96 +1275,30 @@ const GraphViewer: React.FC = () => {
               flexShrink: 0,
             }}
           >
-            {editingFullName ? (
-              <input
-                autoFocus
-                type="text"
-                value={fullNameInput}
-                onChange={e => setFullNameInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    const trimmed = fullNameInput.trim();
-                    if (trimmed) {
-                      setUndergraduateCourses(prev => ({
-                        ...prev,
-                        [selectedYear]: prev[selectedYear].map(c =>
-                          c.code === activeCourse.code ? { ...c, fullName: trimmed } : c
-                        ),
-                      }));
-                    }
-                    setEditingFullName(false);
-                    setFullNameInput('');
-                  }
-                  if (e.key === 'Escape') {
-                    setEditingFullName(false);
-                    setFullNameInput('');
-                  }
-                }}
-                onBlur={() => {
-                  const trimmed = fullNameInput.trim();
-                  if (trimmed) {
-                    setUndergraduateCourses(prev => ({
-                      ...prev,
-                      [selectedYear]: prev[selectedYear].map(c =>
-                        c.code === activeCourse.code ? { ...c, fullName: trimmed } : c
-                      ),
-                    }));
-                  }
-                  setEditingFullName(false);
-                  setFullNameInput('');
-                }}
-                style={{
-                  background: DARK_BG,
-                  border: `1px solid ${ACCENT}`,
-                  color: TEXT_PRIMARY,
-                  borderRadius: '999px',
-                  padding: '3px 12px',
-                  fontSize: '0.8rem',
-                  outline: 'none',
-                  width: '320px',
-                }}
-              />
-            ) : (
-              <div
-                className="group"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
-                onClick={() => { setEditingFullName(true); setFullNameInput(activeCourse.fullName); }}
-              >
-                <span
-                  style={{
-                    background: DARK_BG,
-                    border: `1px solid ${BORDER_COLOR}`,
-                    borderRadius: '999px',
-                    padding: '3px 12px',
-                    fontSize: '0.8rem',
-                    color: TEXT_PRIMARY,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {activeCourse.fullName}
-                </span>
-                <button
-                  title="Rename full name"
-                  onClick={e => {
-                    e.stopPropagation();
-                    setEditingFullName(true);
-                    setFullNameInput(activeCourse.fullName);
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: TEXT_MUTED,
-                    fontSize: '0.8rem',
-                    lineHeight: 1,
-                    padding: '2px',
-                    opacity: 1,
-                  }}
-                >
-                  <span style={{ transform: 'scaleX(-1)', display: 'inline-block' }}>✎</span>
-                </button>
-              </div>
-            )}
+            <input
+              type="text"
+              value={activeCourse.fullName}
+              placeholder="Enter course full name..."
+              onChange={(e) => {
+                const val = e.target.value;
+                setUndergraduateCourses(prev => ({
+                  ...prev,
+                  [selectedYear!]: prev[selectedYear!].map(c =>
+                    c.code === activeCourse.code ? { ...c, fullName: val } : c
+                  ),
+                }));
+              }}
+              style={{
+                background: DARK_BG,
+                border: `1px solid ${BORDER_COLOR}`,
+                color: TEXT_PRIMARY,
+                borderRadius: '999px',
+                padding: '3px 12px',
+                fontSize: '0.8rem',
+                outline: 'none',
+                width: '320px',
+              }}
+            />
           </div>
         );
       })()}

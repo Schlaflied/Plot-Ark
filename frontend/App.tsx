@@ -1313,6 +1313,16 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const LEVEL_LABELS: Record<string, string> = {
+    'undergraduate-year-1': 'Undergraduate — Year 1',
+    'undergraduate-year-2': 'Undergraduate — Year 2',
+    'undergraduate-year-3': 'Undergraduate — Year 3',
+    'undergraduate-year-4': 'Undergraduate — Year 4',
+    'graduate': 'Graduate',
+    'phd': 'PhD',
+    'professional': 'Professional',
+  };
+
   const handleExportPDF = async () => {
     const { jsPDF } = await import('jspdf');
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -1334,7 +1344,7 @@ const App: React.FC = () => {
     // Title
     addText(topic, 22, true, [30, 20, 10]);
     if (courseCode) addText(courseCode, 11, false, [120, 100, 80]);
-    addText(`${level} · ${audience}`, 10, false, [150, 130, 110]);
+    addText(`${LEVEL_LABELS[level] ?? level} · ${audience}`, 10, false, [150, 130, 110]);
     y += 4;
 
     // Course narrative
@@ -1345,6 +1355,9 @@ const App: React.FC = () => {
     }
 
     // Modules
+    const allReadings: { title: string; url: string }[] = [];
+    const seenUrls = new Set<string>();
+
     editedModules.forEach((m, i) => {
       const modNum = (m as any).module_number ?? i + 1;
       addText(`Module ${modNum}: ${m.title}`, 13, true, [80, 60, 40]);
@@ -1354,7 +1367,14 @@ const App: React.FC = () => {
       }
       if (m.recommended_readings?.length) {
         addText('Readings', 10, true);
-        m.recommended_readings.forEach(r => addText(`• ${formatCitation(r.title || '', r.url || '', citationFormat)}`, 9));
+        m.recommended_readings.forEach(r => {
+          addText(`• ${r.title || ''}`, 9);
+          const key = r.url || r.title || '';
+          if (key && !seenUrls.has(key)) {
+            seenUrls.add(key);
+            allReadings.push({ title: r.title || '', url: r.url || '' });
+          }
+        });
       }
       if (m.assignments?.length) {
         addText('Assessment', 10, true);
@@ -1365,6 +1385,14 @@ const App: React.FC = () => {
       }
       y += 4;
     });
+
+    // References section
+    if (allReadings.length) {
+      addText('References', 13, true, [30, 20, 10]);
+      allReadings.forEach((r, i) => {
+        addText(`[${i + 1}] ${formatCitation(r.title, r.url, citationFormat)}`, 9);
+      });
+    }
 
     const filename = `${topic.replace(/\s+/g, '_').toLowerCase()}_curriculum.pdf`;
     doc.save(filename);
@@ -1930,6 +1958,11 @@ const App: React.FC = () => {
                         </>
                       )}
                     </label>
+                    {syllabusFileName && previewSources.length > 0 && (
+                      <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                        📚 Found {previewSources.length} required reading{previewSources.length !== 1 ? 's' : ''} from your syllabus — they'll appear in the source review step before generation.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-stone-700 uppercase tracking-wider mb-2">Design Approach</label>

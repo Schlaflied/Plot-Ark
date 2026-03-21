@@ -34,7 +34,7 @@
 
 **syllabus upload** — 拖入 PDF/DOCX → 自动填充表单字段 + 提取必读材料
 
-![syllabus upload](docs/syllabus%20upload.gif)
+![syllabus upload](docs/Syllabus%20Upload.gif)
 
 **research agent&human in the loop** — Tavily 研究 Agent → 人工信源审核 → 批准/拒绝
 
@@ -46,9 +46,9 @@
 
 **Knowledge Graph** — 概念图、节点详情、自然语言查询与节点高亮
 
-![Knowledge Graph](docs/knowledge%20graph.gif)
+![Knowledge Graph](docs/Knowledge%20graph%20.gif)
 
-▶ [完整演示视频（Google Drive）](https://drive.google.com/file/d/14xBVW0lqy2lpF718XlUqynFn2OurXPgu/view?usp=sharing)
+▶ [完整演示视频（Google Drive）](https://drive.google.com/file/d/14SLOJFImW9TqyyXipJL1wumkptir7WuU/view?usp=sharing)
 
 ---
 
@@ -87,7 +87,10 @@
 <summary><strong>📦 导出</strong></summary>
 
 - **IMS Common Cartridge（.imscc）** — 可直接导入 Canvas、Moodle、D2L
+- **PDF 导出** — 客户端 jsPDF；每模块显示阅读材料标题，完整引用汇总至结尾 References 部分
+- **DOCX 导出** — python-docx 后端；结构与 PDF 导出一致
 - **Markdown 导出** — 将含阅读材料与作业的完整课程导出为 .md 文件
+- **引用格式选择器** — APA / MLA / Chicago，适用于所有导出格式
 - **复制到剪贴板** — 一键粘贴到任意编辑器
 
 </details>
@@ -95,10 +98,14 @@
 <details>
 <summary><strong>🕸️ 知识图谱（LightRAG）</strong></summary>
 
-- **材料导入** — 上传课程 PDF 和 PPTX；`ingest.py` 将其处理为 LightRAG 知识图谱
-- **学科标签页** — 按课程独立显示图谱（商业法、CALL）或合并为 All 视图（994 个节点，586 条边）
+- **材料导入面板** — 右侧常驻面板；拖拽上传 PDF/PPTX（最多 15 个文件，每个 50MB）；逐文件进度追踪；Build Graph 按钮触发 LightRAG 导入
+- **学年侧边栏** — Year 1–4 + All Courses 导航；课程按学年分类展示
+- **课程管理** — 每个学年有课程横幅与 pill 导航；支持增删/重命名/拖拽排序 course pill；每门课有可编辑的完整课程名标签；修改自动保存至 localStorage
+- **动态学科标签页** — 支持增删/重命名/拖拽排序学科标签；标签状态跨 session 持久化
 - **力导向可视化** — 交互式 2D 图谱，暖棕色调配色；节点大小随连接数缩放
 - **节点详情面板** — 点击任意概念节点查看其定义与连接数
+- **全屏模式** — 全屏切换，支持 ESC 键退出
+- **课程搜索** — 按名称或课程代码跨学年搜索；自动定位到对应学年
 - **概念搜索** — 在图谱中筛选并高亮匹配节点
 - **知识查询** — 用自然语言对图谱提问；Redis 缓存答案（持久化缓存）
 - **查询历史** — 可收藏和删除的历史记录，附学科标签
@@ -251,10 +258,10 @@ plot-ark/
 ├── .env.example
 ├── docs/
 │   ├── architecture.md
-│   ├── syllabus upload.gif          ← 演示：大纲导入 → 表单自动填充
+│   ├── Syllabus Upload.gif          ← 演示：大纲导入 → 表单自动填充
 │   ├── research agent&human in the loop.gif  ← 演示：研究 Agent + 人工信源审核
 │   ├── module adjuistment.gif       ← 演示：模块编辑 + 拖拽排序
-│   └── knowledge graph.gif          ← 演示：知识图谱与查询
+│   └── Knowledge graph .gif         ← 演示：学年导航、课程管理、全屏模式、自然语言查询
 ├── frontend/                        ← React + TypeScript + Vite
 │   ├── Dockerfile
 │   ├── index.tsx                    ← 入口文件
@@ -296,6 +303,12 @@ plot-ark/
 - [x] xAPI mini-LRS — 语句采集、学习者状态、教授分析面板（mock 数据）
 - [x] 大纲导入 — PDF/DOCX → 自动填充表单 + 提取必读材料
 - [x] 课程叙事 — 骨架生成阶段自动生成课程故事，教授可编辑
+- [x] 引用格式选择器 — APA / MLA / Chicago，适用于所有导出格式
+- [x] PDF + DOCX 导出 — 客户端 jsPDF 与 python-docx 后端
+- [x] 多课程管理 — 动态课程槽支持增删/重命名/拖拽排序
+- [x] My Courses 仪表板 — 卡片网格展示课程历史
+- [x] 知识图谱课程管理 — 学年侧边栏、课程横幅、动态标签页、全屏模式、课程搜索
+- [x] 知识图谱导入面板 — 拖拽上传材料，右侧常驻面板
 - [ ] Redis 学习者状态管理
 - [ ] Professor LTM — 从编辑历史学习偏好
 - [ ] LTI 1.3 — 推送至 Canvas / Moodle
