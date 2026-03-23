@@ -13,6 +13,7 @@ import {
   Moon,
   Settings,
   BookOpen,
+  Network,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 
@@ -82,6 +83,9 @@ const CoursePage: React.FC = () => {
   const [copyMdDone, setCopyMdDone] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(224); // 224px = w-56
   const [exportOpen, setExportOpen] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [editedModules, setEditedModules] = useState<Record<number, Partial<Module>>>({});
+  const [showEditHint, setShowEditHint] = useState(true);
   const isResizing = React.useRef(false);
 
   const startResize = (e: React.MouseEvent) => {
@@ -130,6 +134,12 @@ const CoursePage: React.FC = () => {
       });
   }, [id]);
 
+  useEffect(() => {
+    if (!showEditHint) return;
+    const timer = setTimeout(() => setShowEditHint(false), 4000);
+    return () => clearTimeout(timer);
+  }, [showEditHint]);
+
   // ── Derived ──────────────────────────────────────────────────────────────────
 
   const modules = curriculum?.modules ?? [];
@@ -137,7 +147,9 @@ const CoursePage: React.FC = () => {
     ? modules.filter(m => m.title.toLowerCase().includes(search.toLowerCase()))
     : modules;
 
-  const currentModule = modules[currentModuleIndex] ?? null;
+  const currentModule = modules[currentModuleIndex]
+    ? { ...modules[currentModuleIndex], ...editedModules[currentModuleIndex] }
+    : null;
 
   const navigateModule = (dir: -1 | 1) => {
     const next = currentModuleIndex + dir;
@@ -469,6 +481,15 @@ const CoursePage: React.FC = () => {
     setTimeout(() => setCopiedCitation(null), 2000);
   };
 
+  const handleEditField = (field: string, value: any) => {
+    setEditedModules(prev => ({
+      ...prev,
+      [currentModuleIndex]: { ...prev[currentModuleIndex], [field]: value }
+    }));
+    setAutoSaveStatus('saving');
+    setTimeout(() => setAutoSaveStatus('saved'), 1000);
+  };
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
@@ -500,6 +521,7 @@ const CoursePage: React.FC = () => {
           ))}
         </div>
       </header>
+
 
       {/* ── Body ────────────────────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -570,6 +592,14 @@ const CoursePage: React.FC = () => {
             )}
           </div>
 
+          {/* Graph Tab */}
+          <div className="border-t border-stone-800 p-3">
+            <button className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-stone-400 hover:bg-stone-800 hover:text-stone-200 transition-colors text-xs font-medium">
+              <Network size={14} />
+              Knowledge Graph
+            </button>
+          </div>
+
           {/* Resize handle */}
           <div
             onMouseDown={startResize}
@@ -603,6 +633,17 @@ const CoursePage: React.FC = () => {
                 </button>
               </div>
 
+              {/* Edit Hint */}
+              {showEditHint && (
+                <div className="flex items-center justify-between mb-3 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+                  <div className="flex items-center gap-2">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v16a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    Click any field to edit — changes save automatically
+                  </div>
+                  <button onClick={() => setShowEditHint(false)} className="text-amber-400 hover:text-amber-600 transition-colors">✕</button>
+                </div>
+              )}
+
               {/* Module Card */}
               <div className="bg-white border border-stone-200 rounded-2xl p-8 shadow-sm">
 
@@ -626,7 +667,18 @@ const CoursePage: React.FC = () => {
                 <div className="text-amber-600 font-serif text-xl italic mb-2">
                   Module {currentModuleIndex + 1}
                 </div>
-                <h3 className="font-serif text-2xl text-stone-900 mb-6">{currentModule.title}</h3>
+                <div className="flex items-start gap-3 mb-6">
+                  <input
+                    className="font-serif text-2xl text-stone-900 flex-1 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 rounded-t px-1 py-0.5 outline-none transition-all"
+                    value={currentModule.title}
+                    onChange={e => handleEditField('title', e.target.value)}
+                  />
+                  {autoSaveStatus !== 'idle' && (
+                    <span className="text-[10px] text-stone-400 mt-3 shrink-0">
+                      {autoSaveStatus === 'saving' ? 'Saving...' : '✓ Saved'}
+                    </span>
+                  )}
+                </div>
 
                 {/* Tabs */}
                 <div className="flex border-b border-stone-200 mb-6">
@@ -651,8 +703,16 @@ const CoursePage: React.FC = () => {
                     <ul className="space-y-2 mb-8">
                       {(currentModule.learning_objectives || []).map((obj, i) => (
                         <li key={i} className="flex items-start gap-3 text-stone-700">
-                          <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2 flex-shrink-0" />
-                          <span className="leading-relaxed">{obj}</span>
+                          <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2.5 flex-shrink-0" />
+                          <input
+                            className="leading-relaxed flex-1 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 rounded-t px-1 outline-none transition-all text-stone-700"
+                            value={obj}
+                            onChange={e => {
+                              const newObjs = [...(currentModule.learning_objectives || [])];
+                              newObjs[i] = e.target.value;
+                              handleEditField('learning_objectives', newObjs);
+                            }}
+                          />
                         </li>
                       ))}
                       {(currentModule.learning_objectives || []).length === 0 && (
@@ -665,9 +725,12 @@ const CoursePage: React.FC = () => {
                         <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-3">
                           Narrative Preview
                         </h4>
-                        <p className="text-stone-600 leading-relaxed italic border-l-2 border-stone-300 pl-4">
-                          "{currentModule.narrative_preview}"
-                        </p>
+                        <textarea
+                          className="w-full text-stone-600 leading-relaxed italic border-l-2 border-stone-300 pl-4 bg-transparent focus:bg-amber-50/50 focus:border-amber-300 outline-none resize-none transition-all"
+                          rows={4}
+                          value={currentModule.narrative_preview || ''}
+                          onChange={e => handleEditField('narrative_preview', e.target.value)}
+                        />
                       </div>
                     )}
                   </>
@@ -793,7 +856,9 @@ const CoursePage: React.FC = () => {
               </div>
 
               {/* ── Export Bar ── */}
-              <div className="mt-6 flex items-center gap-3">
+              <div className="mt-8">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3">Export your curriculum</p>
+                <div className="flex items-center gap-3">
                 {/* IMSCC */}
                 <button
                   onClick={() => alert('IMSCC export requires backend — coming soon')}
@@ -858,6 +923,7 @@ const CoursePage: React.FC = () => {
                     </div>
                   )}
                 </div>
+              </div>
               </div>
             </>
           ) : (
