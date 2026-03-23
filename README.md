@@ -289,7 +289,7 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE)
 
 ---
 
-## 收录 / Featured In
+## Featured In
 
 - 🌟 [Awesome-AI-Agents](https://github.com/Jenqyang/Awesome-AI-Agents) — agentic EdTech curriculum engine
 

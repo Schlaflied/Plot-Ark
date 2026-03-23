@@ -14,6 +14,7 @@ import {
   Settings,
   BookOpen,
 } from 'lucide-react';
+import jsPDF from 'jspdf';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -79,6 +80,36 @@ const CoursePage: React.FC = () => {
   const [citationFormat, setCitationFormat] = useState<'apa' | 'mla' | 'chicago'>('apa');
   const [copiedCitation, setCopiedCitation] = useState<number | null>(null);
   const [copyMdDone, setCopyMdDone] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(224); // 224px = w-56
+  const [exportOpen, setExportOpen] = useState(false);
+  const isResizing = React.useRef(false);
+
+  const startResize = (e: React.MouseEvent) => {
+    isResizing.current = true;
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    const onMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+      const newWidth = Math.min(360, Math.max(160, startWidth + e.clientX - startX));
+      setSidebarWidth(newWidth);
+    };
+    const onUp = () => {
+      isResizing.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-export-dropdown]')) setExportOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -200,6 +231,212 @@ const CoursePage: React.FC = () => {
     return lines.join('\n');
   };
 
+  const generateCurriculumHTML = (forWord = false): string => {
+    if (!curriculum) return '';
+    const modules = curriculum.modules ?? [];
+
+    const moduleSections = modules.map((mod, i) => {
+      const objectives = (mod.learning_objectives || [])
+        .map(o => `<li>${o}</li>`).join('');
+
+      const readings = (mod.recommended_readings || []).map(r => {
+        const link = r.url ? `<a href="${r.url}">${r.title}</a>` : r.title;
+        return `<li>${link}</li>`;
+      }).join('');
+
+      const assignments = (mod.assignments || []).map(a =>
+        `<div class="assessment"><strong>${a.title}</strong><p>${a.task_description || a.coverage || ''}</p></div>`
+      ).join('');
+
+      return `
+      <div class="module">
+        <h2>Module ${i + 1}: ${mod.title}</h2>
+        ${objectives ? `<h3>Learning Objectives</h3><ul>${objectives}</ul>` : ''}
+        ${readings ? `<h3>Readings</h3><ul>${readings}</ul>` : ''}
+        ${assignments ? `<h3>Assessment</h3>${assignments}` : ''}
+      </div>
+    `;
+    }).join('');
+
+    const sources = (curriculum.sources ?? []).map(s =>
+      `<li><a href="${s.url}">${s.title || s.domain}</a></li>`
+    ).join('');
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${curriculum.topic}</title>
+<style>
+  body { font-family: Georgia, serif; max-width: 740px; margin: 40px auto; padding: 0 32px; color: #1a1a1a; font-size: 14px; line-height: 1.7; }
+  .meta { color: #888; font-size: 12px; margin-bottom: 40px; border-bottom: 1px solid #eee; padding-bottom: 16px; }
+  h1 { font-size: 26px; font-weight: bold; margin-bottom: 6px; }
+  h2 { font-size: 18px; color: #92400e; margin-top: 36px; margin-bottom: 8px; border-bottom: 1px solid #f0e6d3; padding-bottom: 4px; }
+  h3 { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em; color: #555; margin-top: 16px; margin-bottom: 6px; }
+  ul { margin: 0 0 12px 0; padding-left: 20px; }
+  li { margin-bottom: 4px; }
+  a { color: #92400e; }
+  .assessment { background: #fafafa; border-left: 3px solid #d97706; padding: 10px 14px; margin-top: 8px; border-radius: 2px; }
+  .assessment strong { display: block; margin-bottom: 4px; }
+  .assessment p { margin: 0; color: #555; font-size: 13px; }
+  .module { margin-bottom: 32px; }
+  .sources { margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px; }
+  @media print { body { margin: 0; } }
+</style>
+</head>
+<body>
+  <h1>${curriculum.topic}</h1>
+  <div class="meta">${curriculum.level} · ${curriculum.course_type} · ${modules.length} modules</div>
+  ${moduleSections}
+  ${sources ? `<div class="sources"><h3>Sources</h3><ul>${sources}</ul></div>` : ''}
+</body>
+</html>`;
+  };
+
+  const exportPDF = () => {
+  if (!curriculum) return;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 56;
+  const contentW = pageW - margin * 2;
+  let y = margin;
+
+  const checkPage = (needed: number) => {
+    if (y + needed > pageH - margin) { doc.addPage(); y = margin; }
+  };
+
+  // Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.setTextColor(28, 25, 23);
+  doc.text(curriculum.topic, margin, y);
+  y += 28;
+
+  // Meta
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(120, 113, 108);
+  doc.text(`${curriculum.level} · ${curriculum.course_type} · ${(curriculum.modules || []).length} modules`, margin, y);
+  y += 24;
+
+  // Divider
+  doc.setDrawColor(220, 215, 210);
+  doc.line(margin, y, pageW - margin, y);
+  y += 20;
+
+  (curriculum.modules || []).forEach((mod, i) => {
+    checkPage(60);
+
+    // Module heading
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(146, 64, 14); // amber-800
+    const heading = `Module ${i + 1}: ${mod.title}`;
+    const headingLines = doc.splitTextToSize(heading, contentW);
+    doc.text(headingLines, margin, y);
+    y += headingLines.length * 18 + 10;
+
+    // Learning Objectives
+    if (mod.learning_objectives?.length) {
+      checkPage(30);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(80, 73, 68);
+      doc.text('LEARNING OBJECTIVES', margin, y);
+      y += 14;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(40, 36, 33);
+      mod.learning_objectives.forEach(obj => {
+        checkPage(20);
+        const lines = doc.splitTextToSize(`• ${obj}`, contentW - 10);
+        doc.text(lines, margin + 6, y);
+        y += lines.length * 14 + 2;
+      });
+      y += 6;
+    }
+
+    // Readings
+    if (mod.recommended_readings?.length) {
+      checkPage(30);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(80, 73, 68);
+      doc.text('READINGS', margin, y);
+      y += 14;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(40, 36, 33);
+      mod.recommended_readings.forEach(r => {
+        checkPage(20);
+        const lines = doc.splitTextToSize(`• ${r.title}`, contentW - 10);
+        doc.text(lines, margin + 6, y);
+        y += lines.length * 14 + 2;
+      });
+      y += 6;
+    }
+
+    // Assessment
+    if (mod.assignments?.length) {
+      checkPage(40);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(80, 73, 68);
+      doc.text('ASSESSMENT', margin, y);
+      y += 14;
+      mod.assignments.forEach(a => {
+        checkPage(30);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(40, 36, 33);
+        doc.text(a.title, margin + 6, y);
+        y += 14;
+        const desc = a.task_description || a.coverage || '';
+        if (desc) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          doc.setTextColor(90, 82, 76);
+          const lines = doc.splitTextToSize(desc, contentW - 10);
+          checkPage(lines.length * 13);
+          doc.text(lines, margin + 6, y);
+          y += lines.length * 13 + 4;
+        }
+      });
+      y += 6;
+    }
+
+    y += 16;
+  });
+
+  // ── References section (from curriculum.sources — full Tavily list) ──
+  const allSources: Source[] = curriculum.sources ?? [];
+  if (allSources.length > 0) {
+    checkPage(60);
+    doc.setDrawColor(220, 215, 210);
+    doc.line(margin, y, pageW - margin, y);
+    y += 20;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(146, 64, 14);
+    doc.text('References', margin, y);
+    y += 20;
+    allSources.forEach(src => {
+      const citation = formatCitation(src, citationFormat);
+      checkPage(24);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(40, 36, 33);
+      const citLines = doc.splitTextToSize(citation, contentW);
+      doc.text(citLines, margin, y);
+      y += citLines.length * 13 + 4;
+    });
+  }
+
+  const filename = `${(curriculum.topic || 'course').replace(/\s+/g, '_').slice(0, 40)}_curriculum.pdf`;
+  doc.save(filename);
+};
+
   const downloadJSON = () => {
     const blob = new Blob([JSON.stringify(curriculum, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -268,7 +505,7 @@ const CoursePage: React.FC = () => {
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* ── Left Sidebar ──────────────────────────────────────────────────── */}
-        <aside className="w-56 shrink-0 bg-stone-900 text-stone-100 flex flex-col border-r border-stone-800 overflow-hidden">
+        <aside style={{ width: sidebarWidth }} className="shrink-0 bg-stone-900 text-stone-100 flex flex-col border-r border-stone-800 overflow-hidden relative">
 
           {/* Course title */}
           <div className="px-4 pt-5 pb-3 border-b border-stone-800">
@@ -310,7 +547,7 @@ const CoursePage: React.FC = () => {
                       }`}
                     >
                       <span className="font-mono text-xs opacity-40 w-4 shrink-0">{origIdx + 1}</span>
-                      <span className="truncate flex-1 leading-snug text-xs" title={mod.title}>{mod.title}</span>
+                      <span className="flex-1 leading-snug text-xs break-words" title={mod.title}>{mod.title}</span>
                       {/* Complexity dots */}
                       <span className="flex gap-0.5 shrink-0">
                         {[1, 2, 3, 4, 5].map(n => (
@@ -332,6 +569,12 @@ const CoursePage: React.FC = () => {
               <p className="py-8 text-center text-stone-600 text-xs">No modules found</p>
             )}
           </div>
+
+          {/* Resize handle */}
+          <div
+            onMouseDown={startResize}
+            className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-amber-500/40 transition-colors"
+          />
         </aside>
 
         {/* ── Main Content ──────────────────────────────────────────────────── */}
@@ -548,6 +791,74 @@ const CoursePage: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* ── Export Bar ── */}
+              <div className="mt-6 flex items-center gap-3">
+                {/* IMSCC */}
+                <button
+                  onClick={() => alert('IMSCC export requires backend — coming soon')}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-white text-sm font-semibold transition-colors"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  IMSCC
+                </button>
+
+                {/* Copy .md */}
+                <button
+                  onClick={copyMarkdown}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 text-sm font-semibold transition-colors"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                  {copyMdDone ? 'Copied!' : 'Copy'}
+                </button>
+
+                {/* Export dropdown */}
+                <div className="relative" data-export-dropdown>
+                  <button
+                    onClick={() => setExportOpen(v => !v)}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 text-sm font-semibold transition-colors"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  {exportOpen && (
+                    <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden z-10">
+                      <button
+                        onClick={() => { exportPDF(); setExportOpen(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                        Export PDF
+                      </button>
+                      <button
+                        onClick={() => {
+                          const html = generateCurriculumHTML(true);
+                          const blob = new Blob([html], { type: 'application/msword' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${(curriculum?.topic || 'course').replace(/\s+/g, '_').slice(0, 40)}.doc`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          setExportOpen(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Export DOCX
+                      </button>
+                      <button
+                        onClick={() => { downloadMarkdown(); setExportOpen(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Export Markdown
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-stone-200 rounded-2xl text-stone-400">
@@ -587,7 +898,13 @@ const CoursePage: React.FC = () => {
 
             {/* Citation format selector */}
             {sources.length > 0 && (
-              <div className="flex gap-1 mb-4">
+              <div className="flex items-center gap-1 mb-4">
+                <div className="group relative mr-1">
+                  <div className="w-4 h-4 rounded-full bg-stone-200 text-stone-500 text-[10px] font-bold flex items-center justify-center cursor-help hover:bg-amber-100 hover:text-amber-600 transition-colors">?</div>
+                  <div className="absolute left-6 top-0 w-52 bg-stone-800 text-stone-200 text-[10px] leading-relaxed rounded-lg px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-20">
+                    Select a format to copy formatted references for your syllabus or course materials.
+                  </div>
+                </div>
                 {(['apa', 'mla', 'chicago'] as const).map(fmt => (
                   <button
                     key={fmt}
@@ -638,40 +955,6 @@ const CoursePage: React.FC = () => {
         </aside>
       </div>
 
-      {/* ── Bottom Action Bar ────────────────────────────────────────────── */}
-      <footer className="h-14 shrink-0 bg-white border-t border-stone-200 flex items-center px-6 gap-2">
-        <button
-          onClick={downloadJSON}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium transition-colors"
-        >
-          ⬇ Download JSON
-        </button>
-        <button
-          onClick={downloadMarkdown}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium transition-colors"
-        >
-          ⬇ Download .md
-        </button>
-        <button
-          onClick={copyMarkdown}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium transition-colors"
-        >
-          {copyMdDone ? '✓ Copied!' : '⎘ Copy .md'}
-        </button>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium transition-colors"
-        >
-          🖨 Print / PDF
-        </button>
-        <div className="flex-1" />
-        <button
-          onClick={() => alert('IMSCC export requires backend — coming soon')}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-medium transition-colors"
-        >
-          📦 Export IMSCC
-        </button>
-      </footer>
     </div>
   );
 };
