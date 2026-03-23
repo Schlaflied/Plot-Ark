@@ -15,6 +15,7 @@
 [![xAPI](https://img.shields.io/badge/xAPI-1.0.3-5C6BC0)](https://xapi.com/)
 [![Tavily](https://img.shields.io/badge/Tavily-Research%20Agent-7C3AED)](https://tavily.com/)
 [![IMS](https://img.shields.io/badge/Export-IMS%20Common%20Cartridge-2E7D32)](https://www.imsglobal.org/)
+[![Awesome](https://awesome.re/badge.svg)](https://github.com/Jenqyang/Awesome-AI-Agents)
 
 <p align="center">
   <img src="Logo_Agentic.png" alt="Plot Ark Logo" width="200"/>
@@ -285,6 +286,12 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE)
 - Modifications must be open-sourced under the same license
 - Network deployment requires your product to also be open-source
 - Commercial licensing — open a GitHub Issue
+
+---
+
+## 收录 / Featured In
+
+- 🌟 [Awesome-AI-Agents](https://github.com/Jenqyang/Awesome-AI-Agents) — agentic EdTech curriculum engine
 
 ---
 
