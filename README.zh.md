@@ -288,6 +288,12 @@ GNU Affero 通用公共许可证 v3.0 — 详见 [LICENSE](LICENSE)
 
 ---
 
+## 收录
+
+- 🌟 [Awesome-AI-Agents](https://github.com/Jenqyang/Awesome-AI-Agents) — 主动式 EdTech 课程引擎
+
+---
+
 ## ⭐ Star 历史
 
 [![Star History Chart](https://api.star-history.com/image?repos=Schlaflied/Plot-Ark&type=date)](https://star-history.com/#Schlaflied/Plot-Ark&Date)
