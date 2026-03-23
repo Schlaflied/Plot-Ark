@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft,
   ChevronRight,
@@ -16,6 +16,23 @@ import {
   Network,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -68,6 +85,68 @@ interface CourseDetail {
   sources: Source[];
 }
 
+// ─── SortableModuleItem ───────────────────────────────────────────────────────
+
+interface SortableModuleItemProps {
+  id: string;
+  index: number;
+  module: Module;
+  isActive: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+}
+
+const SortableModuleItem: React.FC<SortableModuleItemProps> = ({ id, index, module, isActive, onSelect, onDelete }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-1 group">
+      <button
+        {...attributes}
+        {...listeners}
+        className="p-1 text-stone-600 hover:text-stone-400 cursor-grab active:cursor-grabbing shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Drag to reorder"
+      >
+        <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+          <circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/>
+          <circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/>
+          <circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/>
+        </svg>
+      </button>
+      <button
+        onClick={onSelect}
+        className={`flex-1 text-left px-2 py-2.5 rounded-lg text-sm transition-all flex items-center gap-2 min-w-0 ${
+          isActive ? 'bg-stone-700 text-white' : 'text-stone-400 hover:bg-stone-800 hover:text-stone-200'
+        }`}
+      >
+        <span className="font-mono text-xs opacity-40 w-4 shrink-0">{index + 1}</span>
+        <span className="flex-1 leading-snug text-xs break-words min-w-0" title={module.title}>{module.title}</span>
+        <span className="flex gap-0.5 shrink-0">
+          {[1, 2, 3, 4, 5].map(n => (
+            <span key={n} className={`w-1.5 h-1.5 rounded-full ${
+              n <= Number(module.complexity_level)
+                ? isActive ? 'bg-amber-400' : 'bg-stone-500'
+                : isActive ? 'bg-white/20' : 'bg-stone-700'
+            }`} />
+          ))}
+        </span>
+      </button>
+      <button
+        onClick={onDelete}
+        className="p-1 text-stone-700 hover:text-red-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Delete module"
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  );
+};
+
 // ─── CoursePage ───────────────────────────────────────────────────────────────
 
 const CoursePage: React.FC = () => {
@@ -87,6 +166,12 @@ const CoursePage: React.FC = () => {
   const [editedModules, setEditedModules] = useState<Record<number, Partial<Module>>>({});
   const [showEditHint, setShowEditHint] = useState(true);
   const isResizing = React.useRef(false);
+  const navigate = useNavigate();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const startResize = (e: React.MouseEvent) => {
     isResizing.current = true;
@@ -143,13 +228,14 @@ const CoursePage: React.FC = () => {
   // ── Derived ──────────────────────────────────────────────────────────────────
 
   const modules = curriculum?.modules ?? [];
+  const mergedModules = modules.map((m, i) =>
+    editedModules[i] ? { ...m, ...editedModules[i] } : m
+  );
   const filteredModules = search.trim()
-    ? modules.filter(m => m.title.toLowerCase().includes(search.toLowerCase()))
-    : modules;
+    ? mergedModules.filter(m => m.title.toLowerCase().includes(search.toLowerCase()))
+    : mergedModules;
 
-  const currentModule = modules[currentModuleIndex]
-    ? { ...modules[currentModuleIndex], ...editedModules[currentModuleIndex] }
-    : null;
+  const currentModule = mergedModules[currentModuleIndex] ?? null;
 
   const navigateModule = (dir: -1 | 1) => {
     const next = currentModuleIndex + dir;
@@ -490,6 +576,43 @@ const CoursePage: React.FC = () => {
     setTimeout(() => setAutoSaveStatus('saved'), 1000);
   };
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !curriculum) return;
+    const oldIndex = mergedModules.findIndex((_, i) => `module-${i}` === active.id);
+    const newIndex = mergedModules.findIndex((_, i) => `module-${i}` === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    // Merge edits into curriculum before reordering so nothing is lost
+    const newModules = arrayMove([...mergedModules], oldIndex, newIndex);
+    setCurriculum({ ...curriculum, modules: newModules });
+    setEditedModules({});
+    setCurrentModuleIndex(newIndex);
+  };
+
+  const handleDeleteModule = (idx: number) => {
+    if (!curriculum || mergedModules.length <= 1) return;
+    const newModules = mergedModules.filter((_, i) => i !== idx);
+    setCurriculum({ ...curriculum, modules: newModules });
+    setEditedModules({});
+    setCurrentModuleIndex(Math.min(idx, newModules.length - 1));
+  };
+
+  const handleAddModule = () => {
+    if (!curriculum) return;
+    const newModule: Module = {
+      title: 'New Module',
+      complexity_level: 1,
+      learning_objectives: [''],
+      narrative_preview: '',
+      recommended_readings: [],
+      assignments: [],
+    };
+    const newModules = [...modules, newModule];
+    setCurriculum({ ...curriculum, modules: newModules });
+    setCurrentModuleIndex(newModules.length - 1);
+    setActiveTab('objectives');
+  };
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
@@ -550,12 +673,37 @@ const CoursePage: React.FC = () => {
             />
           </div>
 
+          {/* Knowledge Graph shortcut */}
+          <div className="px-3 py-2 border-b border-stone-800">
+            <button
+              onClick={() => navigate('/graph', {
+                state: {
+                  fromCourse: id,
+                  courseCode: curriculum?.course_code,
+                  courseTopic: curriculum?.topic,
+                }
+              })}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 transition-colors text-xs font-semibold border border-amber-500/20"
+            >
+              <Network size={14} />
+              Knowledge Graph
+            </button>
+          </div>
+
           {/* Module list */}
           <div className="flex-1 overflow-y-auto p-2">
-            {filteredModules.length > 0 ? (
+            {/* Drag hint */}
+            <div className="flex items-center gap-1.5 px-2 py-1.5 mb-2 rounded-lg bg-stone-800/60 text-stone-500 text-[10px]">
+              <svg width="8" height="12" viewBox="0 0 10 14" fill="currentColor" className="shrink-0 opacity-60">
+                <circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/>
+                <circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/>
+                <circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/>
+              </svg>
+              Drag to reorder modules
+            </div>
+            {search.trim() ? (
               <div className="space-y-0.5">
-                {filteredModules.map((mod, listIdx) => {
-                  // When search is active, find original index for navigation
+                {filteredModules.length > 0 ? filteredModules.map((mod) => {
                   const origIdx = modules.indexOf(mod);
                   const isActive = origIdx === currentModuleIndex;
                   return (
@@ -563,40 +711,40 @@ const CoursePage: React.FC = () => {
                       key={origIdx}
                       onClick={() => { setCurrentModuleIndex(origIdx); setActiveTab('objectives'); }}
                       className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all flex items-center gap-3 ${
-                        isActive
-                          ? 'bg-stone-700 text-white'
-                          : 'text-stone-400 hover:bg-stone-800 hover:text-stone-200'
+                        isActive ? 'bg-stone-700 text-white' : 'text-stone-400 hover:bg-stone-800 hover:text-stone-200'
                       }`}
                     >
                       <span className="font-mono text-xs opacity-40 w-4 shrink-0">{origIdx + 1}</span>
                       <span className="flex-1 leading-snug text-xs break-words" title={mod.title}>{mod.title}</span>
-                      {/* Complexity dots */}
-                      <span className="flex gap-0.5 shrink-0">
-                        {[1, 2, 3, 4, 5].map(n => (
-                          <span
-                            key={n}
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              n <= Number(mod.complexity_level)
-                                ? isActive ? 'bg-amber-400' : 'bg-stone-500'
-                                : isActive ? 'bg-white/20' : 'bg-stone-700'
-                            }`}
-                          />
-                        ))}
-                      </span>
                     </button>
                   );
-                })}
+                }) : <p className="py-8 text-center text-stone-600 text-xs">No modules found</p>}
               </div>
             ) : (
-              <p className="py-8 text-center text-stone-600 text-xs">No modules found</p>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={mergedModules.map((_, i) => `module-${i}`)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-0.5">
+                    {mergedModules.map((mod, idx) => (
+                      <SortableModuleItem
+                        key={`module-${idx}`}
+                        id={`module-${idx}`}
+                        index={idx}
+                        module={mod}
+                        isActive={idx === currentModuleIndex}
+                        onSelect={() => { setCurrentModuleIndex(idx); setActiveTab('objectives'); }}
+                        onDelete={() => handleDeleteModule(idx)}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
-          </div>
-
-          {/* Graph Tab */}
-          <div className="border-t border-stone-800 p-3">
-            <button className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-stone-400 hover:bg-stone-800 hover:text-stone-200 transition-colors text-xs font-medium">
-              <Network size={14} />
-              Knowledge Graph
+            <button
+              onClick={handleAddModule}
+              className="w-full mt-2 px-3 py-2 rounded-lg text-xs text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition-colors flex items-center gap-2"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add module
             </button>
           </div>
 
@@ -652,10 +800,12 @@ const CoursePage: React.FC = () => {
                   <span className="text-xs text-stone-500 uppercase tracking-widest font-bold">Complexity</span>
                   <div className="flex gap-1">
                     {[1, 2, 3, 4, 5].map(n => (
-                      <div
+                      <button
                         key={n}
-                        className={`h-2 w-7 rounded-full transition-colors ${
-                          n <= Number(currentModule.complexity_level) ? 'bg-amber-500' : 'bg-stone-200'
+                        title={`Set complexity to ${n}`}
+                        onClick={() => handleEditField('complexity_level', n)}
+                        className={`h-2 w-7 rounded-full transition-colors hover:opacity-80 cursor-pointer ${
+                          n <= Number(currentModule.complexity_level) ? 'bg-amber-500' : 'bg-stone-200 hover:bg-amber-200'
                         }`}
                       />
                     ))}
@@ -664,12 +814,12 @@ const CoursePage: React.FC = () => {
                 </div>
 
                 {/* Module number + title */}
-                <div className="text-amber-600 font-serif text-xl italic mb-2">
+                <div className="text-amber-600 font-serif text-[27px] italic mb-2">
                   Module {currentModuleIndex + 1}
                 </div>
                 <div className="flex items-start gap-3 mb-6">
                   <input
-                    className="font-serif text-2xl text-stone-900 flex-1 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 rounded-t px-1 py-0.5 outline-none transition-all"
+                    className="font-serif text-[32px] text-stone-900 flex-1 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 rounded-t px-1 py-0.5 outline-none transition-all"
                     value={currentModule.title}
                     onChange={e => handleEditField('title', e.target.value)}
                   />
@@ -686,7 +836,7 @@ const CoursePage: React.FC = () => {
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}
-                      className={`px-4 py-2 text-xs font-bold uppercase tracking-widest transition-colors ${
+                      className={`px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors ${
                         activeTab === tab
                           ? 'border-b-2 border-amber-500 text-stone-900'
                           : 'text-stone-400 hover:text-stone-700'
@@ -700,7 +850,7 @@ const CoursePage: React.FC = () => {
                 {/* ── Tab: Objectives ── */}
                 {activeTab === 'objectives' && (
                   <>
-                    <ul className="space-y-2 mb-8">
+                    <ul className="space-y-2 mb-4">
                       {(currentModule.learning_objectives || []).map((obj, i) => (
                         <li key={i} className="flex items-start gap-3 text-stone-700">
                           <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2.5 flex-shrink-0" />
@@ -713,12 +863,29 @@ const CoursePage: React.FC = () => {
                               handleEditField('learning_objectives', newObjs);
                             }}
                           />
+                          <button
+                            onClick={() => {
+                              const newObjs = (currentModule.learning_objectives || []).filter((_, idx) => idx !== i);
+                              handleEditField('learning_objectives', newObjs);
+                            }}
+                            className="text-stone-300 hover:text-red-400 transition-colors mt-0.5 shrink-0 text-xs"
+                            title="Remove"
+                          >✕</button>
                         </li>
                       ))}
                       {(currentModule.learning_objectives || []).length === 0 && (
                         <p className="text-stone-400 italic text-sm">No learning objectives listed.</p>
                       )}
                     </ul>
+                    <button
+                      onClick={() => {
+                        const newObjs = [...(currentModule.learning_objectives || []), ''];
+                        handleEditField('learning_objectives', newObjs);
+                      }}
+                      className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 mb-8"
+                    >
+                      + Add objective
+                    </button>
 
                     {currentModule.narrative_preview && (
                       <div>
@@ -739,120 +906,242 @@ const CoursePage: React.FC = () => {
                 {/* ── Tab: Resources ── */}
                 {activeTab === 'resources' && (() => {
                   const readings = currentModule.recommended_readings || [];
-                  const required = readings.filter(r => r.reading_type === 'required');
-                  const optional = readings.filter(r => r.reading_type !== 'required');
 
-                  const renderReadingCard = (r: Reading, ri: number) => (
-                    <div key={ri} className="bg-stone-50 rounded-xl p-5 border border-stone-200">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">
-                          {r.type === 'video' ? '🎬' : r.type === 'news' ? '📰' : '📄'} {r.type || 'academic'}
-                        </span>
-                        {r.estimated_time && (
-                          <span className="text-xs text-stone-400">{r.estimated_time}</span>
-                        )}
-                      </div>
-                      {r.url ? (
-                        <a
-                          href={r.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-bold text-stone-900 hover:text-amber-600 transition-colors mb-3 leading-snug block underline underline-offset-2 decoration-stone-300"
-                        >
-                          {r.title}
-                        </a>
-                      ) : (
-                        <h5 className="font-bold text-stone-900 mb-3 leading-snug">{r.title}</h5>
-                      )}
-                      {r.key_points?.length > 0 && (
-                        <ul className="space-y-1 mb-3">
-                          {r.key_points.map((kp, j) => (
-                            <li key={j} className="text-sm text-stone-600 flex items-start gap-2">
-                              <span className="text-amber-500 font-bold mt-0.5">·</span>
-                              <span>{kp}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      {r.rationale && (
-                        <div className="text-xs text-stone-500 border-t border-stone-100 pt-3 mt-3">
-                          <span className="font-bold text-stone-400 uppercase tracking-wide mr-1">Why:</span>
-                          {r.rationale}
-                        </div>
-                      )}
-                    </div>
-                  );
+                  const updateReading = (ri: number, updated: Partial<Reading>) => {
+                    const newReadings = readings.map((r, idx) => idx === ri ? { ...r, ...updated } : r);
+                    handleEditField('recommended_readings', newReadings);
+                  };
+                  const removeReading = (ri: number) => {
+                    handleEditField('recommended_readings', readings.filter((_, idx) => idx !== ri));
+                  };
 
                   return (
                     <div className="space-y-4">
-                      {required.length > 0 && (
-                        <div className="space-y-3">
-                          <div className="text-xs font-bold tracking-widest text-amber-600 uppercase">Required Readings</div>
-                          {required.map((r, ri) => renderReadingCard(r, ri))}
-                        </div>
-                      )}
-                      {optional.length > 0 && (
-                        <div className="space-y-3">
-                          <div className="text-xs font-bold tracking-widest text-stone-400 uppercase">Optional Readings</div>
-                          {optional.map((r, ri) => renderReadingCard(r, required.length + ri))}
-                        </div>
-                      )}
-                      {required.length === 0 && optional.length > 0 && null /* already rendered above */}
                       {readings.length === 0 && (
                         <p className="text-stone-400 italic text-sm">No readings recommended for this module.</p>
                       )}
+                      {readings.map((r, ri) => (
+                        <div key={ri} className="bg-stone-50 rounded-xl p-5 border border-stone-200">
+                          {/* Header row */}
+                          <div className="flex items-center gap-2 mb-3">
+                            <select
+                              className="text-xs text-stone-500 bg-white border border-stone-200 rounded px-1.5 py-0.5 outline-none focus:border-amber-300 cursor-pointer"
+                              value={r.type || 'academic'}
+                              onChange={e => updateReading(ri, { type: e.target.value })}
+                            >
+                              <option value="academic">📄 Academic</option>
+                              <option value="video">🎬 Video</option>
+                              <option value="news">📰 News</option>
+                            </select>
+                            <input
+                              className="text-xs text-stone-400 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 outline-none px-1 flex-1"
+                              value={r.estimated_time || ''}
+                              placeholder="estimated time"
+                              onChange={e => updateReading(ri, { estimated_time: e.target.value })}
+                            />
+                            <select
+                              className="text-xs text-stone-400 bg-transparent border border-stone-200 rounded px-1 py-0.5 outline-none"
+                              value={r.reading_type || 'optional'}
+                              onChange={e => updateReading(ri, { reading_type: e.target.value as 'required' | 'optional' })}
+                            >
+                              <option value="required">Required</option>
+                              <option value="optional">Optional</option>
+                            </select>
+                            <button
+                              onClick={() => removeReading(ri)}
+                              className="text-stone-300 hover:text-red-400 transition-colors text-xs ml-1"
+                              title="Remove reading"
+                            >✕</button>
+                          </div>
+
+                          {/* Title */}
+                          <input
+                            className="font-bold text-stone-900 w-full bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 outline-none px-1 mb-1 leading-snug"
+                            value={r.title}
+                            placeholder="Title"
+                            onChange={e => updateReading(ri, { title: e.target.value })}
+                          />
+                          <input
+                            className="text-xs text-stone-400 w-full bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 outline-none px-1 mb-3"
+                            value={r.url || ''}
+                            placeholder="URL (optional)"
+                            onChange={e => updateReading(ri, { url: e.target.value })}
+                          />
+
+                          {/* Key points */}
+                          <div className="mb-3">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">Key Points</p>
+                            <ul className="space-y-1">
+                              {(r.key_points || []).map((kp, j) => (
+                                <li key={j} className="flex items-start gap-2">
+                                  <span className="text-amber-500 font-bold mt-1.5 text-xs">·</span>
+                                  <input
+                                    className="text-sm text-stone-600 flex-1 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 outline-none px-1"
+                                    value={kp}
+                                    onChange={e => {
+                                      const newKps = [...(r.key_points || [])];
+                                      newKps[j] = e.target.value;
+                                      updateReading(ri, { key_points: newKps });
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      const newKps = (r.key_points || []).filter((_, idx) => idx !== j);
+                                      updateReading(ri, { key_points: newKps });
+                                    }}
+                                    className="text-stone-300 hover:text-red-400 transition-colors text-xs mt-1 shrink-0"
+                                  >✕</button>
+                                </li>
+                              ))}
+                            </ul>
+                            <button
+                              onClick={() => updateReading(ri, { key_points: [...(r.key_points || []), ''] })}
+                              className="text-xs text-amber-600 hover:text-amber-700 font-medium mt-1.5 flex items-center gap-1"
+                            >+ Add key point</button>
+                          </div>
+
+                          {/* Rationale */}
+                          <div className="border-t border-stone-100 pt-3">
+                            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide">Why: </span>
+                            <input
+                              className="text-xs text-stone-500 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 outline-none px-1 w-[calc(100%-3rem)]"
+                              value={r.rationale || ''}
+                              placeholder="Rationale…"
+                              onChange={e => updateReading(ri, { rationale: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        onClick={() => {
+                          const newReading: Reading = { title: '', key_points: [], rationale: '', reading_type: 'required' };
+                          handleEditField('recommended_readings', [...readings, newReading]);
+                        }}
+                        className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1"
+                      >+ Add reading</button>
                     </div>
                   );
                 })()}
 
                 {/* ── Tab: Assessment ── */}
-                {activeTab === 'assessment' && (
-                  <div className="space-y-4">
-                    {(currentModule.assignments || []).map((a, ai) => (
-                      <div key={ai} className="bg-stone-50 rounded-xl p-5 border border-stone-200">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="px-2 py-0.5 bg-stone-200 text-stone-600 text-xs font-bold rounded uppercase tracking-wide">
-                            {a.type}
-                          </span>
-                          <h5 className="font-bold text-stone-900">{a.title}</h5>
-                        </div>
-                        {a.task_description ? (
-                          <p className="text-sm text-stone-700 leading-relaxed mb-3">{a.task_description}</p>
-                        ) : a.coverage ? (
-                          <p className="text-sm text-stone-600 leading-relaxed mb-3">{a.coverage}</p>
-                        ) : null}
-                        {a.deliverable && (
+                {activeTab === 'assessment' && (() => {
+                  const assignments = currentModule.assignments || [];
+
+                  const updateAssignment = (ai: number, updated: Partial<Assignment>) => {
+                    const newAssignments = assignments.map((a, idx) => idx === ai ? { ...a, ...updated } : a);
+                    handleEditField('assignments', newAssignments);
+                  };
+                  const removeAssignment = (ai: number) => {
+                    handleEditField('assignments', assignments.filter((_, idx) => idx !== ai));
+                  };
+
+                  return (
+                    <div className="space-y-4">
+                      {assignments.length === 0 && (
+                        <p className="text-stone-400 italic text-sm">No assignment for this module.</p>
+                      )}
+                      {assignments.map((a, ai) => (
+                        <div key={ai} className="bg-stone-50 rounded-xl p-5 border border-stone-200">
+                          {/* Type + Title row */}
+                          <div className="flex items-center gap-2 mb-3">
+                            <input
+                              className="px-2 py-0.5 bg-stone-200 text-stone-600 text-xs font-bold rounded uppercase tracking-wide bg-transparent border border-stone-200 focus:border-amber-300 outline-none w-28"
+                              value={a.type}
+                              placeholder="Type"
+                              onChange={e => updateAssignment(ai, { type: e.target.value })}
+                            />
+                            <input
+                              className="font-bold text-stone-900 flex-1 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 outline-none px-1"
+                              value={a.title}
+                              placeholder="Assignment title"
+                              onChange={e => updateAssignment(ai, { title: e.target.value })}
+                            />
+                            <button
+                              onClick={() => removeAssignment(ai)}
+                              className="text-stone-300 hover:text-red-400 transition-colors text-xs shrink-0"
+                              title="Remove assignment"
+                            >✕</button>
+                          </div>
+
+                          {/* Description */}
+                          <div className="mb-3">
+                            <span className="text-[10px] font-bold tracking-widest text-stone-400 uppercase block mb-1">Description</span>
+                            <textarea
+                              className="w-full text-sm text-stone-700 leading-relaxed bg-transparent border border-stone-200 rounded-lg p-2 focus:border-amber-300 focus:bg-amber-50/50 outline-none resize-none transition-all"
+                              rows={3}
+                              value={a.task_description || a.coverage || ''}
+                              placeholder="Task description…"
+                              onChange={e => updateAssignment(ai, { task_description: e.target.value, coverage: '' })}
+                            />
+                          </div>
+
+                          {/* Deliverable */}
                           <div className="mb-2">
-                            <span className="text-xs font-bold tracking-widest text-stone-400 uppercase">Deliverable</span>
-                            <p className="text-sm text-stone-600 mt-0.5">{a.deliverable}</p>
+                            <span className="text-[10px] font-bold tracking-widest text-stone-400 uppercase block mb-1">Deliverable</span>
+                            <input
+                              className="w-full text-sm text-stone-600 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 outline-none px-1"
+                              value={a.deliverable || ''}
+                              placeholder="What students submit…"
+                              onChange={e => updateAssignment(ai, { deliverable: e.target.value })}
+                            />
                           </div>
-                        )}
-                        {a.estimated_time && (
-                          <div className="mb-2 flex items-center gap-1.5">
+
+                          {/* Estimated time */}
+                          <div className="mb-3 flex items-center gap-1.5">
                             <span className="text-stone-400 text-sm">⏱</span>
-                            <span className="text-sm text-stone-600">{a.estimated_time}</span>
+                            <input
+                              className="text-sm text-stone-600 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 outline-none px-1 flex-1"
+                              value={a.estimated_time || ''}
+                              placeholder="Estimated time…"
+                              onChange={e => updateAssignment(ai, { estimated_time: e.target.value })}
+                            />
                           </div>
-                        )}
-                        {a.rubric_highlights && a.rubric_highlights.length > 0 && (
+
+                          {/* Rubric highlights */}
                           <div className="mt-3">
-                            <span className="text-xs font-bold tracking-widest text-stone-400 uppercase">Rubric</span>
-                            <ul className="mt-1 space-y-1">
-                              {a.rubric_highlights.map((point, pi) => (
-                                <li key={pi} className="flex items-start gap-2 text-sm text-stone-600">
-                                  <span className="text-stone-300 mt-0.5">•</span>
-                                  <span>{point}</span>
+                            <span className="text-[10px] font-bold tracking-widest text-stone-400 uppercase block mb-1.5">Rubric</span>
+                            <ul className="space-y-1">
+                              {(a.rubric_highlights || []).map((point, pi) => (
+                                <li key={pi} className="flex items-start gap-2">
+                                  <span className="text-stone-300 mt-1.5 text-xs">•</span>
+                                  <input
+                                    className="text-sm text-stone-600 flex-1 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 outline-none px-1"
+                                    value={point}
+                                    onChange={e => {
+                                      const newRubric = [...(a.rubric_highlights || [])];
+                                      newRubric[pi] = e.target.value;
+                                      updateAssignment(ai, { rubric_highlights: newRubric });
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      const newRubric = (a.rubric_highlights || []).filter((_, idx) => idx !== pi);
+                                      updateAssignment(ai, { rubric_highlights: newRubric });
+                                    }}
+                                    className="text-stone-300 hover:text-red-400 transition-colors text-xs mt-1 shrink-0"
+                                  >✕</button>
                                 </li>
                               ))}
                             </ul>
+                            <button
+                              onClick={() => updateAssignment(ai, { rubric_highlights: [...(a.rubric_highlights || []), ''] })}
+                              className="text-xs text-amber-600 hover:text-amber-700 font-medium mt-1.5 flex items-center gap-1"
+                            >+ Add rubric point</button>
                           </div>
-                        )}
-                      </div>
-                    ))}
-                    {(currentModule.assignments || []).length === 0 && (
-                      <p className="text-stone-400 italic text-sm">No assignment for this module.</p>
-                    )}
-                  </div>
-                )}
+                        </div>
+                      ))}
+
+                      <button
+                        onClick={() => {
+                          const newAssignment: Assignment = { title: '', type: 'Assignment', task_description: '', rubric_highlights: [] };
+                          handleEditField('assignments', [...assignments, newAssignment]);
+                        }}
+                        className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1"
+                      >+ Add assignment</button>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* ── Export Bar ── */}

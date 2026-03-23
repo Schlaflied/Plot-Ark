@@ -76,7 +76,12 @@ function stripMarkdown(text: string): string {
 
 type SubjectKey = string;
 
-const GraphViewer: React.FC = () => {
+interface GraphViewerProps {
+  initialCourseCode?: string;
+  initialCourseTopic?: string;
+}
+
+const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCourseTopic }) => {
   const [activeSubject, setActiveSubject] = useState<SubjectKey>('all');
   const [selectedYear, setSelectedYear] = useState<number | null>(1);
 
@@ -112,6 +117,29 @@ const GraphViewer: React.FC = () => {
       ],
     };
   });
+  // Auto-select course when navigated from CoursePage
+  useEffect(() => {
+    if (!initialCourseCode && !initialCourseTopic) return;
+    // undergraduateCourses may not be populated yet from localStorage on first render
+    // Read directly from localStorage to find the match
+    try {
+      const stored = localStorage.getItem('plot_ark_undergraduate_courses');
+      if (!stored) return;
+      const courses: Record<number, { code: string; label: string; fullName: string }[]> = JSON.parse(stored);
+      for (const [yearStr, yearCourses] of Object.entries(courses)) {
+        for (const course of yearCourses) {
+          const matchByCode = initialCourseCode && course.label?.toLowerCase() === initialCourseCode.toLowerCase();
+          const matchByTopic = initialCourseTopic && course.fullName?.toLowerCase() === initialCourseTopic.toLowerCase();
+          if (matchByCode || matchByTopic) {
+            setSelectedYear(Number(yearStr));
+            setActiveSubject(course.code as SubjectKey);
+            return;
+          }
+        }
+      }
+    } catch {}
+  }, []);
+
   const [editingCourseKey, setEditingCourseKey] = useState<string | null>(null);
   const [courseNameInput, setCourseNameInput] = useState('');
   const [editingFullName, setEditingFullName] = useState(false);
