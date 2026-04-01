@@ -116,13 +116,18 @@
 </details>
 
 <details>
-<summary><strong>🤖 主动式层（路线图）</strong></summary>
+<summary><strong>🤖 A2A 多 Agent 分析系统</strong></summary>
 
-- **xAPI mini-LRS** — mock 学习行为数据（experienced/completed/struggled/passed）驱动教授端 Student Data 面板；学习者进度条、卡点概念洞察、语句流
-- **xAPI 事件收集** — 精细化学习者行为追踪（已观看、已跳过、遇到困难）
-- **Redis 学习者状态** — 实时档案（已掌握 / 需加强 / 推荐下一步）
-- **Professor LTM** — 系统通过编辑历史学习讲师偏好（基于差异对比，无需填写问卷）
-- **多语言概念桥接** — 用学习者母语解释概念，同时保留英文术语
+- **xAPI Mock 数据引擎** — 为所有课程种入真实学习行为数据（experienced/completed/struggled/passed/failed/attempted），注入 15% 异常行为噪声
+- **多 Agent 分析流水线** — Orchestrator 协调 4 个专业 Agent：Behavior Analyst、Risk Detector、Content Optimizer、Cohort Comparator
+- **Hive 风格节点架构** — 每个 Agent 继承 `BaseNode`，支持 reflexion/重试、L3 JSON Schema 校验、SQL Fallback
+- **SharedMemory (Redis)** — Agent 间通过 Redis 共享内存通信，支持本地 dict 降级
+- **SSE 实时流式反馈** — 分析进度通过 Server-Sent Events 流式传输；前端实时显示 Agent 状态
+- **Student Data 仪表板** — 独立全页分析视图，可拖拽侧边栏、分区导航、课程元数据展示
+- **风险评估** — 多信号评分（低活跃、高困难率、未完成模块），包含风险学生表格
+- **群组对比** — 学生分为高绩效/普通/高风险/脱离四个群组，含平均完成率与困难率
+- **报告导出** — PDF（ReportLab + matplotlib 图表）、DOCX（python-docx + 图表）、Excel（openpyxl），均使用品牌色可视化
+- **Section 5 总览** — 数据驱动的改进建议，按优先级标注（🔴 HIGH / 🟡 MEDIUM / ⚪ LOW）
 
 </details>
 
@@ -194,6 +199,10 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 
 <img src="docs/RAG flowchart.png" alt="RAG & Knowledge Graph Ingestion" width="800"/>
 
+**A2A 多 Agent 分析架构**
+
+<img src="docs/A2A%20agent%20Structure.png" alt="A2A 多 Agent 分析架构" width="800"/>
+
 **规划中的主动式循环：**
 ```
 xAPI 行为事件 → 课程 Agent → Redis 学习者状态 → 叙事引擎 → LMS
@@ -210,9 +219,11 @@ xAPI 行为事件 → 课程 Agent → Redis 学习者状态 → 叙事引擎 �
 | **AI** | OpenAI GPT-4o-mini / Google Gemini | 内容生成（通过 `AI_PROVIDER` 可插拔切换） |
 | **研究 Agent** | Tavily Search API | 生成前学术信源检索 |
 | **历史记录** | PostgreSQL | 课程持久化存储，支持收藏 |
-| **缓存** | Redis | 图谱查询缓存 + 学习者状态 |
+| **缓存** | Redis | 图谱查询缓存 + 学习者状态 + Agent 共享内存 |
 | **知识图谱** | LightRAG + networkx + react-force-graph-2d | 课程材料导入 → 交互式概念图谱 |
 | **行为数据** | xAPI 1.0.3 + mini-LRS | 语句采集 → Redis 学习者状态 → 教授分析面板 |
+| **分析引擎** | A2A 多 Agent（Hive 风格） | 行为分析、风险检测、内容优化、群组对比 |
+| **报告导出** | ReportLab + python-docx + openpyxl + matplotlib | PDF/DOCX 含品牌图表，Excel 含原始数据 |
 | **导出** | IMS Common Cartridge + DOCX + PDF | 多格式兼容主流 LMS 的输出 |
 | **开发** | Docker Compose | 一键启动本地环境 |
 
@@ -275,15 +286,25 @@ plot-ark/
 │   ├── routes/
 │   │   ├── curriculum.py                ← /api/curriculum/*（生成、验架、展开、保存）
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
-│   │   ├── sources.py                   ← /api/sources/preview
-│   │   ├── graph.py                     ← /api/graph + /api/graph/query
-│   │   ├── xapi.py                      ← /xapi/statements + /xapi/analytics
-│   │   ├── syllabus.py                  ← /api/syllabus/{parse,import}
-│   │   └── materials.py                 ← /api/materials/ingest
+│   │   ├── sources.py                   ← Tavily 源预览
+│   │   ├── graph.py                     ← 知识图谱 + RAG 查询
+│   │   ├── xapi.py                      ← xAPI 语句 + 种子生成器
+│   │   ├── analytics.py                 ← A2A SSE 分析 + PDF/DOCX/Excel 导出
+│   │   ├── syllabus.py                  ← PDF/DOCX 解析 + 导入
+│   │   └── materials.py                 ← LightRAG 材料摄入
+│   ├── agents/
+│   │   ├── base.py                      ← BaseNode + SharedMemory + NodeResult
+│   │   ├── orchestrator.py              ← 多 Agent 协调器（含 SSE）
+│   │   ├── behavior_analyst.py          ← xAPI 动词/模块参与度分析
+│   │   ├── risk_detector.py             ← 多信号风险评分
+│   │   ├── content_optimizer.py         ← 模块表现交叉分析
+│   │   └── cohort_comparator.py         ← 学生群组对比
 │   ├── services/
 │   │   ├── research.py                  ← Tavily 搜索 + 可信度评分
 │   │   ├── file_parser.py               ← PDF/PPTX/DOCX 文本提取
-│   │   └── lightrag_service.py          ← LightRAG 实例管理
+│   │   ├── lightrag_service.py          ← LightRAG 实例管理
+│   │   ├── xapi_generator.py            ← Mock xAPI 数据 + 噪声注入
+│   │   └── report_exporter.py           ← PDF/DOCX/Excel 报告生成
 │   ├── Dockerfile
 │   └── requirements.txt
 │
@@ -293,7 +314,8 @@ plot-ark/
 │   │   ├── GeneratePage.tsx             ← 课程生成表单
 │   │   ├── CoursePage.tsx               ← 模块编辑器 + 导出
 │   │   ├── CoursesPage.tsx              ← 课程仪表板
-│   │   └── GraphPage.tsx                ← 知识图谱查看器
+│   │   ├── GraphPage.tsx                ← 知识图谱查看器
+│   │   └── StudentDataPage.tsx          ← A2A 多 Agent 分析仪表板
 │   ├── components/
 │   │   ├── ui/
 │   │   │   ├── Select.tsx               ← 可复用下拉选择
@@ -346,6 +368,10 @@ plot-ark/
 - [x] 前端代码拆分 — 提取可复用 UI 组件（Select、Input、SyllabusUpload）
 - [x] Session Duration pill 选择器 — 快捷预设 + 自定义 hr/min 输入
 - [x] Module Count pill 选择器 — 快捷预设 + 自定义输入
+- [x] A2A 多 Agent 分析 — Orchestrator + 4 个 Agent（Behavior Analyst、Risk Detector、Content Optimizer、Cohort Comparator）
+- [x] Student Data 仪表板 — 独立分析页面，可拖拽侧边栏、分区导航、SSE 实时进度
+- [x] 分析报告导出 — PDF 含品牌图表 + DOCX + Excel
+- [x] xAPI Mock 数据引擎 — 15% 异常噪声，覆盖全部课程
 - [ ] Redis 学习者状态管理
 - [ ] Professor LTM — 从编辑历史学习偏好
 - [ ] LTI 1.3 — 推送至 Canvas / Moodle

@@ -9,6 +9,7 @@ import CoursesPage from './pages/CoursesPage';
 import GraphPage from './pages/GraphPage';
 import CoursePage from './pages/CoursePage';
 import GeneratePage from './pages/GeneratePage';
+import StudentDataPage from './pages/StudentDataPage';
 
 const App: React.FC = () => {
   return (
@@ -18,6 +19,7 @@ const App: React.FC = () => {
       <Route path="/courses" element={<CoursesPage />} />
       <Route path="/graph" element={<GraphPage />} />
       <Route path="/course/:id" element={<CoursePage />} />
+      <Route path="/student-data" element={<StudentDataPage />} />
     </Routes>
   );
 };

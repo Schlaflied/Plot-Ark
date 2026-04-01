@@ -1,4 +1,4 @@
-"""xAPI statement routes and analytics."""
+"""xAPI statement routes, analytics, and mock data seeding."""
 
 import json
 import random
@@ -9,6 +9,8 @@ from config import redis_client
 
 xapi_bp = Blueprint("xapi", __name__)
 
+
+# ── Receive statements ────────────────────────────────────────────────────────
 
 @xapi_bp.route("/api/xapi/statement", methods=["POST"])
 def receive_xapi():
@@ -61,6 +63,8 @@ def receive_xapi_statement():
     return jsonify({"status": "stored"})
 
 
+# ── Read statements ───────────────────────────────────────────────────────────
+
 @xapi_bp.route("/xapi/statements", methods=["GET"])
 def get_xapi_statements():
     """Return recent xAPI statements (last 50)."""
@@ -80,9 +84,11 @@ def get_xapi_statements():
     return jsonify(statements)
 
 
+# ── Global analytics ──────────────────────────────────────────────────────────
+
 @xapi_bp.route("/xapi/analytics", methods=["GET"])
 def get_xapi_analytics():
-    """Return aggregated learner analytics."""
+    """Return aggregated learner analytics across all courses."""
     conn = get_db()
     if not conn:
         return jsonify({"students": [], "struggling_concepts": [], "modules": []})
@@ -118,7 +124,8 @@ def get_xapi_analytics():
             COUNT(DISTINCT actor_email) FILTER (WHERE verb IN ('completed', 'passed')) as completed,
             COUNT(DISTINCT actor_email) as total_interacted
         FROM xapi_statements
-        WHERE object_id LIKE 'module/%' AND object_id NOT LIKE 'module/%/%'
+        WHERE object_id LIKE 'course/%/module/%'
+          AND object_id NOT LIKE 'course/%/module/%/%'
         GROUP BY object_id
         ORDER BY object_id
     """)
@@ -128,48 +135,192 @@ def get_xapi_analytics():
     return jsonify({"students": students, "struggling_concepts": struggling_concepts, "modules": modules})
 
 
+# ── Per-course analytics ──────────────────────────────────────────────────────
+
+@xapi_bp.route("/xapi/analytics/<int:course_id>", methods=["GET"])
+def get_course_xapi_analytics(course_id):
+    """Return xAPI analytics scoped to a specific course."""
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+
+    try:
+        cur = conn.cursor()
+        prefix = f"course/{course_id}/%"
+
+        # Students in this course
+        cur.execute("""
+            SELECT actor_name, actor_email,
+                COUNT(*) as total_actions,
+                COUNT(*) FILTER (WHERE verb IN ('completed', 'passed')) as mastered,
+                COUNT(*) FILTER (WHERE verb = 'struggled') as struggling,
+                COUNT(*) FILTER (WHERE verb = 'experienced') as viewed,
+                COUNT(*) FILTER (WHERE verb = 'failed') as failed,
+                MAX(timestamp) as last_seen
+            FROM xapi_statements
+            WHERE object_id LIKE %s
+            GROUP BY actor_name, actor_email
+            ORDER BY last_seen DESC
+        """, (prefix,))
+        students = [
+            {
+                "name": r[0], "email": r[1], "total_actions": r[2],
+                "mastered": r[3], "struggling": r[4], "viewed": r[5],
+                "failed": r[6], "last_seen": r[7].isoformat() if r[7] else None,
+            }
+            for r in cur.fetchall()
+        ]
+
+        # Module completion rates
+        module_prefix = f"course/{course_id}/module/%"
+        cur.execute("""
+            SELECT object_id, object_name,
+                COUNT(DISTINCT actor_email) FILTER (WHERE verb IN ('completed', 'passed')) as completed,
+                COUNT(DISTINCT actor_email) FILTER (WHERE verb = 'struggled') as struggled,
+                COUNT(DISTINCT actor_email) as total_interacted
+            FROM xapi_statements
+            WHERE object_id LIKE %s
+              AND object_id NOT LIKE %s
+            GROUP BY object_id, object_name
+            ORDER BY object_id
+        """, (module_prefix, f"course/{course_id}/module/%/%"))
+        modules = [
+            {
+                "module_id": r[0], "module_name": r[1],
+                "completed": r[2], "struggled": r[3], "total": r[4],
+            }
+            for r in cur.fetchall()
+        ]
+
+        # Struggling concepts for this course
+        cur.execute("""
+            SELECT object_name, COUNT(*) as count
+            FROM xapi_statements
+            WHERE object_id LIKE %s AND verb = 'struggled'
+            GROUP BY object_name
+            ORDER BY count DESC
+            LIMIT 10
+        """, (prefix,))
+        struggling = [{"concept": r[0], "count": r[1]} for r in cur.fetchall()]
+
+        # Verb distribution
+        cur.execute("""
+            SELECT verb, COUNT(*) as count
+            FROM xapi_statements
+            WHERE object_id LIKE %s
+            GROUP BY verb
+            ORDER BY count DESC
+        """, (prefix,))
+        verb_dist = {r[0]: r[1] for r in cur.fetchall()}
+
+        # Daily activity (last 14 days)
+        cur.execute("""
+            SELECT DATE(timestamp) as day, COUNT(*) as count
+            FROM xapi_statements
+            WHERE object_id LIKE %s
+              AND timestamp > NOW() - INTERVAL '14 days'
+            GROUP BY DATE(timestamp)
+            ORDER BY day
+        """, (prefix,))
+        daily_activity = [
+            {"date": r[0].isoformat(), "count": r[1]}
+            for r in cur.fetchall()
+        ]
+
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "course_id": course_id,
+            "students": students,
+            "modules": modules,
+            "struggling_concepts": struggling,
+            "verb_distribution": verb_dist,
+            "daily_activity": daily_activity,
+            "total_students": len(students),
+            "total_statements": sum(s["total_actions"] for s in students),
+        })
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Manual seed endpoint ─────────────────────────────────────────────────────
+
+@xapi_bp.route("/api/xapi/seed", methods=["POST"])
+def trigger_seed():
+    """
+    Manually trigger xAPI mock data generation for all courses.
+    Query params:
+      - noise: float (0.0 to 1.0, default 0.15)
+      - force: bool (if true, clear existing data first)
+    """
+    from services.xapi_generator import generate_all_courses
+
+    noise = float(request.args.get("noise", 0.15))
+    force = request.args.get("force", "false").lower() == "true"
+
+    if force:
+        conn = get_db()
+        if conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM xapi_statements")
+            conn.commit()
+            cur.close()
+            conn.close()
+            print("Cleared existing xAPI statements.")
+
+    result = generate_all_courses(noise_ratio=noise)
+    return jsonify(result)
+
+
+@xapi_bp.route("/api/xapi/stats", methods=["GET"])
+def xapi_stats():
+    """Quick stats on xAPI data in the database."""
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM xapi_statements")
+        total = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(DISTINCT actor_email) FROM xapi_statements")
+        unique_students = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(DISTINCT curriculum_topic) FROM xapi_statements")
+        unique_courses = cur.fetchone()[0]
+        cur.execute("SELECT verb, COUNT(*) FROM xapi_statements GROUP BY verb ORDER BY COUNT(*) DESC")
+        verb_counts = {r[0]: r[1] for r in cur.fetchall()}
+        cur.close()
+        conn.close()
+        return jsonify({
+            "total_statements": total,
+            "unique_students": unique_students,
+            "unique_courses": unique_courses,
+            "verb_distribution": verb_counts,
+        })
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Auto-seed on startup ─────────────────────────────────────────────────────
+
 def seed_mock_xapi():
-    """Seed mock xAPI statements if table is empty."""
+    """Seed xAPI data if table is empty. Uses new dynamic generator."""
     conn = get_db()
     if not conn:
         return
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM xapi_statements")
     count = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+
     if count > 0:
-        conn.close()
+        print(f"xAPI table already has {count} statements, skipping seed.")
         return
 
-    statements = [
-        ("alice@test.com", "Alice Chen", "completed", "module/1", "Introduction to the Course"),
-        ("alice@test.com", "Alice Chen", "passed", "module/1/reading/0", "Week 1 Reading"),
-        ("alice@test.com", "Alice Chen", "completed", "module/2", "Core Concepts"),
-        ("alice@test.com", "Alice Chen", "attempted", "module/3", "Applied Theory"),
-        ("alice@test.com", "Alice Chen", "passed", "module/3/quiz", "Module 3 Quiz"),
-        ("bob@test.com", "Bob Kim", "completed", "module/1", "Introduction to the Course"),
-        ("bob@test.com", "Bob Kim", "experienced", "module/2/reading/0", "Core Reading"),
-        ("bob@test.com", "Bob Kim", "struggled", "module/3", "Applied Theory"),
-        ("bob@test.com", "Bob Kim", "struggled", "module/3/concept/theory", "Theoretical Framework"),
-        ("bob@test.com", "Bob Kim", "attempted", "module/3/quiz", "Module 3 Quiz"),
-        ("carol@test.com", "Carol Singh", "experienced", "module/1", "Introduction to the Course"),
-        ("carol@test.com", "Carol Singh", "completed", "module/1", "Introduction to the Course"),
-        ("carol@test.com", "Carol Singh", "experienced", "module/2", "Core Concepts"),
-        ("carol@test.com", "Carol Singh", "struggled", "module/2/concept/advanced", "Advanced Core Concept"),
-        ("david@test.com", "David Park", "completed", "module/1", "Introduction to the Course"),
-        ("david@test.com", "David Park", "completed", "module/2", "Core Concepts"),
-        ("david@test.com", "David Park", "passed", "module/2/quiz", "Module 2 Quiz"),
-        ("david@test.com", "David Park", "attempted", "module/3", "Applied Theory"),
-        ("david@test.com", "David Park", "experienced", "module/4", "Case Studies"),
-        ("david@test.com", "David Park", "struggled", "module/4/concept/integration", "Integration Concept"),
-    ]
-
-    base_time = datetime.now() - timedelta(days=7)
-    for i, (email, name, verb, obj_id, obj_name) in enumerate(statements):
-        ts = base_time + timedelta(hours=i * 3 + random.randint(0, 2))
-        cur.execute(
-            "INSERT INTO xapi_statements (actor_email, actor_name, verb, object_id, object_name, timestamp, curriculum_topic) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (email, name, verb, obj_id, obj_name, ts, "Mock Course")
-        )
-    conn.commit()
-    conn.close()
-    print("Mock xAPI statements seeded.")
+    print("Seeding xAPI mock data for all courses (15% noise)...")
+    from services.xapi_generator import generate_all_courses
+    result = generate_all_courses(noise_ratio=0.15)
+    print(f"xAPI seed complete: {result.get('total_statements', 0)} statements across {result.get('courses_processed', 0)} courses.")

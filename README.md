@@ -117,13 +117,18 @@
 </details>
 
 <details>
-<summary><strong>🤖 Agentic Layer (Roadmap)</strong></summary>
+<summary><strong>🤖 A2A Multi-Agent Analytics</strong></summary>
 
-- **xAPI mini-LRS** — mock learner behavior (experienced/completed/struggled/passed) feeds a professor-facing Student Data panel; learner state bars, struggling concept insights, statement feed
-- **xAPI event collection** — fine-grained learner behavior (watched, skipped, struggled)
-- **Redis learner state** — real-time profile (mastered / struggling / recommended_next)
-- **Professor LTM** — system learns instructor preferences from edit history (diff-based, no surveys)
-- **Multilingual concept bridging** — explain in learner's native language, preserve English terminology
+- **xAPI mock data engine** — seeds realistic learner behavior (experienced/completed/struggled/passed/failed/attempted) across all courses with 15% anomaly noise injection
+- **Multi-agent analysis pipeline** — Orchestrator dispatches 4 specialized agents: Behavior Analyst, Risk Detector, Content Optimizer, Cohort Comparator
+- **Hive-style node architecture** — each agent inherits `BaseNode` with reflexion/retry, L3 JSON Schema validation, and SQL fallback
+- **SharedMemory (Redis)** — agents communicate through Redis-backed shared memory with local dict fallback
+- **SSE real-time streaming** — analysis progress streams via Server-Sent Events; frontend shows live agent status
+- **Student Data dashboard** — dedicated full-page analytics view with resizable sidebar, section navigation, and course metadata
+- **Risk assessment** — multi-signal scoring (low activity, high struggle, incomplete modules) with at-risk student table
+- **Cohort comparison** — students grouped into high-performers / average / at-risk / disengaged with avg completion and struggle rates
+- **Report export** — PDF (ReportLab + matplotlib charts), DOCX (python-docx + charts), Excel (openpyxl) with brand-colored visualizations
+- **Section 5 Overview** — data-driven recommended actions with priority levels (🔴 HIGH / 🟡 MEDIUM / ⚪ LOW)
 
 </details>
 
@@ -195,6 +200,10 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 
 <img src="docs/RAG flowchart.png" alt="RAG & Knowledge Graph Ingestion" width="800"/>
 
+**A2A Multi-Agent Analytics Architecture**
+
+<img src="docs/A2A%20agent%20Structure.png" alt="A2A Multi-Agent Analytics Architecture" width="800"/>
+
 **Planned agentic loop:**
 ```
 xAPI behavior events → Curriculum Agent → Redis learner state → Narrative Engine → LMS
@@ -211,9 +220,11 @@ xAPI behavior events → Curriculum Agent → Redis learner state → Narrative 
 | **AI** | OpenAI GPT-4o-mini / Google Gemini | Content generation (pluggable via `AI_PROVIDER`) |
 | **Research Agent** | Tavily Search API | Pre-generation academic source retrieval |
 | **History** | PostgreSQL | Persistent curriculum storage with favorites |
-| **Cache** | Redis | Graph query cache + learner state |
+| **Cache** | Redis | Graph query cache + learner state + shared agent memory |
 | **Knowledge Graph** | LightRAG + networkx + react-force-graph-2d | Course material ingestion → interactive concept graph |
 | **Behavior Data** | xAPI 1.0.3 + mini-LRS | Statement ingestion → Redis learner state → professor analytics panel |
+| **Analytics** | A2A multi-agent (Hive-style) | Behavior analysis, risk detection, content optimization, cohort comparison |
+| **Report Export** | ReportLab + python-docx + openpyxl + matplotlib | PDF/DOCX with branded charts, Excel with raw data |
 | **Export** | IMS Common Cartridge + DOCX + PDF | LMS-compatible output in multiple formats |
 | **Dev** | Docker Compose | Single-command local environment |
 
@@ -276,15 +287,25 @@ plot-ark/
 │   ├── routes/
 │   │   ├── curriculum.py                ← /api/curriculum/* (generate, skeleton, expand, save)
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
-│   │   ├── sources.py                   ← /api/sources/preview
-│   │   ├── graph.py                     ← /api/graph + /api/graph/query
-│   │   ├── xapi.py                      ← /xapi/statements + /xapi/analytics
-│   │   ├── syllabus.py                  ← /api/syllabus/{parse,import}
-│   │   └── materials.py                 ← /api/materials/ingest
+│   │   ├── sources.py                   ← Tavily source preview
+│   │   ├── graph.py                     ← KG data + RAG query
+│   │   ├── xapi.py                      ← xAPI statements + seed generator
+│   │   ├── analytics.py                 ← A2A SSE analysis + PDF/DOCX/Excel export
+│   │   ├── syllabus.py                  ← PDF/DOCX parse + import
+│   │   └── materials.py                 ← LightRAG ingest
+│   ├── agents/
+│   │   ├── base.py                      ← BaseNode + SharedMemory + NodeResult
+│   │   ├── orchestrator.py              ← Multi-agent coordinator with SSE
+│   │   ├── behavior_analyst.py          ← xAPI verb/module engagement analysis
+│   │   ├── risk_detector.py             ← Multi-signal at-risk scoring
+│   │   ├── content_optimizer.py         ← Module performance cross-analysis
+│   │   └── cohort_comparator.py         ← Student cohort grouping
 │   ├── services/
 │   │   ├── research.py                  ← Tavily search + credibility scoring
 │   │   ├── file_parser.py               ← PDF/PPTX/DOCX text extraction
-│   │   └── lightrag_service.py          ← LightRAG instance management
+│   │   ├── lightrag_service.py          ← LightRAG instance management
+│   │   ├── xapi_generator.py            ← Mock xAPI data with noise injection
+│   │   └── report_exporter.py           ← PDF/DOCX/Excel report generation
 │   ├── Dockerfile
 │   └── requirements.txt
 │
@@ -294,7 +315,8 @@ plot-ark/
 │   │   ├── GeneratePage.tsx             ← Course generation form
 │   │   ├── CoursePage.tsx               ← Module editor + export
 │   │   ├── CoursesPage.tsx              ← Course dashboard
-│   │   └── GraphPage.tsx                ← Knowledge graph viewer
+│   │   ├── GraphPage.tsx                ← Knowledge graph viewer
+│   │   └── StudentDataPage.tsx          ← A2A multi-agent analytics dashboard
 │   ├── components/
 │   │   ├── ui/
 │   │   │   ├── Select.tsx               ← Reusable dropdown
@@ -347,6 +369,10 @@ plot-ark/
 - [x] Frontend code splitting — extracted reusable UI components (Select, Input, SyllabusUpload)
 - [x] Session Duration pill selector — quick presets + custom hr/min input
 - [x] Module Count pill selector — quick presets + custom input
+- [x] A2A multi-agent analytics — Orchestrator + 4 agents (Behavior Analyst, Risk Detector, Content Optimizer, Cohort Comparator)
+- [x] Student Data dashboard — dedicated analytics page with resizable sidebar, section nav, SSE progress
+- [x] Analytics report export — PDF with branded charts + DOCX + Excel
+- [x] xAPI mock data engine — 15% anomaly noise, full course coverage
 - [ ] Redis learner state management
 - [ ] Professor LTM — preference learning from edit history
 - [ ] LTI 1.3 — push into Canvas / Moodle

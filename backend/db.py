@@ -66,6 +66,26 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS idx_feedback_course
                     ON student_feedback(course_id)
                 """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_xapi_actor
+                    ON xapi_statements(actor_email)
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_xapi_verb
+                    ON xapi_statements(verb)
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_xapi_object
+                    ON xapi_statements(object_id)
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_xapi_topic
+                    ON xapi_statements(curriculum_topic)
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_xapi_timestamp
+                    ON xapi_statements(timestamp)
+                """)
                 conn.commit()
                 cur.close()
                 conn.close()

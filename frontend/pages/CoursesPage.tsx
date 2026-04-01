@@ -544,8 +544,7 @@ const CoursesPage: React.FC = () => {
                     <path d="M3 9h18M9 21V9"/>
                   </svg>
                 }
-                to="#"
-                isExternal
+                to="/student-data"
               />
             )}
           </div>

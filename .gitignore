@@ -32,3 +32,13 @@ docs/FEEDBACK.md
 
 # LightRAG generated storage (large vector DBs — regenerate with ingest.py)
 data/lightrag_storage*/
+
+# xAPI mock data (seeded in PostgreSQL — regenerate via POST /api/xapi/seed)
+data/xapi/
+*.xapi.json
+
+# Exported analytics reports (generated on demand)
+exports/
+*.analytics.pdf
+*.analytics.docx
+*.analytics.xlsx
