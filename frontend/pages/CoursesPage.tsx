@@ -371,6 +371,7 @@ const SideSection: React.FC<{ title: string; children: React.ReactNode }> = ({ t
 const CoursesPage: React.FC = () => {
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [search, setSearch] = useState('');
 
   // Toolbar state
   const [language, setLanguage] = useState<Language>('EN');
@@ -475,6 +476,15 @@ const CoursesPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Search input */}
+        <input
+          type="text"
+          placeholder="Search courses…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full max-w-sm bg-white border border-stone-200 rounded-xl px-4 py-2 text-sm text-stone-700 placeholder:text-stone-400 outline-none focus:ring-2 focus:ring-amber-300 transition mb-6"
+        />
+
         {/* Course grid */}
         {historyLoading ? (
           <div className="flex items-center justify-center py-24 text-stone-400 text-sm">
@@ -482,14 +492,23 @@ const CoursesPage: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            {historyEntries.map(entry => (
-              <CourseCard
-                key={entry.id}
-                entry={entry}
-                onDelete={deleteHistory}
-                onToggleFavorite={toggleFavorite}
-              />
-            ))}
+            {historyEntries
+              .filter(entry =>
+                entry.topic.toLowerCase().includes(search.toLowerCase())
+              )
+              .map(entry => (
+                <CourseCard
+                  key={entry.id}
+                  entry={entry}
+                  onDelete={deleteHistory}
+                  onToggleFavorite={toggleFavorite}
+                />
+              ))}
+            {search && historyEntries.filter(entry =>
+              entry.topic.toLowerCase().includes(search.toLowerCase())
+            ).length === 0 && (
+              <p className="col-span-full text-sm text-stone-400 italic">No courses found.</p>
+            )}
             <AddCourseCard />
             <SpecialCard
               title="Knowledge Graph"

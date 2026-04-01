@@ -5,6 +5,7 @@
 
 import React, { Component } from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 
 class ErrorBoundary extends Component<{children: React.ReactNode}, {error: Error | null}> {
@@ -30,7 +31,9 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
-  <ErrorBoundary>
-    <App />
-  </ErrorBoundary>
+  <BrowserRouter>
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  </BrowserRouter>
 );

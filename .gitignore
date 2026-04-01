@@ -31,5 +31,4 @@ data/materials/
 docs/FEEDBACK.md
 
 # LightRAG generated storage (large vector DBs — regenerate with ingest.py)
-data/lightrag_storage/
-data/lightrag_storage_call/
+data/lightrag_storage*/
