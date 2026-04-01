@@ -153,42 +153,49 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 **System Architecture**
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  Frontend (React + TypeScript + Vite)                           │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐   │
-│  │ Generate  │ │ Courses  │ │  Course  │ │ Knowledge Graph  │   │
-│  │   Page    │ │   Page   │ │   Page   │ │     Page         │   │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └───────┬──────────┘   │
-│       │            │            │               │              │
-│  components/ui/  constants/  components/generate/              │
-│  (Select, Input) (formOptions) (SyllabusUpload)                │
-└───────┼────────────┼────────────┼───────────────┼──────────────┘
-        │            │            │               │
-        ▼            ▼            ▼               ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  Backend (Flask + Blueprints)              app.py (~30 lines)   │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  routes/                                                │    │
-│  │  ├── curriculum.py   generate / skeleton / expand / save│    │
-│  │  ├── history.py      CRUD + favorite + DOCX export      │    │
-│  │  ├── sources.py      Tavily source preview               │    │
-│  │  ├── graph.py        KG data + RAG query                │    │
-│  │  ├── xapi.py         xAPI statements + analytics        │    │
-│  │  ├── syllabus.py     PDF/DOCX parse + import            │    │
-│  │  └── materials.py    LightRAG ingest                    │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│  ┌──────────────┐  ┌────────────┐  ┌───────────────────────┐   │
-│  │ services/    │  │ config.py  │  │ constants.py          │   │
-│  │ research.py  │  │ Flask app  │  │ Bloom's taxonomy      │   │
-│  │ file_parser  │  │ AI clients │  │ session constraints   │   │
-│  │ lightrag_svc │  │ Redis      │  │ assessment formats    │   │
-│  └──────┬───────┘  └─────┬──────┘  └───────────────────────┘   │
-└─────────┼────────────────┼─────────────────────────────────────┘
-          │                │
-          ▼                ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│  Frontend (React + TypeScript + Vite)                                      │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌───────────────┐  │
+│  │ Generate  │ │ Courses  │ │  Course  │ │ Knowledge │ │ Student Data  │  │
+│  │   Page    │ │   Page   │ │   Page   │ │   Graph   │ │    Page       │  │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └──────┬────────┘  │
+│       │            │            │              │              │           │
+│  components/ui/  constants/  components/generate/     SSE streaming      │
+│  (Select, Input) (formOptions) (SyllabusUpload, SourceReview)            │
+└───────┼────────────┼────────────┼──────────────┼──────────────┼──────────┘
+        │            │            │              │              │
+        ▼            ▼            ▼              ▼              ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│  Backend (Flask + Blueprints)                    app.py (~30 lines)       │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │  routes/                                                            │  │
+│  │  ├── curriculum.py    generate / skeleton / expand / save           │  │
+│  │  ├── history.py       CRUD + favorite + DOCX export                │  │
+│  │  ├── analytics.py     A2A SSE analysis + PDF/DOCX/Excel export     │  │
+│  │  ├── xapi.py          xAPI statements + mock data seed             │  │
+│  │  ├── graph.py         KG data + RAG query                          │  │
+│  │  ├── sources.py       Tavily source preview                        │  │
+│  │  ├── syllabus.py      PDF/DOCX parse + import                      │  │
+│  │  └── materials.py     LightRAG ingest                              │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│  ┌─────────────────────────────┐  ┌────────────────────────────────────┐  │
+│  │  agents/ (Hive-style A2A)   │  │  services/                        │  │
+│  │  ├── base.py (BaseNode)     │  │  ├── research.py (Tavily)         │  │
+│  │  ├── orchestrator.py        │  │  ├── file_parser.py               │  │
+│  │  ├── behavior_analyst.py    │  │  ├── lightrag_service.py          │  │
+│  │  ├── risk_detector.py       │  │  ├── xapi_generator.py            │  │
+│  │  ├── content_optimizer.py   │  │  └── report_exporter.py           │  │
+│  │  └── cohort_comparator.py   │  │     (PDF + DOCX + Excel + charts) │  │
+│  └──────────┬──────────────────┘  └─────────────┬────────────────────┘  │
+│             │  SharedMemory (Redis)              │                       │
+└─────────────┼───────────────────────────────────┼───────────────────────┘
+              │                                   │
+              ▼                                   ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
 │  PostgreSQL  │  │    Redis     │  │   LightRAG   │
-│  (history)   │  │   (cache)    │  │   (KG data)  │
+│  (curricula  │  │  (cache +    │  │   (KG data)  │
+│  + xapi +    │  │   shared     │  │              │
+│  feedback)   │  │   memory)    │  │              │
 └──────────────┘  └──────────────┘  └──────────────┘
 ```
 
