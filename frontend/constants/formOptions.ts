@@ -2,23 +2,45 @@
  * Shared form option constants for the GeneratePage.
  */
 
-export const LEVELS = [
-  { value: 'undergraduate-year-1', label: 'Undergraduate — Year 1' },
-  { value: 'undergraduate-year-2', label: 'Undergraduate — Year 2' },
-  { value: 'undergraduate-year-3', label: 'Undergraduate — Year 3' },
-  { value: 'undergraduate-year-4', label: 'Undergraduate — Year 4' },
-  { value: 'master-year-1', label: 'Master — Year 1' },
-  { value: 'master-year-2', label: 'Master — Year 2' },
-  { value: 'doctoral', label: 'Doctoral' },
-  { value: 'professional-beginner', label: 'Professional — Beginner' },
-  { value: 'professional-intermediate', label: 'Professional — Intermediate' },
-  { value: 'professional-advanced', label: 'Professional — Advanced' },
-  { value: 'esl-beginner', label: 'ESL — Beginner' },
-  { value: 'esl-intermediate', label: 'ESL — Intermediate' },
-  { value: 'esl-advanced', label: 'ESL — Advanced' },
-  { value: 'k12-elementary', label: 'K-12 — Elementary' },
-  { value: 'k12-middle', label: 'K-12 — Middle School' },
-  { value: 'k12-highschool', label: 'K-12 — High School' },
+export interface GroupedOption {
+  value: string;
+  label: string;
+  group: string;
+  desc?: string;
+}
+
+export const LEVEL_GROUPS = [
+  'Undergraduate',
+  'Graduate',
+  'ESL/EFL',
+  'K-12',
+  'Professional',
+] as const;
+
+export const LEVELS: GroupedOption[] = [
+  // ── Undergraduate ──
+  { value: 'undergraduate-year-1', label: 'Undergraduate Year 1', group: 'Undergraduate' },
+  { value: 'undergraduate-year-2', label: 'Undergraduate Year 2', group: 'Undergraduate' },
+  { value: 'undergraduate-year-3', label: 'Undergraduate Year 3', group: 'Undergraduate' },
+  { value: 'undergraduate-year-4', label: 'Undergraduate Year 4', group: 'Undergraduate' },
+  // ── Graduate ──
+  { value: 'master-year-1', label: "Master's Year 1", group: 'Graduate' },
+  { value: 'master-year-2', label: "Master's Year 2", group: 'Graduate' },
+  { value: 'doctoral', label: 'Doctoral', group: 'Graduate' },
+  // ── ESL/EFL ──
+  { value: 'esl-beginner', label: 'ESL/EFL — Beginner (CLB 1-4)', group: 'ESL/EFL' },
+  { value: 'esl-intermediate', label: 'ESL/EFL — Intermediate (CLB 5-7)', group: 'ESL/EFL' },
+  { value: 'esl-advanced', label: 'ESL/EFL — Advanced (CLB 8+)', group: 'ESL/EFL' },
+  // ── K-12 ──
+  { value: 'k12-elementary', label: 'K-12 Elementary', group: 'K-12' },
+  { value: 'k12-middle', label: 'K-12 Middle School', group: 'K-12' },
+  { value: 'k12-highschool', label: 'K-12 High School', group: 'K-12' },
+  // ── Professional ──
+  { value: 'professional-beginner', label: 'Beginner', group: 'Professional' },
+  { value: 'professional-intermediate', label: 'Intermediate', group: 'Professional' },
+  { value: 'professional-advanced', label: 'Advanced', group: 'Professional' },
+  // ── Other ──
+  { value: 'other-custom', label: 'Other / Custom', group: '' },
 ];
 
 export const COURSE_TYPES = [
@@ -30,8 +52,8 @@ export const COURSE_TYPES = [
 ];
 
 export const DESIGN_APPROACHES = [
-  { value: 'addie', label: 'ADDIE', desc: 'Linear instructional design' },
-  { value: 'sam', label: 'SAM', desc: 'Iterative rapid prototyping' },
+  { value: 'addie', label: 'ADDIE — Linear (Analysis → Design → Development → Implementation → Evaluation)' },
+  { value: 'sam', label: 'SAM — Iterative (Rapid Prototype → Evaluate → Revise)' },
 ];
 
 export const SESSION_DURATIONS = [
