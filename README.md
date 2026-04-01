@@ -145,6 +145,48 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 
 ## 🏗️ Architecture
 
+**System Architecture**
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Frontend (React + TypeScript + Vite)                           │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐   │
+│  │ Generate  │ │ Courses  │ │  Course  │ │ Knowledge Graph  │   │
+│  │   Page    │ │   Page   │ │   Page   │ │     Page         │   │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └───────┬──────────┘   │
+│       │            │            │               │              │
+│  components/ui/  constants/  components/generate/              │
+│  (Select, Input) (formOptions) (SyllabusUpload)                │
+└───────┼────────────┼────────────┼───────────────┼──────────────┘
+        │            │            │               │
+        ▼            ▼            ▼               ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  Backend (Flask + Blueprints)              app.py (~30 lines)   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  routes/                                                │    │
+│  │  ├── curriculum.py   generate / skeleton / expand / save│    │
+│  │  ├── history.py      CRUD + favorite + DOCX export      │    │
+│  │  ├── sources.py      Tavily source preview               │    │
+│  │  ├── graph.py        KG data + RAG query                │    │
+│  │  ├── xapi.py         xAPI statements + analytics        │    │
+│  │  ├── syllabus.py     PDF/DOCX parse + import            │    │
+│  │  └── materials.py    LightRAG ingest                    │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│  ┌──────────────┐  ┌────────────┐  ┌───────────────────────┐   │
+│  │ services/    │  │ config.py  │  │ constants.py          │   │
+│  │ research.py  │  │ Flask app  │  │ Bloom's taxonomy      │   │
+│  │ file_parser  │  │ AI clients │  │ session constraints   │   │
+│  │ lightrag_svc │  │ Redis      │  │ assessment formats    │   │
+│  └──────┬───────┘  └─────┬──────┘  └───────────────────────┘   │
+└─────────┼────────────────┼─────────────────────────────────────┘
+          │                │
+          ▼                ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  PostgreSQL  │  │    Redis     │  │   LightRAG   │
+│  (history)   │  │   (cache)    │  │   (KG data)  │
+└──────────────┘  └──────────────┘  └──────────────┘
+```
+
 **Course Generation Pipeline**
 
 <img src="docs/Course generation.png" alt="Course Generation Pipeline" width="800"/>
@@ -165,15 +207,14 @@ xAPI behavior events → Curriculum Agent → Redis learner state → Narrative 
 | Layer | Technology | Role |
 |-------|-----------|------|
 | **Frontend** | React + TypeScript + Vite | Module editor, SSE client, drag-and-drop |
-| **Backend** | Python + Flask + SSE | Streaming curriculum generation |
+| **Backend** | Python + Flask Blueprints + SSE | Modular route-based API (7 Blueprints + 3 services) |
 | **AI** | OpenAI GPT-4o-mini / Google Gemini | Content generation (pluggable via `AI_PROVIDER`) |
 | **Research Agent** | Tavily Search API | Pre-generation academic source retrieval |
 | **History** | PostgreSQL | Persistent curriculum storage with favorites |
-| **Cache** | Redis | Learner state (roadmap) |
+| **Cache** | Redis | Graph query cache + learner state |
 | **Knowledge Graph** | LightRAG + networkx + react-force-graph-2d | Course material ingestion → interactive concept graph |
-| **Graph Cache** | Redis + in-memory | Query result cache (persistent cache) + rag instance reuse |
-| **Behavior Data** | xAPI 1.0.3 + mini-LRS | Statement ingestion → Redis learner state → professor analytics panel (mock data; real LMS integration roadmap) |
-| **Export** | IMS Common Cartridge | LMS-compatible output |
+| **Behavior Data** | xAPI 1.0.3 + mini-LRS | Statement ingestion → Redis learner state → professor analytics panel |
+| **Export** | IMS Common Cartridge + DOCX + PDF | LMS-compatible output in multiple formats |
 | **Dev** | Docker Compose | Single-command local environment |
 
 ---
@@ -222,26 +263,54 @@ plot-ark/
 ├── docker-compose.yml
 ├── .env.example
 ├── docs/
-│   ├── architecture.md
-│   ├── Syllabus Upload.gif          ← Demo: syllabus import → form auto-fill
+│   ├── Syllabus Upload.gif              ← Demo: syllabus import → form auto-fill
 │   ├── research agent&human in the loop.gif  ← Demo: research agent + source review
-│   ├── module adjuistment.gif       ← Demo: module editing + drag-and-drop
-│   └── Knowledge graph .gif         ← Demo: year sidebar, course management, fullscreen, query
-├── frontend/                        ← React + TypeScript + Vite
+│   ├── module adjuistment.gif           ← Demo: module editing + drag-and-drop
+│   └── Knowledge graph .gif             ← Demo: knowledge graph features
+│
+├── backend/                             ← Flask (modular Blueprints)
+│   ├── app.py                           ← Entry point (~30 lines, registers Blueprints)
+│   ├── config.py                        ← Flask app, AI clients, Redis, async loop
+│   ├── db.py                            ← PostgreSQL operations
+│   ├── constants.py                     ← Bloom's taxonomy, session constraints, formats
+│   ├── routes/
+│   │   ├── curriculum.py                ← /api/curriculum/* (generate, skeleton, expand, save)
+│   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
+│   │   ├── sources.py                   ← /api/sources/preview
+│   │   ├── graph.py                     ← /api/graph + /api/graph/query
+│   │   ├── xapi.py                      ← /xapi/statements + /xapi/analytics
+│   │   ├── syllabus.py                  ← /api/syllabus/{parse,import}
+│   │   └── materials.py                 ← /api/materials/ingest
+│   ├── services/
+│   │   ├── research.py                  ← Tavily search + credibility scoring
+│   │   ├── file_parser.py               ← PDF/PPTX/DOCX text extraction
+│   │   └── lightrag_service.py          ← LightRAG instance management
 │   ├── Dockerfile
-│   ├── index.tsx                    ← Entry point
-│   ├── App.tsx                      ← Main UI (curriculum engine + student view)
+│   └── requirements.txt
+│
+├── frontend/                            ← React + TypeScript + Vite
+│   ├── App.tsx                          ← Router (React Router v7)
+│   ├── pages/
+│   │   ├── GeneratePage.tsx             ← Course generation form
+│   │   ├── CoursePage.tsx               ← Module editor + export
+│   │   ├── CoursesPage.tsx              ← Course dashboard
+│   │   └── GraphPage.tsx                ← Knowledge graph viewer
 │   ├── components/
-│   │   └── GraphViewer.tsx          ← LightRAG knowledge graph viewer
-│   └── vite.config.ts
-├── backend/                         ← Flask
+│   │   ├── ui/
+│   │   │   ├── Select.tsx               ← Reusable dropdown
+│   │   │   └── Input.tsx                ← Reusable text input
+│   │   ├── generate/
+│   │   │   └── SyllabusUpload.tsx        ← Drag-and-drop syllabus upload
+│   │   ├── GraphViewer.tsx              ← Force-directed graph + query panel
+│   │   └── Diagrams.tsx                 ← Mermaid diagram component
+│   ├── constants/
+│   │   └── formOptions.ts               ← LEVELS, COURSE_TYPES, SESSION_DURATIONS
 │   ├── Dockerfile
-│   ├── app.py                       ← SSE endpoint, Bloom's mapping, graph API
-│   └── ingest.py                    ← LightRAG ingestion script (PDF + PPTX)
+│   └── vite.config.ts
+│
 └── data/
-    ├── materials/                   ← Drop course PDFs/PPTXs here (gitignored)
-    ├── lightrag_storage/            ← Business Law graph (gitignored, regenerate)
-    └── lightrag_storage_call/       ← CALL graph (gitignored, regenerate)
+    ├── materials/                       ← Course PDFs/PPTXs (gitignored)
+    └── lightrag_storage*/               ← Knowledge graph data (gitignored, regenerate)
 ```
 
 ---
@@ -274,6 +343,10 @@ plot-ark/
 - [x] My Courses dashboard — card grid with course history overview
 - [x] Knowledge Graph course management — year sidebar, course banner, dynamic subject tabs, fullscreen, course search
 - [x] Knowledge Graph ingestion panel — drag-and-drop material upload, always-visible right panel
+- [x] Backend modularization — Flask Blueprints (7 routes + 3 services), app.py reduced to ~30 lines
+- [x] Frontend code splitting — extracted reusable UI components (Select, Input, SyllabusUpload)
+- [x] Session Duration pill selector — quick presets + custom hr/min input
+- [x] Module Count pill selector — quick presets + custom input
 - [ ] Redis learner state management
 - [ ] Professor LTM — preference learning from edit history
 - [ ] LTI 1.3 — push into Canvas / Moodle

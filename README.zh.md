@@ -144,6 +144,48 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 
 ## 🏗️ 架构
 
+**系统架构**
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  前端 (React + TypeScript + Vite)                                │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐   │
+│  │ Generate  │ │ Courses  │ │  Course  │ │ Knowledge Graph  │   │
+│  │   Page    │ │   Page   │ │   Page   │ │     Page         │   │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └───────┬──────────┘   │
+│       │            │            │               │              │
+│  components/ui/  constants/  components/generate/              │
+│  (Select, Input) (formOptions) (SyllabusUpload)                │
+└───────┼────────────┼────────────┼───────────────┼──────────────┘
+        │            │            │               │
+        ▼            ▼            ▼               ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  后端 (Flask + Blueprints)                app.py (~30 行)       │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  routes/                                                │    │
+│  │  ├── curriculum.py   生成 / 验架 / 展开 / 保存          │    │
+│  │  ├── history.py      CRUD + 收藏 + DOCX 导出          │    │
+│  │  ├── sources.py      Tavily 源预览                     │    │
+│  │  ├── graph.py        知识图谱 + RAG 查询              │    │
+│  │  ├── xapi.py         xAPI 语句 + 分析面板            │    │
+│  │  ├── syllabus.py     PDF/DOCX 解析 + 导入            │    │
+│  │  └── materials.py    LightRAG 材料摄入               │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│  ┌──────────────┐  ┌────────────┐  ┌───────────────────────┐   │
+│  │ services/    │  │ config.py  │  │ constants.py          │   │
+│  │ research.py  │  │ Flask app  │  │ Bloom's 分类           │   │
+│  │ file_parser  │  │ AI 客户端   │  │ 会话约束              │   │
+│  │ lightrag_svc │  │ Redis      │  │ 评估格式              │   │
+│  └──────┬───────┘  └─────┬──────┘  └───────────────────────┘   │
+└─────────┼────────────────┼─────────────────────────────────────┘
+          │                │
+          ▼                ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  PostgreSQL  │  │    Redis     │  │   LightRAG   │
+│   (历史)     │  │   (缓存)    │  │  (知识图谱)  │
+└──────────────┘  └──────────────┘  └──────────────┘
+```
+
 **课程生成流水线**
 
 <img src="docs/Course generation.png" alt="Course Generation Pipeline" width="800"/>
@@ -164,15 +206,14 @@ xAPI 行为事件 → 课程 Agent → Redis 学习者状态 → 叙事引擎 �
 | 层级 | 技术 | 职责 |
 |------|------|------|
 | **前端** | React + TypeScript + Vite | 模块编辑器、SSE 客户端、拖拽排序 |
-| **后端** | Python + Flask + SSE | 流式课程生成 |
+| **后端** | Python + Flask Blueprints + SSE | 模块化路由 API（7 个 Blueprints + 3 个 services） |
 | **AI** | OpenAI GPT-4o-mini / Google Gemini | 内容生成（通过 `AI_PROVIDER` 可插拔切换） |
 | **研究 Agent** | Tavily Search API | 生成前学术信源检索 |
 | **历史记录** | PostgreSQL | 课程持久化存储，支持收藏 |
-| **缓存** | Redis | 学习者状态（路线图） |
+| **缓存** | Redis | 图谱查询缓存 + 学习者状态 |
 | **知识图谱** | LightRAG + networkx + react-force-graph-2d | 课程材料导入 → 交互式概念图谱 |
-| **图谱缓存** | Redis + 内存缓存 | 查询结果缓存（持久化）+ RAG 实例复用 |
-| **行为数据** | xAPI 1.0.3 + mini-LRS | 语句采集 → Redis 学习者状态 → 教授分析面板（mock 数据；真实 LMS 集成为路线图） |
-| **导出** | IMS Common Cartridge | 兼容主流 LMS 的输出格式 |
+| **行为数据** | xAPI 1.0.3 + mini-LRS | 语句采集 → Redis 学习者状态 → 教授分析面板 |
+| **导出** | IMS Common Cartridge + DOCX + PDF | 多格式兼容主流 LMS 的输出 |
 | **开发** | Docker Compose | 一键启动本地环境 |
 
 ---
@@ -221,26 +262,54 @@ plot-ark/
 ├── docker-compose.yml
 ├── .env.example
 ├── docs/
-│   ├── architecture.md
-│   ├── Syllabus Upload.gif          ← 演示：大纲导入 → 表单自动填充
+│   ├── Syllabus Upload.gif              ← 演示：大纲导入 → 表单自动填充
 │   ├── research agent&human in the loop.gif  ← 演示：研究 Agent + 人工信源审核
-│   ├── module adjuistment.gif       ← 演示：模块编辑 + 拖拽排序
-│   └── Knowledge graph .gif         ← 演示：学年导航、课程管理、全屏模式、自然语言查询
-├── frontend/                        ← React + TypeScript + Vite
+│   ├── module adjuistment.gif           ← 演示：模块编辑 + 拖拽排序
+│   └── Knowledge graph .gif             ← 演示：知识图谱功能
+│
+├── backend/                             ← Flask（模块化 Blueprints）
+│   ├── app.py                           ← 入口文件（~30 行，注册 Blueprints）
+│   ├── config.py                        ← Flask app、AI 客户端、Redis、异步循环
+│   ├── db.py                            ← PostgreSQL 操作
+│   ├── constants.py                     ← Bloom's 分类、会话约束、评估格式
+│   ├── routes/
+│   │   ├── curriculum.py                ← /api/curriculum/*（生成、验架、展开、保存）
+│   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
+│   │   ├── sources.py                   ← /api/sources/preview
+│   │   ├── graph.py                     ← /api/graph + /api/graph/query
+│   │   ├── xapi.py                      ← /xapi/statements + /xapi/analytics
+│   │   ├── syllabus.py                  ← /api/syllabus/{parse,import}
+│   │   └── materials.py                 ← /api/materials/ingest
+│   ├── services/
+│   │   ├── research.py                  ← Tavily 搜索 + 可信度评分
+│   │   ├── file_parser.py               ← PDF/PPTX/DOCX 文本提取
+│   │   └── lightrag_service.py          ← LightRAG 实例管理
 │   ├── Dockerfile
-│   ├── index.tsx                    ← 入口文件
-│   ├── App.tsx                      ← 主界面（课程引擎 + 学生视图）
+│   └── requirements.txt
+│
+├── frontend/                            ← React + TypeScript + Vite
+│   ├── App.tsx                          ← 路由注册（React Router v7）
+│   ├── pages/
+│   │   ├── GeneratePage.tsx             ← 课程生成表单
+│   │   ├── CoursePage.tsx               ← 模块编辑器 + 导出
+│   │   ├── CoursesPage.tsx              ← 课程仪表板
+│   │   └── GraphPage.tsx                ← 知识图谱查看器
 │   ├── components/
-│   │   └── GraphViewer.tsx          ← LightRAG 知识图谱查看器
-│   └── vite.config.ts
-├── backend/                         ← Flask
+│   │   ├── ui/
+│   │   │   ├── Select.tsx               ← 可复用下拉选择
+│   │   │   └── Input.tsx                ← 可复用文本输入
+│   │   ├── generate/
+│   │   │   └── SyllabusUpload.tsx        ← 拖拽上传大纲解析
+│   │   ├── GraphViewer.tsx              ← 力导向图 + 查询面板
+│   │   └── Diagrams.tsx                 ← Mermaid 图表组件
+│   ├── constants/
+│   │   └── formOptions.ts               ← LEVELS, COURSE_TYPES, SESSION_DURATIONS
 │   ├── Dockerfile
-│   ├── app.py                       ← SSE 端点、布鲁姆映射、图谱 API
-│   └── ingest.py                    ← LightRAG 导入脚本（PDF + PPTX）
+│   └── vite.config.ts
+│
 └── data/
-    ├── materials/                   ← 放置课程 PDF/PPTX（已加入 .gitignore）
-    ├── lightrag_storage/            ← 商业法图谱（已 gitignore，可重新生成）
-    └── lightrag_storage_call/       ← CALL 图谱（已 gitignore，可重新生成）
+    ├── materials/                       ← 课程 PDF/PPTX（已 gitignore）
+    └── lightrag_storage*/               ← 知识图谱数据（已 gitignore，可重新生成）
 ```
 
 ---
@@ -273,6 +342,10 @@ plot-ark/
 - [x] My Courses 仪表板 — 卡片网格展示课程历史
 - [x] 知识图谱课程管理 — 学年侧边栏、课程横幅、动态标签页、全屏模式、课程搜索
 - [x] 知识图谱导入面板 — 拖拽上传材料，右侧常驻面板
+- [x] 后端模块化重构 — Flask Blueprints（7 个路由 + 3 个 services），app.py 精简至 ~30 行
+- [x] 前端代码拆分 — 提取可复用 UI 组件（Select、Input、SyllabusUpload）
+- [x] Session Duration pill 选择器 — 快捷预设 + 自定义 hr/min 输入
+- [x] Module Count pill 选择器 — 快捷预设 + 自定义输入
 - [ ] Redis 学习者状态管理
 - [ ] Professor LTM — 从编辑历史学习偏好
 - [ ] LTI 1.3 — 推送至 Canvas / Moodle
