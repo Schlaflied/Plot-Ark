@@ -50,6 +50,22 @@ def init_db():
                         curriculum_topic TEXT
                     )
                 """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS student_feedback (
+                        id SERIAL PRIMARY KEY,
+                        course_id INTEGER NOT NULL,
+                        module_index INTEGER NOT NULL,
+                        module_title TEXT,
+                        sentiment TEXT NOT NULL,
+                        comment TEXT DEFAULT '',
+                        student_id TEXT DEFAULT 'anonymous',
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_feedback_course
+                    ON student_feedback(course_id)
+                """)
                 conn.commit()
                 cur.close()
                 conn.close()

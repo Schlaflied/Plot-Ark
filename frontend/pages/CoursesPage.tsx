@@ -166,11 +166,11 @@ interface CourseCardProps {
   onToggleFavorite: (e: React.MouseEvent, id: number) => void;
 }
 
-const CourseCard: React.FC<CourseCardProps> = ({ entry, onDelete, onToggleFavorite }) => {
+const CourseCard: React.FC<CourseCardProps & { viewMode?: 'professor' | 'student' }> = ({ entry, onDelete, onToggleFavorite, viewMode = 'professor' }) => {
   const navigate = useNavigate();
   return (
     <div
-      onClick={() => navigate(`/course/${entry.id}`)}
+      onClick={() => navigate(`/course/${entry.id}${viewMode === 'student' ? '?view=student' : ''}`)}
       className="relative bg-white border border-stone-200 rounded-xl shadow-sm group hover:shadow-md transition-all cursor-pointer"
     >
       {/* Amber top border */}
@@ -372,6 +372,9 @@ const CoursesPage: React.FC = () => {
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'professor' | 'student'>('professor');
+
+  const isStudent = viewMode === 'student';
 
   // Toolbar state
   const [language, setLanguage] = useState<Language>('EN');
@@ -424,13 +427,27 @@ const CoursesPage: React.FC = () => {
     <div className={`min-h-screen flex flex-col ${darkMode ? 'bg-stone-900' : 'bg-[#F9F8F4]'}`}>
 
       {/* ── View Banner ─────────────────────────────────────────────────── */}
-      <div className="w-full bg-amber-50 border-b border-amber-200 flex items-center justify-between px-6 py-3 text-sm">
+      <div className={`w-full border-b flex items-center justify-between px-6 py-3 text-sm ${
+        isStudent
+          ? 'bg-green-50 border-green-200'
+          : 'bg-amber-50 border-amber-200'
+      }`}>
         <div className="flex items-center gap-2.5">
-          <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
-          <span className="font-semibold text-amber-900 tracking-wide">Professor View</span>
+          <span className={`w-2 h-2 rounded-full inline-block ${isStudent ? 'bg-green-500' : 'bg-amber-500'}`} />
+          <span className={`font-semibold tracking-wide ${isStudent ? 'text-green-900' : 'text-amber-900'}`}>
+            {isStudent ? 'Student View' : 'Professor View'}
+          </span>
+          {isStudent && <span className="text-xs text-green-600 font-normal">— read only</span>}
         </div>
-        <button className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-amber-300 bg-white hover:bg-amber-100 transition-colors text-amber-800 font-medium text-xs">
-          Switch to Student View
+        <button
+          onClick={() => setViewMode(isStudent ? 'professor' : 'student')}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg border bg-white transition-colors font-medium text-xs ${
+            isStudent
+              ? 'border-green-300 hover:bg-green-100 text-green-800'
+              : 'border-amber-300 hover:bg-amber-100 text-amber-800'
+          }`}
+        >
+          {isStudent ? 'Back to Professor View' : 'Switch to Student View'}
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </button>
       </div>
@@ -502,6 +519,7 @@ const CoursesPage: React.FC = () => {
                   entry={entry}
                   onDelete={deleteHistory}
                   onToggleFavorite={toggleFavorite}
+                  viewMode={viewMode}
                 />
               ))}
             {search && historyEntries.filter(entry =>
@@ -509,25 +527,27 @@ const CoursesPage: React.FC = () => {
             ).length === 0 && (
               <p className="col-span-full text-sm text-stone-400 italic">No courses found.</p>
             )}
-            <AddCourseCard />
+            {!isStudent && <AddCourseCard />}
             <SpecialCard
               title="Knowledge Graph"
               description="Visualise concept relationships across all your courses"
               icon={<Network size={18} />}
               to="/graph"
             />
-            <SpecialCard
-              title="Student Data"
-              description="Analytics, progress tracking, and assessment insights"
-              icon={
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  <path d="M3 9h18M9 21V9"/>
-                </svg>
-              }
-              to="#"
-              isExternal
-            />
+            {!isStudent && (
+              <SpecialCard
+                title="Student Data"
+                description="Analytics, progress tracking, and assessment insights"
+                icon={
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <path d="M3 9h18M9 21V9"/>
+                  </svg>
+                }
+                to="#"
+                isExternal
+              />
+            )}
           </div>
         )}
       </main>
@@ -535,14 +555,16 @@ const CoursesPage: React.FC = () => {
       {/* ── Side Panel ──────────────────────────────────────────────────────── */}
       <aside className="w-64 shrink-0 border-l border-stone-200 bg-white flex flex-col gap-0 px-5 py-6 overflow-y-auto">
 
-        <SideSection title="Student Data Overview">
-          <MiniBarChart />
-          <p className="text-xs text-stone-400 italic mt-2">
-            Course data will appear after generation
-          </p>
-        </SideSection>
+        {!isStudent && (
+          <SideSection title="Student Data Overview">
+            <MiniBarChart />
+            <p className="text-xs text-stone-400 italic mt-2">
+              Course data will appear after generation
+            </p>
+          </SideSection>
+        )}
 
-        <div className="pt-5">
+        <div className={isStudent ? '' : 'pt-5'}>
           <SideSection title="Assignments Due">
             <div className="space-y-2">
               {['Module 3 Quiz — Apr 2', 'Essay Draft — Apr 8', 'Final Project — Apr 20'].map(item => (

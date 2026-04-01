@@ -12,6 +12,7 @@ from routes.graph import graph_bp
 from routes.xapi import xapi_bp, seed_mock_xapi
 from routes.syllabus import syllabus_bp
 from routes.materials import materials_bp
+from routes.feedback import feedback_bp
 
 app.register_blueprint(curriculum_bp)
 app.register_blueprint(history_bp)
@@ -20,6 +21,7 @@ app.register_blueprint(graph_bp)
 app.register_blueprint(xapi_bp)
 app.register_blueprint(syllabus_bp)
 app.register_blueprint(materials_bp)
+app.register_blueprint(feedback_bp)
 
 # Initialize database and seed mock data
 init_db()

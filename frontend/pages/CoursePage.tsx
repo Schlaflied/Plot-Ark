@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ChevronLeft,
   ChevronRight,
@@ -151,6 +151,8 @@ const SortableModuleItem: React.FC<SortableModuleItemProps> = ({ id, index, modu
 
 const CoursePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const isStudent = searchParams.get('view') === 'student';
   const [curriculum, setCurriculum] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -165,6 +167,7 @@ const CoursePage: React.FC = () => {
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [editedModules, setEditedModules] = useState<Record<number, Partial<Module>>>({});
   const [showEditHint, setShowEditHint] = useState(true);
+  const [moduleFeedback, setModuleFeedback] = useState<Record<string, string>>({});
   const isResizing = React.useRef(false);
   const navigate = useNavigate();
 
@@ -590,7 +593,7 @@ const CoursePage: React.FC = () => {
   };
 
   const handleDeleteModule = (idx: number) => {
-    if (!curriculum || mergedModules.length <= 1) return;
+    if (!curriculum || mergedModules.length <= 1 || isStudent) return;
     const newModules = mergedModules.filter((_, i) => i !== idx);
     setCurriculum({ ...curriculum, modules: newModules });
     setEditedModules({});
@@ -598,7 +601,7 @@ const CoursePage: React.FC = () => {
   };
 
   const handleAddModule = () => {
-    if (!curriculum) return;
+    if (!curriculum || isStudent) return;
     const newModule: Module = {
       title: 'New Module',
       complexity_level: 1,
@@ -617,6 +620,24 @@ const CoursePage: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F9F8F4]">
+
+      {/* ── Student Banner ──────────────────────────────────────────────── */}
+      {isStudent && (
+        <div className="w-full bg-green-50 border-b border-green-200 flex items-center justify-between px-6 py-2.5 text-sm shrink-0">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+            <span className="font-semibold text-green-900 tracking-wide">Student View</span>
+            <span className="text-xs text-green-600 font-normal">— read only</span>
+          </div>
+          <button
+            onClick={() => navigate(`/course/${id}`)}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-green-300 bg-white hover:bg-green-100 transition-colors text-green-800 font-medium text-xs"
+          >
+            Back to Professor View
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      )}
 
       {/* ── Top Bar ─────────────────────────────────────────────────────────── */}
       <header className="h-12 flex items-center px-4 bg-white border-b border-stone-200 shrink-0 gap-4">
@@ -654,12 +675,22 @@ const CoursePage: React.FC = () => {
 
           {/* Course title */}
           <div className="px-4 pt-5 pb-3 border-b border-stone-800">
+            {isStudent && (
+              <p className="text-[10px] font-bold uppercase tracking-widest text-green-400 mb-1.5">
+                Course Structure
+              </p>
+            )}
             <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-1">
               {curriculum.course_code || 'Course'}
             </p>
             <p className="font-serif text-sm text-stone-100 leading-snug line-clamp-3">
               {curriculum.topic}
             </p>
+            {isStudent && (
+              <p className="text-[10px] text-stone-500 mt-1">
+                {modules.length} modules
+              </p>
+            )}
           </div>
 
           {/* Search */}
@@ -692,16 +723,46 @@ const CoursePage: React.FC = () => {
 
           {/* Module list */}
           <div className="flex-1 overflow-y-auto p-2">
-            {/* Drag hint */}
-            <div className="flex items-center gap-1.5 px-2 py-1.5 mb-2 rounded-lg bg-stone-800/60 text-stone-500 text-[10px]">
-              <svg width="8" height="12" viewBox="0 0 10 14" fill="currentColor" className="shrink-0 opacity-60">
-                <circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/>
-                <circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/>
-                <circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/>
-              </svg>
-              Drag to reorder modules
-            </div>
-            {search.trim() ? (
+            {/* Drag hint — professor only */}
+            {!isStudent && (
+              <div className="flex items-center gap-1.5 px-2 py-1.5 mb-2 rounded-lg bg-stone-800/60 text-stone-500 text-[10px]">
+                <svg width="8" height="12" viewBox="0 0 10 14" fill="currentColor" className="shrink-0 opacity-60">
+                  <circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/>
+                  <circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/>
+                  <circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/>
+                </svg>
+                Drag to reorder modules
+              </div>
+            )}
+            {isStudent ? (
+              /* ── Student view: simple read-only list ── */
+              <div className="space-y-0.5">
+                {mergedModules.map((mod, idx) => {
+                  const isActive = idx === currentModuleIndex;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => { setCurrentModuleIndex(idx); setActiveTab('objectives'); }}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all flex items-center gap-2 min-w-0 ${
+                        isActive ? 'bg-stone-700 text-white' : 'text-stone-400 hover:bg-stone-800 hover:text-stone-200'
+                      }`}
+                    >
+                      <span className="font-mono text-xs opacity-40 w-4 shrink-0">{idx + 1}</span>
+                      <span className="flex-1 leading-snug text-xs break-words min-w-0" title={mod.title}>{mod.title}</span>
+                      <span className="flex gap-0.5 shrink-0">
+                        {[1, 2, 3, 4, 5].map(n => (
+                          <span key={n} className={`w-1.5 h-1.5 rounded-full ${
+                            n <= Number(mod.complexity_level)
+                              ? isActive ? 'bg-amber-400' : 'bg-stone-500'
+                              : isActive ? 'bg-white/20' : 'bg-stone-700'
+                          }`} />
+                        ))}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : search.trim() ? (
               <div className="space-y-0.5">
                 {filteredModules.length > 0 ? filteredModules.map((mod) => {
                   const origIdx = modules.indexOf(mod);
@@ -739,13 +800,15 @@ const CoursePage: React.FC = () => {
                 </SortableContext>
               </DndContext>
             )}
-            <button
-              onClick={handleAddModule}
-              className="w-full mt-2 px-3 py-2 rounded-lg text-xs text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition-colors flex items-center gap-2"
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add module
-            </button>
+            {!isStudent && (
+              <button
+                onClick={handleAddModule}
+                className="w-full mt-2 px-3 py-2 rounded-lg text-xs text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition-colors flex items-center gap-2"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add module
+              </button>
+            )}
           </div>
 
           {/* Resize handle */}
@@ -781,8 +844,8 @@ const CoursePage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Edit Hint */}
-              {showEditHint && (
+              {/* Edit Hint — professor only */}
+              {!isStudent && showEditHint && (
                 <div className="flex items-center justify-between mb-3 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
                   <div className="flex items-center gap-2">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v16a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -800,14 +863,21 @@ const CoursePage: React.FC = () => {
                   <span className="text-xs text-stone-500 uppercase tracking-widest font-bold">Complexity</span>
                   <div className="flex gap-1">
                     {[1, 2, 3, 4, 5].map(n => (
-                      <button
-                        key={n}
-                        title={`Set complexity to ${n}`}
-                        onClick={() => handleEditField('complexity_level', n)}
-                        className={`h-2 w-7 rounded-full transition-colors hover:opacity-80 cursor-pointer ${
-                          n <= Number(currentModule.complexity_level) ? 'bg-amber-500' : 'bg-stone-200 hover:bg-amber-200'
-                        }`}
-                      />
+                      isStudent ? (
+                        <div
+                          key={n}
+                          className={`h-2 w-7 rounded-full ${n <= Number(currentModule.complexity_level) ? 'bg-amber-500' : 'bg-stone-200'}`}
+                        />
+                      ) : (
+                        <button
+                          key={n}
+                          title={`Set complexity to ${n}`}
+                          onClick={() => handleEditField('complexity_level', n)}
+                          className={`h-2 w-7 rounded-full transition-colors hover:opacity-80 cursor-pointer ${
+                            n <= Number(currentModule.complexity_level) ? 'bg-amber-500' : 'bg-stone-200 hover:bg-amber-200'
+                          }`}
+                        />
+                      )
                     ))}
                   </div>
                   <span className="text-xs text-stone-500 font-mono">{currentModule.complexity_level}/5</span>
@@ -818,15 +888,21 @@ const CoursePage: React.FC = () => {
                   Module {currentModuleIndex + 1}
                 </div>
                 <div className="flex items-start gap-3 mb-6">
-                  <input
-                    className="font-serif text-[32px] text-stone-900 flex-1 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 rounded-t px-1 py-0.5 outline-none transition-all"
-                    value={currentModule.title}
-                    onChange={e => handleEditField('title', e.target.value)}
-                  />
-                  {autoSaveStatus !== 'idle' && (
-                    <span className="text-[10px] text-stone-400 mt-3 shrink-0">
-                      {autoSaveStatus === 'saving' ? 'Saving...' : '✓ Saved'}
-                    </span>
+                  {isStudent ? (
+                    <h2 className="font-serif text-[32px] text-stone-900 flex-1 px-1 py-0.5">{currentModule.title}</h2>
+                  ) : (
+                    <>
+                      <input
+                        className="font-serif text-[32px] text-stone-900 flex-1 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 rounded-t px-1 py-0.5 outline-none transition-all"
+                        value={currentModule.title}
+                        onChange={e => handleEditField('title', e.target.value)}
+                      />
+                      {autoSaveStatus !== 'idle' && (
+                        <span className="text-[10px] text-stone-400 mt-3 shrink-0">
+                          {autoSaveStatus === 'saving' ? 'Saving...' : '✓ Saved'}
+                        </span>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -847,57 +923,70 @@ const CoursePage: React.FC = () => {
                   ))}
                 </div>
 
-                {/* ── Tab: Objectives ── */}
                 {activeTab === 'objectives' && (
                   <>
                     <ul className="space-y-2 mb-4">
                       {(currentModule.learning_objectives || []).map((obj, i) => (
                         <li key={i} className="flex items-start gap-3 text-stone-700">
                           <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2.5 flex-shrink-0" />
-                          <input
-                            className="leading-relaxed flex-1 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 rounded-t px-1 outline-none transition-all text-stone-700"
-                            value={obj}
-                            onChange={e => {
-                              const newObjs = [...(currentModule.learning_objectives || [])];
-                              newObjs[i] = e.target.value;
-                              handleEditField('learning_objectives', newObjs);
-                            }}
-                          />
-                          <button
-                            onClick={() => {
-                              const newObjs = (currentModule.learning_objectives || []).filter((_, idx) => idx !== i);
-                              handleEditField('learning_objectives', newObjs);
-                            }}
-                            className="text-stone-300 hover:text-red-400 transition-colors mt-0.5 shrink-0 text-xs"
-                            title="Remove"
-                          >✕</button>
+                          {isStudent ? (
+                            <span className="leading-relaxed flex-1 text-stone-700">{obj}</span>
+                          ) : (
+                            <>
+                              <input
+                                className="leading-relaxed flex-1 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 rounded-t px-1 outline-none transition-all text-stone-700"
+                                value={obj}
+                                onChange={e => {
+                                  const newObjs = [...(currentModule.learning_objectives || [])];
+                                  newObjs[i] = e.target.value;
+                                  handleEditField('learning_objectives', newObjs);
+                                }}
+                              />
+                              <button
+                                onClick={() => {
+                                  const newObjs = (currentModule.learning_objectives || []).filter((_, idx) => idx !== i);
+                                  handleEditField('learning_objectives', newObjs);
+                                }}
+                                className="text-stone-300 hover:text-red-400 transition-colors mt-0.5 shrink-0 text-xs"
+                                title="Remove"
+                              >✕</button>
+                            </>
+                          )}
                         </li>
                       ))}
                       {(currentModule.learning_objectives || []).length === 0 && (
                         <p className="text-stone-400 italic text-sm">No learning objectives listed.</p>
                       )}
                     </ul>
-                    <button
-                      onClick={() => {
-                        const newObjs = [...(currentModule.learning_objectives || []), ''];
-                        handleEditField('learning_objectives', newObjs);
-                      }}
-                      className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 mb-8"
-                    >
-                      + Add objective
-                    </button>
+                    {!isStudent && (
+                      <button
+                        onClick={() => {
+                          const newObjs = [...(currentModule.learning_objectives || []), ''];
+                          handleEditField('learning_objectives', newObjs);
+                        }}
+                        className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 mb-8"
+                      >
+                        + Add objective
+                      </button>
+                    )}
 
                     {currentModule.narrative_preview && (
                       <div>
                         <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-3">
                           Narrative Preview
                         </h4>
-                        <textarea
-                          className="w-full text-stone-600 leading-relaxed italic border-l-2 border-stone-300 pl-4 bg-transparent focus:bg-amber-50/50 focus:border-amber-300 outline-none resize-none transition-all"
-                          rows={4}
-                          value={currentModule.narrative_preview || ''}
-                          onChange={e => handleEditField('narrative_preview', e.target.value)}
-                        />
+                        {isStudent ? (
+                          <blockquote className="text-stone-600 leading-relaxed italic border-l-2 border-stone-300 pl-4">
+                            "{currentModule.narrative_preview}"
+                          </blockquote>
+                        ) : (
+                          <textarea
+                            className="w-full text-stone-600 leading-relaxed italic border-l-2 border-stone-300 pl-4 bg-transparent focus:bg-amber-50/50 focus:border-amber-300 outline-none resize-none transition-all"
+                            rows={4}
+                            value={currentModule.narrative_preview || ''}
+                            onChange={e => handleEditField('narrative_preview', e.target.value)}
+                          />
+                        )}
                       </div>
                     )}
                   </>
@@ -906,6 +995,52 @@ const CoursePage: React.FC = () => {
                 {/* ── Tab: Resources ── */}
                 {activeTab === 'resources' && (() => {
                   const readings = currentModule.recommended_readings || [];
+
+                  if (isStudent) {
+                    return (
+                      <div className="space-y-4">
+                        {readings.length === 0 && (
+                          <p className="text-stone-400 italic text-sm">No readings recommended for this module.</p>
+                        )}
+                        {readings.map((r, ri) => (
+                          <div key={ri} className="bg-stone-50 rounded-xl p-5 border border-stone-200">
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className="text-xs text-stone-500 bg-white border border-stone-200 rounded px-1.5 py-0.5">
+                                {r.type === 'video' ? '🎬 Video' : r.type === 'news' ? '📰 News' : '📄 Academic'}
+                              </span>
+                              {r.estimated_time && <span className="text-xs text-stone-400">{r.estimated_time}</span>}
+                              <span className={`text-xs ml-auto ${r.reading_type === 'required' ? 'text-amber-600 font-semibold' : 'text-stone-400'}`}>
+                                {r.reading_type === 'required' ? 'Required' : 'Optional'}
+                              </span>
+                            </div>
+                            <p className="font-bold text-stone-900 mb-1 leading-snug">{r.title}</p>
+                            {r.url && (
+                              <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-xs text-amber-600 hover:underline block mb-3">{r.url}</a>
+                            )}
+                            {(r.key_points || []).length > 0 && (
+                              <div className="mb-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">Key Points</p>
+                                <ul className="space-y-1">
+                                  {r.key_points.map((kp, j) => (
+                                    <li key={j} className="flex items-start gap-2">
+                                      <span className="text-amber-500 font-bold mt-1.5 text-xs">·</span>
+                                      <span className="text-sm text-stone-600">{kp}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {r.rationale && (
+                              <div className="border-t border-stone-100 pt-3">
+                                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide">Why: </span>
+                                <span className="text-xs text-stone-500">{r.rationale}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
 
                   const updateReading = (ri: number, updated: Partial<Reading>) => {
                     const newReadings = readings.map((r, idx) => idx === ri ? { ...r, ...updated } : r);
@@ -1028,6 +1163,55 @@ const CoursePage: React.FC = () => {
                 {activeTab === 'assessment' && (() => {
                   const assignments = currentModule.assignments || [];
 
+                  if (isStudent) {
+                    return (
+                      <div className="space-y-4">
+                        {assignments.length === 0 && (
+                          <p className="text-stone-400 italic text-sm">No assignment for this module.</p>
+                        )}
+                        {assignments.map((a, ai) => (
+                          <div key={ai} className="bg-stone-50 rounded-xl p-5 border border-stone-200">
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className="px-2 py-0.5 bg-stone-200 text-stone-600 text-xs font-bold rounded uppercase tracking-wide">{a.type}</span>
+                              <span className="font-bold text-stone-900">{a.title}</span>
+                            </div>
+                            {(a.task_description || a.coverage) && (
+                              <div className="mb-3">
+                                <span className="text-[10px] font-bold tracking-widest text-stone-400 uppercase block mb-1">Description</span>
+                                <p className="text-sm text-stone-700 leading-relaxed">{a.task_description || a.coverage}</p>
+                              </div>
+                            )}
+                            {a.deliverable && (
+                              <div className="mb-2">
+                                <span className="text-[10px] font-bold tracking-widest text-stone-400 uppercase block mb-1">Deliverable</span>
+                                <p className="text-sm text-stone-600">{a.deliverable}</p>
+                              </div>
+                            )}
+                            {a.estimated_time && (
+                              <div className="mb-3 flex items-center gap-1.5">
+                                <span className="text-stone-400 text-sm">⏱</span>
+                                <span className="text-sm text-stone-600">{a.estimated_time}</span>
+                              </div>
+                            )}
+                            {(a.rubric_highlights || []).length > 0 && (
+                              <div className="mt-3">
+                                <span className="text-[10px] font-bold tracking-widest text-stone-400 uppercase block mb-1.5">Rubric</span>
+                                <ul className="space-y-1">
+                                  {a.rubric_highlights!.map((point, pi) => (
+                                    <li key={pi} className="flex items-start gap-2">
+                                      <span className="text-stone-300 mt-1.5 text-xs">•</span>
+                                      <span className="text-sm text-stone-600">{point}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+
                   const updateAssignment = (ai: number, updated: Partial<Assignment>) => {
                     const newAssignments = assignments.map((a, idx) => idx === ai ? { ...a, ...updated } : a);
                     handleEditField('assignments', newAssignments);
@@ -1144,76 +1328,163 @@ const CoursePage: React.FC = () => {
                 })()}
               </div>
 
-              {/* ── Export Bar ── */}
-              <div className="mt-8">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3">Export your curriculum</p>
-                <div className="flex items-center gap-3">
-                {/* IMSCC */}
-                <button
-                  onClick={() => alert('IMSCC export requires backend — coming soon')}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-white text-sm font-semibold transition-colors"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  IMSCC
-                </button>
+              {/* ── Student: Sentiment Feedback / Professor: Export Bar ── */}
+              {isStudent ? (
+                <div className="mt-8 bg-white border border-stone-200 rounded-2xl p-6 shadow-sm">
+                  <p className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-4">How are you feeling about this module?</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { key: 'got-it', emoji: '🟢', label: 'Got it — I could explain this',
+                        base: 'bg-white border-stone-200 text-stone-700 hover:bg-green-50',
+                        active: 'bg-green-50 border-green-500 text-green-800 ring-1 ring-green-400 shadow-sm' },
+                      { key: 'mostly', emoji: '🟡', label: 'Mostly got it, but unclear on parts',
+                        base: 'bg-white border-stone-200 text-stone-700 hover:bg-amber-50',
+                        active: 'bg-amber-50 border-amber-500 text-amber-800 ring-1 ring-amber-400 shadow-sm' },
+                      { key: 'off', emoji: '🔴', label: "Something's off, not sure what",
+                        base: 'bg-white border-stone-200 text-stone-700 hover:bg-red-50',
+                        active: 'bg-red-50 border-red-500 text-red-800 ring-1 ring-red-400 shadow-sm' },
+                      { key: 'not-read', emoji: '⚫', label: "Didn't really read it",
+                        base: 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50',
+                        active: 'bg-stone-100 border-stone-500 text-stone-700 ring-1 ring-stone-400 shadow-sm' },
+                    ].map(opt => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setModuleFeedback(prev => ({ ...prev, [currentModuleIndex]: opt.key }))}
+                        className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all cursor-pointer ${
+                          moduleFeedback[currentModuleIndex] === opt.key ? opt.active : opt.base
+                        }`}
+                      >
+                        <span className="text-base shrink-0">{opt.emoji}</span>
+                        <span className="text-left leading-snug">{opt.label}</span>
+                      </button>
+                    ))}
+                  </div>
 
-                {/* Copy .md */}
-                <button
-                  onClick={copyMarkdown}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 text-sm font-semibold transition-colors"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                  {copyMdDone ? 'Copied!' : 'Copy'}
-                </button>
+                  {/* Optional comment textarea */}
+                  <textarea
+                    className="w-full mt-4 px-4 py-3 border border-stone-200 rounded-xl text-sm text-stone-700 placeholder:text-stone-400 bg-stone-50/50 focus:bg-white focus:border-amber-300 outline-none resize-none transition-all"
+                    rows={2}
+                    placeholder="Anything on your mind? (optional)"
+                    value={(moduleFeedback[`${currentModuleIndex}-comment`] as string) || ''}
+                    onChange={e => setModuleFeedback(prev => ({ ...prev, [`${currentModuleIndex}-comment`]: e.target.value }))}
+                  />
 
-                {/* Export dropdown */}
-                <div className="relative" data-export-dropdown>
+                  {/* Submit & Skip */}
+                  <div className="flex items-center gap-3 mt-3">
+                    <button
+                      onClick={async () => {
+                        const sentiment = moduleFeedback[currentModuleIndex];
+                        if (!sentiment) return;
+                        const comment = moduleFeedback[`${currentModuleIndex}-comment`] || '';
+                        try {
+                          await fetch('/api/feedback', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              course_id: Number(id),
+                              module_index: currentModuleIndex,
+                              module_title: currentModule.title,
+                              sentiment,
+                              comment,
+                              student_id: 'anonymous',
+                            }),
+                          });
+                          setModuleFeedback(prev => ({ ...prev, [`${currentModuleIndex}-submitted`]: 'true' }));
+                        } catch (err) {
+                          console.error('Feedback submit error:', err);
+                        }
+                      }}
+                      disabled={!moduleFeedback[currentModuleIndex] || moduleFeedback[`${currentModuleIndex}-submitted`] === 'true'}
+                      className={`px-5 py-2 rounded-lg text-sm font-bold uppercase tracking-wide transition-all ${
+                        moduleFeedback[`${currentModuleIndex}-submitted`] === 'true'
+                          ? 'bg-green-600 text-white cursor-default'
+                          : moduleFeedback[currentModuleIndex]
+                            ? 'bg-stone-900 text-white hover:bg-stone-700 cursor-pointer'
+                            : 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {moduleFeedback[`${currentModuleIndex}-submitted`] === 'true' ? '✓ Submitted' : 'Submit'}
+                    </button>
+                    <button
+                      onClick={() => navigateModule(1)}
+                      disabled={currentModuleIndex === modules.length - 1}
+                      className="text-sm text-stone-400 hover:text-stone-600 transition-colors disabled:opacity-30"
+                    >
+                      Skip
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-8">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3">Export your curriculum</p>
+                  <div className="flex items-center gap-3">
+                  {/* IMSCC */}
                   <button
-                    onClick={() => setExportOpen(v => !v)}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 text-sm font-semibold transition-colors"
+                    onClick={() => alert('IMSCC export requires backend — coming soon')}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-white text-sm font-semibold transition-colors"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Export
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    IMSCC
                   </button>
-                  {exportOpen && (
-                    <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden z-10">
-                      <button
-                        onClick={() => { exportPDF(); setExportOpen(false); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                        Export PDF
-                      </button>
-                      <button
-                        onClick={() => {
-                          const html = generateCurriculumHTML(true);
-                          const blob = new Blob([html], { type: 'application/msword' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `${(curriculum?.topic || 'course').replace(/\s+/g, '_').slice(0, 40)}.doc`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                          setExportOpen(false);
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        Export DOCX
-                      </button>
-                      <button
-                        onClick={() => { downloadMarkdown(); setExportOpen(false); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        Export Markdown
-                      </button>
-                    </div>
-                  )}
+
+                  {/* Copy .md */}
+                  <button
+                    onClick={copyMarkdown}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 text-sm font-semibold transition-colors"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    {copyMdDone ? 'Copied!' : 'Copy'}
+                  </button>
+
+                  {/* Export dropdown */}
+                  <div className="relative" data-export-dropdown>
+                    <button
+                      onClick={() => setExportOpen(v => !v)}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 text-sm font-semibold transition-colors"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Export
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    {exportOpen && (
+                      <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden z-10">
+                        <button
+                          onClick={() => { exportPDF(); setExportOpen(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                          Export PDF
+                        </button>
+                        <button
+                          onClick={() => {
+                            const html = generateCurriculumHTML(true);
+                            const blob = new Blob([html], { type: 'application/msword' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${(curriculum?.topic || 'course').replace(/\s+/g, '_').slice(0, 40)}.doc`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                            setExportOpen(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                          Export DOCX
+                        </button>
+                        <button
+                          onClick={() => { downloadMarkdown(); setExportOpen(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                          Export Markdown
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              </div>
+                </div>
+              )}
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-stone-200 rounded-2xl text-stone-400">
