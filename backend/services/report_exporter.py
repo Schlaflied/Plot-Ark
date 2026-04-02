@@ -22,6 +22,7 @@ COLORS = {
     "stone_700": "#44403c",
     "stone_500": "#78716c",
     "stone_300": "#d6d3d1",
+    "stone_200": "#e7e5e4",
     "red_500": "#ef4444",
     "red_400": "#f87171",
     "green_500": "#22c55e",
@@ -36,15 +37,15 @@ BAR_COLORS = [COLORS["amber_500"], COLORS["stone_500"], COLORS["red_400"],
 
 
 def _setup_chart_style():
-    """Apply Plot-Ark dark theme to matplotlib."""
+    """Apply Plot-Ark McKinsey/Google style to matplotlib."""
     plt.rcParams.update({
-        "figure.facecolor": COLORS["bg_dark"],
-        "axes.facecolor": "#292524",
-        "axes.edgecolor": COLORS["stone_500"],
-        "axes.labelcolor": COLORS["stone_300"],
-        "text.color": COLORS["stone_300"],
-        "xtick.color": COLORS["stone_300"],
-        "ytick.color": COLORS["stone_300"],
+        "figure.facecolor": "#FFFFFF",
+        "axes.facecolor": "#FFFFFF",
+        "axes.edgecolor": "#D1D5DB",
+        "axes.labelcolor": "#555555",
+        "text.color": "#333333",
+        "xtick.color": "#555555",
+        "ytick.color": "#555555",
         "font.family": "sans-serif",
         "font.size": 10,
     })
@@ -74,17 +75,17 @@ class ReportExporter:
         # 1. Module Completion Bar Chart
         modules = ba.get("module_engagement", [])
         if modules:
-            fig, ax = plt.subplots(figsize=(10, 5))
+            fig, ax = plt.subplots(figsize=(8, 3.5))
             names = [m.get("module_name", "?")[:25] for m in modules]
             rates = [m.get("completion_rate", 0) * 100 for m in modules]
             struggles = [m.get("struggles", 0) for m in modules]
 
             x = range(len(names))
-            ax.bar(x, rates, color=COLORS["amber_500"], alpha=0.85, label="Completion %")
+            ax.bar(x, rates, color=COLORS["amber_500"], alpha=0.9, label="Completion %")
             ax.set_xticks(x)
-            ax.set_xticklabels(names, rotation=45, ha="right", fontsize=8)
+            ax.set_xticklabels(names, rotation=45, ha="right", fontsize=9)
             ax.set_ylabel("Completion Rate (%)")
-            ax.set_title("Module Completion Rates")
+            ax.set_title("Module Completion Rates", fontweight="bold")
             ax.legend()
             plt.tight_layout()
             charts["module_completion_bar"] = _fig_to_bytes(fig)
@@ -92,17 +93,17 @@ class ReportExporter:
         # 2. Engagement Trend Line
         daily = ba.get("engagement_metrics", {}).get("daily_activity", [])
         if daily:
-            fig, ax = plt.subplots(figsize=(10, 4))
+            fig, ax = plt.subplots(figsize=(8, 3.5))
             dates = [d["date"] for d in daily]
             users = [d.get("active_users", 0) for d in daily]
             actions = [d.get("actions", 0) for d in daily]
 
-            ax.plot(dates, users, color=COLORS["amber_500"], marker="o", linewidth=2, label="Active Students")
+            ax.plot(dates, users, color=COLORS["amber_500"], marker="o", linewidth=2.5, label="Active Students")
             ax2 = ax.twinx()
-            ax2.plot(dates, actions, color=COLORS["stone_500"], marker="s", linewidth=1, linestyle="--", label="Total Actions")
+            ax2.plot(dates, actions, color=COLORS["stone_500"], marker="s", linewidth=1.5, linestyle="--", label="Total Actions")
             ax2.set_ylabel("Actions", color=COLORS["stone_500"])
             ax.set_ylabel("Active Students", color=COLORS["amber_500"])
-            ax.set_title("Daily Engagement Trend")
+            ax.set_title("Daily Engagement Trend", fontweight="bold")
             ax.tick_params(axis="x", rotation=45)
             lines1, labels1 = ax.get_legend_handles_labels()
             lines2, labels2 = ax2.get_legend_handles_labels()
@@ -135,20 +136,20 @@ class ReportExporter:
         # 4. Verb Distribution Bar
         verbs = ba.get("verb_distribution", {})
         if verbs:
-            fig, ax = plt.subplots(figsize=(8, 4))
+            fig, ax = plt.subplots(figsize=(8, 3.5))
             v_names = list(verbs.keys())
             v_counts = list(verbs.values())
-            colors_list = [BAR_COLORS[i % len(BAR_COLORS)] for i in range(len(v_names))]
+            colors_list = [COLORS["amber_500"] if i == 0 else COLORS["stone_500"] for i in range(len(v_names))]
             ax.barh(v_names, v_counts, color=colors_list)
             ax.set_xlabel("Count")
-            ax.set_title("Learning Activity Distribution")
+            ax.set_title("Learning Activity Distribution", fontweight="bold")
             plt.tight_layout()
             charts["verb_distribution_bar"] = _fig_to_bytes(fig)
 
         # 5. Cohort Comparison Grouped Bar
         groups = cc.get("groups", {})
         if groups:
-            fig, ax = plt.subplots(figsize=(10, 5))
+            fig, ax = plt.subplots(figsize=(8, 3.5))
             g_names = [n.replace("_", " ").title() for n in groups.keys()]
             comp_rates = [groups[k].get("avg_completion", 0) * 100 for k in groups]
             struggle_rates = [groups[k].get("avg_struggle", 0) * 100 for k in groups]
@@ -156,18 +157,14 @@ class ReportExporter:
 
             x = range(len(g_names))
             width = 0.35
-            ax.bar([i - width/2 for i in x], comp_rates, width, color=COLORS["green_400"], label="Avg Completion %")
-            ax.bar([i + width/2 for i in x], struggle_rates, width, color=COLORS["red_400"], label="Avg Struggle %")
 
-            # Add count labels on top
-            for i, cnt in enumerate(counts):
-                ax.text(i, max(comp_rates[i], struggle_rates[i]) + 2, f"n={cnt}",
-                        ha="center", fontsize=9, color=COLORS["stone_300"])
+            ax.bar([i - width/2 for i in x], comp_rates, width, color=COLORS["amber_500"], label="Avg Completion %")
+            ax.bar([i + width/2 for i in x], struggle_rates, width, color=COLORS["stone_500"], label="Avg Struggle %")
 
             ax.set_xticks(x)
-            ax.set_xticklabels(g_names)
+            ax.set_xticklabels([f"{n}\n(n={c})" for n, c in zip(g_names, counts)])
             ax.set_ylabel("Rate (%)")
-            ax.set_title("Cohort Performance Comparison")
+            ax.set_title("Cohort Performance Comparison", fontweight="bold")
             ax.legend()
             plt.tight_layout()
             charts["cohort_comparison_bar"] = _fig_to_bytes(fig)
@@ -185,14 +182,15 @@ class ReportExporter:
             from reportlab.lib.units import inch
             from reportlab.platypus import (
                 SimpleDocTemplate, Paragraph, Spacer, Image,
-                Table, TableStyle, PageBreak,
+                Table, TableStyle, PageBreak, HRFlowable, KeepTogether
             )
         except ImportError:
             return self._fallback_text_report(report, "pdf")
 
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=letter,
-                                topMargin=0.75*inch, bottomMargin=0.75*inch)
+                                topMargin=0.5*inch, bottomMargin=0.5*inch,
+                                leftMargin=0.5*inch, rightMargin=0.5*inch)
         styles = getSampleStyleSheet()
 
         # Custom styles
@@ -206,10 +204,27 @@ class ReportExporter:
                                     textColor=colors.HexColor(COLORS["stone_500"]),
                                     fontSize=9, spaceAfter=12)
         h2_style = ParagraphStyle("PlotArkH2", parent=styles["Heading2"],
-                                  textColor=colors.HexColor(COLORS["amber_600"]),
-                                  fontSize=16, spaceAfter=8, spaceBefore=16)
+                                  textColor=colors.HexColor(COLORS["amber_500"]),
+                                  fontSize=16, spaceAfter=2, spaceBefore=12)
         body_style = ParagraphStyle("PlotArkBody", parent=styles["Normal"],
                                     fontSize=10, spaceAfter=6)
+        
+        stat_card_num = ParagraphStyle("StatNum", textColor=colors.HexColor(COLORS["amber_500"]), fontSize=36, fontName="Helvetica-Bold", leading=40, alignment=1, spaceAfter=4)
+        stat_card_lbl = ParagraphStyle("StatLbl", textColor=colors.HexColor(COLORS["stone_500"]), fontSize=9, fontName="Helvetica-Bold", alignment=1)
+        insight_style = ParagraphStyle("PlotArkInsight", parent=styles["Normal"], textColor=colors.HexColor(COLORS["stone_500"]), fontSize=9, fontName="Helvetica-Oblique", spaceBefore=4, spaceAfter=8, leftIndent=10, rightIndent=10)
+        callout_style = ParagraphStyle("PlotArkCallout", textColor=colors.HexColor(COLORS["amber_500"]), fontSize=48, fontName="Helvetica-Bold", leading=56, spaceAfter=8, spaceBefore=4)
+        callout_label = ParagraphStyle("PlotArkCalloutLbl", textColor=colors.HexColor(COLORS["stone_500"]), fontSize=12, fontName="Helvetica-Bold", spaceAfter=16)
+
+        def draw_header_footer(canvas, doc_obj):
+            canvas.saveState()
+            canvas.setFont("Helvetica-Bold", 10)
+            canvas.setFillColor(colors.HexColor(COLORS["amber_500"]))
+            canvas.drawString(0.5*inch, letter[1] - 0.4*inch, "Plot Ark Analytics")
+            canvas.setFont("Helvetica", 9)
+            canvas.setFillColor(colors.HexColor(COLORS["stone_500"]))
+            canvas.drawRightString(letter[0] - 0.5*inch, letter[1] - 0.4*inch, report.get("course_meta", {}).get("topic", "Untitled Course"))
+            canvas.drawCentredString(letter[0]/2, 0.3*inch, f"Page {doc_obj.page} | Generated: {report.get('generated_at', datetime.now().isoformat())[:10]}")
+            canvas.restoreState()
 
         elements = []
         charts = self.generate_charts(report)
@@ -231,57 +246,189 @@ class ReportExporter:
         elements.append(Paragraph(" · ".join(meta_parts), meta_style))
         elements.append(Spacer(1, 0.3*inch))
 
-        # Executive Summary
-        summary = report.get("executive_summary", [])
-        if summary:
-            elements.append(Paragraph("Executive Summary", h2_style))
-            for point in summary:
-                elements.append(Paragraph(f"• {point}", body_style))
-            elements.append(Spacer(1, 0.2*inch))
+        # Executive Summary Stat Cards
+        ba = report.get("behavior_analysis", {})
+        ra = report.get("risk_assessment", {})
+        
+        # Calculate real stats
+        total_students = sum(ra.get("risk_distribution", {}).values())
+        if total_students == 0:
+            total_students = max([m.get("unique_students", 0) for m in ba.get("module_engagement", [])] + [0])
+            
+        mods = ba.get("module_engagement", [])
+        avg_comp = sum(m.get("completion_rate", 0) for m in mods) / len(mods) if mods else 0
+        total_at_risk = len(ra.get("at_risk_students", []))
+        
+        stat_data = [
+            [
+                [Paragraph(str(total_students), stat_card_num), Paragraph("TOTAL STUDENTS", stat_card_lbl)],
+                [Paragraph(f"{avg_comp * 100:.0f}%", stat_card_num), Paragraph("AVG COMPLETION", stat_card_lbl)],
+                [Paragraph(str(total_at_risk), stat_card_num), Paragraph("AT-RISK STUDENTS", stat_card_lbl)],
+            ]
+        ]
+        t = Table(stat_data, colWidths=[2.5*inch]*3)
+        t.setStyle(TableStyle([
+            ("ALIGN", (0,0), (-1,-1), "CENTER"),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 0.2*inch))
+
+        # ── Table of Contents (Index) ──────────────────────────────────────
+        toc_heading = ParagraphStyle("PlotArkToC", parent=styles["Heading2"],
+                                     textColor=colors.HexColor(COLORS["stone_700"]),
+                                     fontSize=14, spaceAfter=8, spaceBefore=8)
+        link_style = ParagraphStyle("PlotArkLink", parent=styles["Normal"],
+                                    textColor=colors.HexColor(COLORS["blue_500"]),
+                                    fontSize=11, spaceAfter=4)
+        
+        elements.append(Paragraph("Table of Contents", toc_heading))
+        toc_items = [
+            ("sec_behavior", "1. Behavior Analysis"),
+            ("sec_risk", "2. Risk Assessment"),
+            ("sec_content", "3. Content Optimization"),
+            ("sec_cohort", "4. Cohort Comparison"),
+            ("sec_overview", "5. Overview & Recommended Actions")
+        ]
+        for anchor, label in toc_items:
+            elements.append(Paragraph(f'<font color="{COLORS["blue_500"]}"><a href="#{anchor}">{label}</a></font>', link_style))
+        elements.append(PageBreak())
 
         # Section 1: Behavior Analysis
-        elements.append(Paragraph("1. Behavior Analysis", h2_style))
+        elements.append(Paragraph('<a name="sec_behavior"/>1. Behavior Analysis', h2_style))
+        elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=12))
+        
+        ba = report.get("behavior_analysis", {})
+        
+        # Inject Numerical Summaries
+        verbs = ba.get("verb_distribution", {})
+        if verbs:
+            # Create a 4-column summary grid
+            v_items = list(verbs.items())
+            table_data = []
+            row = []
+            for i, (v, count) in enumerate(v_items):
+                row.append(f"{count}\n{v.title()}")
+                if len(row) == 4 or i == len(v_items) - 1:
+                    while len(row) < 4:
+                        row.append("")
+                    table_data.append(row)
+                    row = []
+            
+            t = Table(table_data, colWidths=[1.5*inch]*4)
+            t.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fafaf9")),  # stone-50
+                ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor(COLORS["stone_700"])),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor(COLORS["stone_300"])),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor(COLORS["stone_200"])),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 0.2*inch))
+
+        # Peak Activity text
+        peak = ba.get("engagement_metrics", {}).get("peak_activity_hours", [])
+        if peak:
+            peak_str = ", ".join([f"{h}:00" for h in peak])
+            elements.append(Paragraph(f"<b>Peak Activity Hours:</b> {peak_str}", body_style))
+            elements.append(Spacer(1, 0.2*inch))
+
         if "engagement_trend_line" in charts:
             elements.append(Image(io.BytesIO(charts["engagement_trend_line"]),
-                                  width=6*inch, height=2.5*inch))
+                                  width=6.5*inch, height=2.8*inch))
+            elements.append(Paragraph('The daily engagement trend indicates overall student activity volume versus active unique students. High peaks generally align with deadlines or new module releases.', insight_style))
+
         if "verb_distribution_bar" in charts:
             elements.append(Spacer(1, 0.2*inch))
             elements.append(Image(io.BytesIO(charts["verb_distribution_bar"]),
-                                  width=5.5*inch, height=2.5*inch))
+                                  width=6.5*inch, height=2.8*inch))
+            elements.append(Paragraph('Action distribution reveals the dominant types of learning interactions. A high volume of passive text verbs (e.g., "viewed", "read") compared to active ones (e.g., "completed", "passed") may suggest a need for more interactive assessments.', insight_style))
 
         # Section 2: Risk Assessment
         elements.append(PageBreak())
-        elements.append(Paragraph("2. Risk Assessment", h2_style))
-        if "risk_distribution_pie" in charts:
-            elements.append(Image(io.BytesIO(charts["risk_distribution_pie"]),
-                                  width=4*inch, height=4*inch))
-
+        elements.append(Paragraph('<a name="sec_risk"/>2. Risk Assessment', h2_style))
+        elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=8))
+        
+        # Big Number Callout + Risk Pie + At-Risk Table — all kept together on
+        # the same page to avoid a large blank gap below the pie chart.
         ra = report.get("risk_assessment", {})
+        high_risk_count = ra.get("risk_distribution", {}).get("high", 0)
         at_risk = ra.get("at_risk_students", [])
+
+        risk_section_elements = []
+        risk_section_elements.append(Paragraph(str(high_risk_count), callout_style))
+        risk_section_elements.append(Paragraph("HIGH RISK STUDENTS NEEDING ATTENTION", callout_label))
+
+        if "risk_distribution_pie" in charts:
+            risk_section_elements.append(Image(io.BytesIO(charts["risk_distribution_pie"]),
+                                               width=3.5*inch, height=3.0*inch))
+            risk_section_elements.append(Paragraph(
+                'The risk pie chart groups students into Low, Medium, and High risk categories '
+                'based on learning progress and struggle rates.', insight_style))
+
         if at_risk:
-            elements.append(Paragraph(f"At-Risk Students ({len(at_risk)})", h2_style))
+            risk_section_elements.append(Paragraph(f"At-Risk Students ({len(at_risk)})", h2_style))
             table_data = [["Name", "Risk", "Score", "Key Signal"]]
             for s in at_risk[:15]:
                 sig = s.get("signals", [""])[0] if s.get("signals") else ""
-                table_data.append([s["name"], s["risk_level"].upper(), str(s["risk_score"]), sig[:50]])
+                table_data.append([
+                    Paragraph(s["name"], body_style),
+                    s["risk_level"].upper(),
+                    str(s["risk_score"]),
+                    Paragraph(sig, body_style)
+                ])
 
-            t = Table(table_data, colWidths=[1.5*inch, 0.8*inch, 0.6*inch, 3.5*inch])
+            t = Table(table_data, colWidths=[1.5*inch, 0.8*inch, 0.6*inch, 3.5*inch], repeatRows=1)
             t.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(COLORS["stone_700"])),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#444444")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor(COLORS["stone_700"])),
                 ("FONTSIZE", (0, 0), (-1, -1), 8),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor(COLORS["stone_300"])),
                 ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5f5f4")]),
             ]))
-            elements.append(t)
+            risk_section_elements.append(t)
+
+        elements.append(KeepTogether(risk_section_elements))
 
         # Section 3: Content Optimization
         elements.append(PageBreak())
-        elements.append(Paragraph("3. Content Optimization", h2_style))
+        elements.append(Paragraph('<a name="sec_content"/>3. Content Optimization', h2_style))
+        elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=8))
+        
+        # Inject Module Engagement Data Table
+        modules = report.get("behavior_analysis", {}).get("module_engagement", [])
+        if modules:
+            elements.append(Paragraph("Module Engagement Summary", ParagraphStyle("PlotArkH3", parent=h2_style, fontSize=12, spaceBefore=0)))
+            table_data = [["Module", "Students", "Completion", "Struggle"]]
+            for m in modules:
+                name_str = m.get("module_name", "")
+                table_data.append([
+                    Paragraph(name_str, body_style),
+                    str(m.get("unique_students", 0)),
+                    f"{m.get('completion_rate', 0)*100:.0f}%",
+                    f"{m.get('struggle_rate', 0)*100:.0f}%"
+                ])
+            t = Table(table_data, colWidths=[3.2*inch, 0.8*inch, 1.0*inch, 1.0*inch])
+            t.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#444444")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor(COLORS["stone_700"])),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor(COLORS["stone_300"])),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5f5f4")]),
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 0.2*inch))
+
         if "module_completion_bar" in charts:
             elements.append(Image(io.BytesIO(charts["module_completion_bar"]),
-                                  width=6*inch, height=3*inch))
+                                  width=6.5*inch, height=2.8*inch))
+            elements.append(Paragraph('Completion rates across all modules. Significant dips commonly correlate with increased difficulty or unoptimized content delivery requiring attention.', insight_style))
 
         co = report.get("content_optimization", {})
         under = co.get("underperforming_content", [])
@@ -296,10 +443,13 @@ class ReportExporter:
 
         # Section 4: Cohort Comparison
         elements.append(PageBreak())
-        elements.append(Paragraph("4. Cohort Comparison", h2_style))
+        elements.append(Paragraph('<a name="sec_cohort"/>4. Cohort Comparison', h2_style))
+        elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=8))
+        
         if "cohort_comparison_bar" in charts:
             elements.append(Image(io.BytesIO(charts["cohort_comparison_bar"]),
-                                  width=6*inch, height=3*inch))
+                                  width=6.5*inch, height=2.8*inch))
+            elements.append(Paragraph('This bar chart segments learners by cohort risk level (High vs Avg vs Low), highlighting how initial disengagement compounds into widening struggle percentage gaps.', insight_style))
 
         cc = report.get("cohort_comparison", {})
         for insight in cc.get("insights", []):
@@ -307,14 +457,15 @@ class ReportExporter:
 
         # Section 5: Overview & Recommended Actions
         elements.append(PageBreak())
-        elements.append(Paragraph("5. Overview & Recommended Actions", h2_style))
+        elements.append(Paragraph('<a name="sec_overview"/>5. Overview & Recommended Actions', h2_style))
+        elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=8))
         elements.append(Spacer(1, 0.1*inch))
 
         overview_lines = self._generate_overview(report)
         for line in overview_lines:
             elements.append(Paragraph(line, body_style))
 
-        doc.build(elements)
+        doc.build(elements, onFirstPage=draw_header_footer, onLaterPages=draw_header_footer)
         return buf.getvalue()
 
     # ── DOCX Export ────────────────────────────────────────────────────────────
@@ -356,8 +507,51 @@ class ReportExporter:
         for point in report.get("executive_summary", []):
             doc.add_paragraph(f"• {point}")
 
+        # Table of Contents
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        doc.add_heading("Table of Contents", level=1)
+        p = doc.add_paragraph()
+        run = p.add_run()
+        fldChar1 = OxmlElement('w:fldChar')
+        fldChar1.set(qn('w:fldCharType'), 'begin')
+        instrText = OxmlElement('w:instrText')
+        instrText.set(qn('xml:space'), 'preserve')
+        instrText.text = 'TOC \\o "1-3" \\h \\z \\u'
+        fldChar2 = OxmlElement('w:fldChar')
+        fldChar2.set(qn('w:fldCharType'), 'separate')
+        fldChar3 = OxmlElement('w:fldChar')
+        fldChar3.set(qn('w:fldCharType'), 'end')
+        run._r.append(fldChar1)
+        run._r.append(instrText)
+        run._r.append(fldChar2)
+        run._r.append(fldChar3)
+        doc.add_page_break()
+
         # Section 1: Behavior Analysis
         doc.add_heading("1. Behavior Analysis", level=1)
+        
+        ba = report.get("behavior_analysis", {})
+        verbs = ba.get("verb_distribution", {})
+        if verbs:
+            v_items = list(verbs.items())
+            num_rows = (len(v_items) + 3) // 4
+            table = doc.add_table(rows=num_rows, cols=4)
+            table.style = 'Table Grid'
+            for idx, (v, count) in enumerate(v_items):
+                r = idx // 4
+                c = idx % 4
+                cell = table.cell(r, c)
+                cell.text = f"{count}\n{v.title()}"
+                for paragraph in cell.paragraphs:
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        peak = ba.get("engagement_metrics", {}).get("peak_activity_hours", [])
+        if peak:
+            peak_str = ", ".join([f"{h}:00" for h in peak])
+            p = doc.add_paragraph("Peak Activity Hours: ")
+            p.add_run(peak_str).bold = True
+
         if "engagement_trend_line" in charts:
             doc.add_picture(io.BytesIO(charts["engagement_trend_line"]), width=Inches(5.5))
         if "verb_distribution_bar" in charts:
@@ -381,21 +575,39 @@ class ReportExporter:
                 row[0].text = s["name"]
                 row[1].text = s["risk_level"].upper()
                 row[2].text = str(s["risk_score"])
-                row[3].text = (s.get("signals", [""])[0])[:60]
+                row[3].text = s.get("signals", [""])[0] if s.get("signals") else ""
 
         # Section 3: Content
         doc.add_heading("3. Content Optimization", level=1)
+        
+        modules = report.get("behavior_analysis", {}).get("module_engagement", [])
+        if modules:
+            doc.add_heading("Module Engagement Summary", level=2)
+            table = doc.add_table(rows=1, cols=4)
+            table.style = 'Table Grid'
+            hdr = table.rows[0].cells
+            hdr[0].text, hdr[1].text, hdr[2].text, hdr[3].text = "Module", "Students", "Completion", "Struggle"
+            for m in modules:
+                row = table.add_row().cells
+                row[0].text = m.get("module_name", "")
+                row[1].text = str(m.get("unique_students", 0))
+                row[2].text = f"{m.get('completion_rate', 0)*100:.0f}%"
+                row[3].text = f"{m.get('struggle_rate', 0)*100:.0f}%"
+
         if "module_completion_bar" in charts:
             doc.add_picture(io.BytesIO(charts["module_completion_bar"]), width=Inches(5.5))
 
         co = report.get("content_optimization", {})
-        for m in co.get("underperforming_content", [])[:5]:
-            p = doc.add_paragraph()
-            run = p.add_run(m["module_name"])
-            run.bold = True
-            p.add_run(f" — Struggle: {m['struggle_rate']:.0%}, Completion: {m['completion_rate']:.0%}")
-            for s in m.get("suggestions", []):
-                doc.add_paragraph(f"  → {s}")
+        under = co.get("underperforming_content", [])
+        if under:
+            doc.add_heading("Modules Needing Attention", level=2)
+            for m in under[:5]:
+                p = doc.add_paragraph()
+                run = p.add_run(m["module_name"])
+                run.bold = True
+                p.add_run(f" — Struggle: {m['struggle_rate']:.0%}, Completion: {m['completion_rate']:.0%}")
+                for s in m.get("suggestions", []):
+                    doc.add_paragraph(f"  → {s}")
 
         # Section 4: Cohort
         doc.add_heading("4. Cohort Comparison", level=1)
@@ -465,7 +677,7 @@ class ReportExporter:
         ws2 = wb.create_sheet("Module Summary")
         ba = report.get("behavior_analysis", {})
         mod_headers = ["Module", "Students", "Completions", "Struggles",
-                       "Completion Rate", "Drop-off Rate"]
+                       "Completion Rate", "Struggle Rate", "Drop-off Rate"]
         for c, h in enumerate(mod_headers, 1):
             cell = ws2.cell(row=1, column=c, value=h)
             cell.font = header_font
@@ -476,8 +688,9 @@ class ReportExporter:
             ws2.cell(row=r_idx, column=2, value=m.get("unique_students", 0))
             ws2.cell(row=r_idx, column=3, value=m.get("completions", 0))
             ws2.cell(row=r_idx, column=4, value=m.get("struggles", 0))
-            ws2.cell(row=r_idx, column=5, value=m.get("completion_rate", 0))
-            ws2.cell(row=r_idx, column=6, value=m.get("drop_off_rate", 0))
+            ws2.cell(row=r_idx, column=5, value=min(m.get("completion_rate", 0), 1.0))
+            ws2.cell(row=r_idx, column=6, value=m.get("struggle_rate", 0))
+            ws2.cell(row=r_idx, column=7, value=m.get("drop_off_rate", 0))
 
         # ── Sheet 3: Student Roster ───────────────────────────────────────────
         ws3 = wb.create_sheet("Student Roster")

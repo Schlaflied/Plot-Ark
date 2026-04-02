@@ -73,7 +73,7 @@ class ContentOptimizerNode(BaseNode):
 
             total_actions = completions + struggles + failures + views
             struggle_rate = struggles / max(total_actions, 1)
-            completion_rate = completions / max(unique, 1)
+            completion_rate = min(completions / max(unique, 1), 1.0)  # cap at 100%
             failure_rate = failures / max(total_actions, 1)
 
             # Extract module index from object_id

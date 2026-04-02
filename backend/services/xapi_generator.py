@@ -343,11 +343,14 @@ def _inject_noise(statements: list[tuple], noise_ratio: float = 0.15) -> list[tu
             future_ts = datetime.now() + timedelta(days=random.randint(1, 30))
             noisy.append((email, name, verb, obj_id, obj_name, future_ts, topic))
 
-    # Add ghost students (registered but near-zero activity)
+    # Add ghost students (registered but near-zero activity) using realistic names
     ghost_count = max(1, int(noise_count * 0.2))
+    _ghost_rng = random.Random(len(statements) + 42)  # deterministic sub-seed
     for g in range(ghost_count):
-        ghost_name = f"Ghost{g+1} Student"
-        ghost_email = f"ghost{g+1}@plotark.edu"
+        ghost_first = _ghost_rng.choice(FIRST_NAMES)
+        ghost_last = _ghost_rng.choice(LAST_NAMES)
+        ghost_name = f"{ghost_first} {ghost_last}"
+        ghost_email = f"{ghost_first.lower()}.{ghost_last.lower()}.g{g}@plotark.edu"
         # 0-1 interactions
         if random.random() > 0.5 and noisy:
             ref = noisy[random.randint(0, len(noisy) - 1)]

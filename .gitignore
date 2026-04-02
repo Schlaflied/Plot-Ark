@@ -33,6 +33,10 @@ docs/FEEDBACK.md
 # LightRAG generated storage (large vector DBs — regenerate with ingest.py)
 data/lightrag_storage*/
 
+# Catch-all for any other local data
+data/*
+!data/.gitkeep
+
 # xAPI mock data (seeded in PostgreSQL — regenerate via POST /api/xapi/seed)
 data/xapi/
 *.xapi.json

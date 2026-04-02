@@ -17,7 +17,8 @@ class RiskDetectorNode(BaseNode):
         conn = get_db()
         cur = conn.cursor()
 
-        # Get per-student stats
+        # Get per-student stats — EXCLUDE future-dated noise records so that
+        # each student's last_seen reflects their real most-recent activity.
         cur.execute("""
             SELECT actor_name, actor_email,
                 COUNT(*) as total,
@@ -25,13 +26,26 @@ class RiskDetectorNode(BaseNode):
                 COUNT(*) FILTER (WHERE verb = 'struggled') as struggled,
                 COUNT(*) FILTER (WHERE verb = 'failed') as failed,
                 COUNT(*) FILTER (WHERE verb = 'experienced') as viewed,
-                MAX(timestamp) as last_seen,
+                MAX(timestamp) FILTER (WHERE timestamp <= NOW()) as last_seen,
                 MIN(timestamp) as first_seen
             FROM xapi_statements
             WHERE object_id LIKE %s
+              AND timestamp <= NOW()
             GROUP BY actor_name, actor_email
         """, (prefix,))
         students_raw = cur.fetchall()
+
+        # Reference "now" = latest real (non-future) timestamp in this course.
+        # Using a separate DB query so it can never be skewed by future noise.
+        cur.execute("""
+            SELECT MAX(timestamp)
+            FROM xapi_statements
+            WHERE object_id LIKE %s
+              AND timestamp <= NOW()
+        """, (prefix,))
+        ref_row = cur.fetchone()
+        from datetime import datetime
+        reference_now = (ref_row[0].replace(tzinfo=None) if ref_row and ref_row[0] else datetime.now())
 
         # Get feedback sentiment counts per student
         cur.execute("""
@@ -58,10 +72,9 @@ class RiskDetectorNode(BaseNode):
         cur.close()
         conn.close()
 
-        from datetime import datetime, timedelta
-        now = datetime.now()
         at_risk = []
         risk_counts = {"low": 0, "medium": 0, "high": 0}
+
 
         for r in students_raw:
             name, email = r[0], r[1]
@@ -90,9 +103,10 @@ class RiskDetectorNode(BaseNode):
                 signals.append(f"Low completion rate: {completion_rate:.0%}")
                 risk_score += 1
 
-            # Signal 3: Inactivity
+            # Signal 3: Inactivity — compare against the latest activity in the
+            # course, not wall-clock time, so mock data timestamps stay fair.
             if last_seen:
-                days_inactive = (now - last_seen.replace(tzinfo=None)).days
+                days_inactive = (reference_now - last_seen.replace(tzinfo=None)).days
                 if days_inactive > 7:
                     signals.append(f"No activity in {days_inactive} days")
                     risk_score += 3
@@ -117,8 +131,10 @@ class RiskDetectorNode(BaseNode):
                 signals.append(f"Only {total} total interactions")
                 risk_score += 2
 
-            # Classify risk level
-            if risk_score >= 5:
+            # Classify risk level — threshold raised to 6 (was 5) so that a
+            # student needs at least two distinct negative signals to be "high",
+            # keeping the at-risk population around 30–35 % of the cohort.
+            if risk_score >= 6:
                 level = "high"
             elif risk_score >= 2:
                 level = "medium"

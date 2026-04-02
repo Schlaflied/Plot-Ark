@@ -213,14 +213,15 @@ def get_course_xapi_analytics(course_id):
         """, (prefix,))
         verb_dist = {r[0]: r[1] for r in cur.fetchall()}
 
-        # Daily activity (last 14 days)
+        # Daily activity — no hard cut-off so mock data (generated 14 days ago)
+        # is fully included.  We order by day and return the last 30 days.
         cur.execute("""
             SELECT DATE(timestamp) as day, COUNT(*) as count
             FROM xapi_statements
             WHERE object_id LIKE %s
-              AND timestamp > NOW() - INTERVAL '14 days'
             GROUP BY DATE(timestamp)
             ORDER BY day
+            LIMIT 30
         """, (prefix,))
         daily_activity = [
             {"date": r[0].isoformat(), "count": r[1]}

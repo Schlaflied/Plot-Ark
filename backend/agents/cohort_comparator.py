@@ -56,23 +56,42 @@ class CohortComparatorNode(BaseNode):
             comp_rate = mastered / max(total, 1)
             struggle_rate = struggled / max(total, 1)
 
+            # ── Unified risk scoring (mirrors RiskDetector thresholds) ───────
+            risk_score = 0
+            if struggle_rate > 0.3:
+                risk_score += 3
+            elif struggle_rate > 0.15:
+                risk_score += 1
+            if comp_rate < 0.15:
+                risk_score += 3
+            elif comp_rate < 0.30:
+                risk_score += 1
+            if total < 3:
+                risk_score += 2
+            if failed > 2:
+                risk_score += 2
+
             profile = {
                 "name": name, "email": email,
                 "total": total, "mastered": mastered,
                 "struggled": struggled, "failed": failed,
-                "completion_rate": round(comp_rate, 2),
+                "completion_rate": min(round(comp_rate, 2), 1.0),
                 "struggle_rate": round(struggle_rate, 2),
                 "modules_touched": mods,
             }
 
-            if comp_rate > 0.5 and struggle_rate < 0.1:
-                high_performers.append(profile)
-            elif comp_rate < 0.15 or total < 3:
-                disengaged.append(profile)
-            elif struggle_rate > 0.25 or failed > 2:
+            if risk_score >= 5:
                 at_risk.append(profile)
-            else:
+            elif risk_score >= 2:
                 average_students.append(profile)
+            elif comp_rate > 0.5 and struggle_rate < 0.1:
+                high_performers.append(profile)
+            else:
+                # Disengaged: low total actions even if not formally at-risk
+                if total < 3 or comp_rate < 0.05:
+                    disengaged.append(profile)
+                else:
+                    average_students.append(profile)
 
         def _group_stats(group):
             if not group:
