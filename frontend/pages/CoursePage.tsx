@@ -642,7 +642,7 @@ const CoursePage: React.FC = () => {
       {/* ── Top Bar ─────────────────────────────────────────────────────────── */}
       <header className="h-12 flex items-center px-4 bg-white border-b border-stone-200 shrink-0 gap-4">
         <Link
-          to="/courses"
+          to={`/courses${isStudent ? '?view=student' : ''}`}
           className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-900 transition-colors font-medium"
         >
           <ChevronLeft size={16} />

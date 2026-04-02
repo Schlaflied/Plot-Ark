@@ -4,7 +4,7 @@
 */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   X, Star, Globe, Cpu, Moon, Sun, Settings, Plus, Network,
   ChevronLeft, ChevronRight,
@@ -372,8 +372,10 @@ const CoursesPage: React.FC = () => {
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useState<'professor' | 'student'>('professor');
-
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [viewMode, setViewMode] = useState<'professor' | 'student'>(
+    searchParams.get('view') === 'student' ? 'student' : 'professor'
+  );
   const isStudent = viewMode === 'student';
 
   // Toolbar state
@@ -440,7 +442,11 @@ const CoursesPage: React.FC = () => {
           {isStudent && <span className="text-xs text-green-600 font-normal">— read only</span>}
         </div>
         <button
-          onClick={() => setViewMode(isStudent ? 'professor' : 'student')}
+          onClick={() => {
+            const nextMode = isStudent ? 'professor' : 'student';
+            setViewMode(nextMode);
+            setSearchParams(nextMode === 'student' ? { view: 'student' } : {});
+          }}
           className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg border bg-white transition-colors font-medium text-xs ${
             isStudent
               ? 'border-green-300 hover:bg-green-100 text-green-800'
