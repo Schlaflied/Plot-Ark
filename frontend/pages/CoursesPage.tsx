@@ -426,9 +426,31 @@ const CoursesPage: React.FC = () => {
   return (
     <div className={`min-h-screen flex flex-col ${darkMode ? 'bg-stone-900' : 'bg-[#F9F8F4]'}`}>
 
-
-
-
+      {/* ── View Banner ─────────────────────────────────────────────────── */}
+      <div className={`w-full border-b flex items-center justify-between px-6 py-3 text-sm ${
+        isStudent
+          ? 'bg-green-50 border-green-200'
+          : 'bg-amber-50 border-amber-200'
+      }`}>
+        <div className="flex items-center gap-2.5">
+          <span className={`w-2 h-2 rounded-full inline-block ${isStudent ? 'bg-green-500' : 'bg-amber-500'}`} />
+          <span className={`font-semibold tracking-wide ${isStudent ? 'text-green-900' : 'text-amber-900'}`}>
+            {isStudent ? 'Student View' : 'Professor View'}
+          </span>
+          {isStudent && <span className="text-xs text-green-600 font-normal">— read only</span>}
+        </div>
+        <button
+          onClick={() => setViewMode(isStudent ? 'professor' : 'student')}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg border bg-white transition-colors font-medium text-xs ${
+            isStudent
+              ? 'border-green-300 hover:bg-green-100 text-green-800'
+              : 'border-amber-300 hover:bg-amber-100 text-amber-800'
+          }`}
+        >
+          {isStudent ? 'Back to Professor View' : 'Switch to Student View'}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+      </div>
       {/* ── Body (Main + Side) ──────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
 
@@ -443,7 +465,7 @@ const CoursesPage: React.FC = () => {
             Dashboard
           </h1>
 
-          {/* Icon toolbar — 4 icons + view mode pill */}
+          {/* Icon toolbar — 4 icons */}
           <div className="flex items-center gap-1">
             <ToolbarDropdown
               icon={<Globe size={18} />}
@@ -467,21 +489,6 @@ const CoursesPage: React.FC = () => {
               {darkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
             <SettingsDropdown />
-
-            {/* View mode pill — right-most in toolbar */}
-            <div className="ml-2 h-5 w-px bg-stone-200" />
-            <button
-              onClick={() => setViewMode(isStudent ? 'professor' : 'student')}
-              title={isStudent ? 'Back to Professor View' : 'Switch to Student View'}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                isStudent
-                  ? 'bg-green-50 border-green-300 text-green-800 hover:bg-green-100'
-                  : 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
-              }`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${isStudent ? 'bg-green-500' : 'bg-amber-500'}`} />
-              {isStudent ? 'Student' : 'Professor'}
-            </button>
           </div>
         </div>
 
