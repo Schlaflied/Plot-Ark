@@ -1360,14 +1360,16 @@ const CoursePage: React.FC = () => {
                     ))}
                   </div>
 
-                  {/* Optional comment textarea */}
-                  <textarea
-                    className="w-full mt-4 px-4 py-3 border border-stone-200 rounded-xl text-sm text-stone-700 placeholder:text-stone-400 bg-stone-50/50 focus:bg-white focus:border-amber-300 outline-none resize-none transition-all"
-                    rows={2}
-                    placeholder="Anything on your mind? (optional)"
-                    value={(moduleFeedback[`${currentModuleIndex}-comment`] as string) || ''}
-                    onChange={e => setModuleFeedback(prev => ({ ...prev, [`${currentModuleIndex}-comment`]: e.target.value }))}
-                  />
+                  {/* Optional comment textarea (only for mostly or off) */}
+                  {(moduleFeedback[currentModuleIndex] === 'mostly' || moduleFeedback[currentModuleIndex] === 'off') && (
+                    <textarea
+                      className="w-full mt-4 px-4 py-3 border border-stone-200 rounded-xl text-sm text-stone-700 placeholder:text-stone-400 bg-stone-50/50 focus:bg-white focus:border-amber-300 outline-none resize-none transition-all"
+                      rows={2}
+                      placeholder="Anything on your mind? (optional)"
+                      value={(moduleFeedback[`${currentModuleIndex}-comment`] as string) || ''}
+                      onChange={e => setModuleFeedback(prev => ({ ...prev, [`${currentModuleIndex}-comment`]: e.target.value }))}
+                    />
+                  )}
 
                   {/* Submit & Skip */}
                   <div className="flex items-center gap-3 mt-3">
