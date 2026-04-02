@@ -258,7 +258,7 @@ def trigger_seed():
     """
     from services.xapi_generator import generate_all_courses
 
-    noise = float(request.args.get("noise", 0.15))
+    noise = float(request.args.get("noise", 0.08))
     force = request.args.get("force", "false").lower() == "true"
 
     if force:
@@ -321,7 +321,7 @@ def seed_mock_xapi():
         print(f"xAPI table already has {count} statements, skipping seed.")
         return
 
-    print("Seeding xAPI mock data for all courses (15% noise)...")
+    print("Seeding xAPI mock data for all courses (8% noise)...")
     from services.xapi_generator import generate_all_courses
-    result = generate_all_courses(noise_ratio=0.15)
+    result = generate_all_courses(noise_ratio=0.08)
     print(f"xAPI seed complete: {result.get('total_statements', 0)} statements across {result.get('courses_processed', 0)} courses.")

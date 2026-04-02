@@ -288,15 +288,14 @@ def _generate_statements_for_student(
     return statements
 
 
-def _inject_noise(statements: list[tuple], noise_ratio: float = 0.15) -> list[tuple]:
+def _inject_noise(statements: list[tuple], noise_ratio: float = 0.08) -> list[tuple]:
     """
     Inject noise into the statement list (irreversible, no denoising).
     Types of noise:
     - Time anomalies: activity at 2-5 AM
     - Speed anomalies: completing a reading in 5 seconds
     - Repetition: same module viewed 10 times
-    - Skipping: interacting with later modules without completing earlier ones
-    - Ghost students: registered but zero or near-zero activity
+    - Future timestamps: activity dated in the future
     """
     noise_count = max(1, int(len(statements) * noise_ratio))
     noisy = list(statements)
@@ -306,7 +305,6 @@ def _inject_noise(statements: list[tuple], noise_ratio: float = 0.15) -> list[tu
             "time_anomaly",
             "speed_anomaly",
             "repetition",
-            "impossible_verb",
             "future_timestamp",
         ])
 
@@ -328,43 +326,41 @@ def _inject_noise(statements: list[tuple], noise_ratio: float = 0.15) -> list[tu
             noisy.append((email, name, "completed", obj_id, obj_name, fast_ts, topic))
 
         elif noise_type == "repetition":
-            # Same action repeated 3-8 times
-            for rep in range(random.randint(3, 8)):
+            # Same action repeated 3-5 times (reduced from 3-8)
+            for rep in range(random.randint(3, 5)):
                 rep_ts = ts + timedelta(minutes=rep * random.randint(1, 5))
                 noisy.append((email, name, "experienced", obj_id, obj_name, rep_ts, topic))
-
-        elif noise_type == "impossible_verb":
-            # E.g. "passed" on a reading (doesn't make logical sense)
-            impossible = random.choice(["passed", "failed", "struggled"])
-            noisy.append((email, name, impossible, obj_id, obj_name, ts, topic))
 
         elif noise_type == "future_timestamp":
             # Timestamp in the future
             future_ts = datetime.now() + timedelta(days=random.randint(1, 30))
             noisy.append((email, name, verb, obj_id, obj_name, future_ts, topic))
 
-    # Add ghost students (registered but near-zero activity) using realistic names
-    ghost_count = max(1, int(noise_count * 0.2))
+    # Ghost students — very few, and they get 2-3 interactions (not 0-1)
+    # so they don't automatically trigger low-volume risk signals.
+    ghost_count = max(1, int(noise_count * 0.05))
     _ghost_rng = random.Random(len(statements) + 42)  # deterministic sub-seed
     for g in range(ghost_count):
         ghost_first = _ghost_rng.choice(FIRST_NAMES)
         ghost_last = _ghost_rng.choice(LAST_NAMES)
         ghost_name = f"{ghost_first} {ghost_last}"
         ghost_email = f"{ghost_first.lower()}.{ghost_last.lower()}.g{g}@plotark.edu"
-        # 0-1 interactions
-        if random.random() > 0.5 and noisy:
-            ref = noisy[random.randint(0, len(noisy) - 1)]
-            noisy.append((
-                ghost_email, ghost_name, "experienced",
-                ref[3], ref[4],
-                ref[5] + timedelta(hours=random.randint(1, 48)),
-                ref[6],
-            ))
+        # Give ghost students 2-3 interactions so they aren't instant high-risk
+        if noisy:
+            for _ in range(random.randint(2, 3)):
+                ref = noisy[random.randint(0, len(noisy) - 1)]
+                ghost_verb = random.choice(["experienced", "attempted", "interacted"])
+                noisy.append((
+                    ghost_email, ghost_name, ghost_verb,
+                    ref[3], ref[4],
+                    ref[5] + timedelta(hours=random.randint(1, 72)),
+                    ref[6],
+                ))
 
     return noisy
 
 
-def generate_for_course(course_id: int, course_data: dict, noise_ratio: float = 0.15) -> list[tuple]:
+def generate_for_course(course_id: int, course_data: dict, noise_ratio: float = 0.08) -> list[tuple]:
     """
     Generate xAPI mock statements for a single course.
 
@@ -412,7 +408,7 @@ def generate_for_course(course_id: int, course_data: dict, noise_ratio: float = 
     return all_statements
 
 
-def generate_all_courses(noise_ratio: float = 0.15) -> dict:
+def generate_all_courses(noise_ratio: float = 0.08) -> dict:
     """
     Generate xAPI mock data for ALL courses in the database.
 

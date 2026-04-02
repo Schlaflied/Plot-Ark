@@ -26,6 +26,7 @@ class RiskDetectorNode(BaseNode):
                 COUNT(*) FILTER (WHERE verb = 'struggled') as struggled,
                 COUNT(*) FILTER (WHERE verb = 'failed') as failed,
                 COUNT(*) FILTER (WHERE verb = 'experienced') as viewed,
+                COUNT(*) FILTER (WHERE verb = 'attempted') as attempted,
                 MAX(timestamp) FILTER (WHERE timestamp <= NOW()) as last_seen,
                 MIN(timestamp) as first_seen
             FROM xapi_statements
@@ -78,28 +79,31 @@ class RiskDetectorNode(BaseNode):
 
         for r in students_raw:
             name, email = r[0], r[1]
-            total, mastered, struggled, failed, viewed = r[2], r[3], r[4], r[5], r[6]
-            last_seen = r[7]
-            first_seen = r[8]
+            total, mastered, struggled, failed, viewed, attempted = r[2], r[3], r[4], r[5], r[6], r[7]
+            last_seen = r[8]
+            first_seen = r[9]
 
             signals = []
             risk_score = 0
 
             # Signal 1: High struggle rate
             struggle_rate = struggled / max(total, 1)
-            if struggle_rate > 0.3:
+            if struggle_rate > 0.40:
                 signals.append(f"High struggle rate: {struggle_rate:.0%}")
                 risk_score += 3
-            elif struggle_rate > 0.15:
+            elif struggle_rate > 0.20:
                 signals.append(f"Moderate struggle rate: {struggle_rate:.0%}")
                 risk_score += 1
 
-            # Signal 2: Low completion rate
-            completion_rate = mastered / max(total, 1)
-            if completion_rate < 0.15:
+            # Signal 2: Low completion rate — use attempt-based denominator
+            # so that passive actions (experienced, interacted) don't inflate
+            # the denominator and make everyone look like they're failing.
+            attempt_base = mastered + failed + attempted
+            completion_rate = mastered / max(attempt_base, 1) if attempt_base > 0 else 0.5
+            if completion_rate < 0.10:
                 signals.append(f"Very low completion rate: {completion_rate:.0%}")
                 risk_score += 3
-            elif completion_rate < 0.30:
+            elif completion_rate < 0.25:
                 signals.append(f"Low completion rate: {completion_rate:.0%}")
                 risk_score += 1
 
@@ -107,10 +111,10 @@ class RiskDetectorNode(BaseNode):
             # course, not wall-clock time, so mock data timestamps stay fair.
             if last_seen:
                 days_inactive = (reference_now - last_seen.replace(tzinfo=None)).days
-                if days_inactive > 7:
+                if days_inactive > 10:
                     signals.append(f"No activity in {days_inactive} days")
                     risk_score += 3
-                elif days_inactive > 3:
+                elif days_inactive > 5:
                     signals.append(f"Inactive for {days_inactive} days")
                     risk_score += 1
 
@@ -126,17 +130,16 @@ class RiskDetectorNode(BaseNode):
                 signals.append(f"{neg} negative feedback submissions")
                 risk_score += 2
 
-            # Signal 6: Low interaction volume
-            if total < 3:
-                signals.append(f"Only {total} total interactions")
-                risk_score += 2
+            # Signal 6: Low interaction volume — only flag truly absent students
+            if total < 2:
+                signals.append(f"Only {total} total interaction")
+                risk_score += 1
 
-            # Classify risk level — threshold raised to 6 (was 5) so that a
-            # student needs at least two distinct negative signals to be "high",
-            # keeping the at-risk population around 30–35 % of the cohort.
-            if risk_score >= 6:
+            # Classify risk level — thresholds set to keep the at-risk
+            # population around 25-30 % of the cohort.
+            if risk_score >= 7:
                 level = "high"
-            elif risk_score >= 2:
+            elif risk_score >= 3:
                 level = "medium"
             else:
                 level = "low"
