@@ -222,15 +222,15 @@ xAPI behavior events → Curriculum Agent → Redis learner state → Narrative 
 
 | Layer | Technology | Role |
 |-------|-----------|------|
-| **Frontend** | React + TypeScript + Vite | Module editor, SSE client, drag-and-drop |
-| **Backend** | Python + Flask Blueprints + SSE | Modular route-based API (7 Blueprints + 3 services) |
-| **AI** | OpenAI GPT-4o-mini / Google Gemini | Content generation (pluggable via `AI_PROVIDER`) |
+| **Frontend** | React + TypeScript + Vite | Module editor, A2A dashboard, SSE client, drag-and-drop |
+| **Backend** | Python + Flask Blueprints | Modular route-based API (8 Blueprints + 6 Agents + 5 Services) |
+| **AI** | OpenAI GPT-4o / Google Gemini | Content generation & A2A analysis (via `AI_PROVIDER`) |
 | **Research Agent** | Tavily Search API | Pre-generation academic source retrieval |
-| **History** | PostgreSQL | Persistent curriculum storage with favorites |
-| **Cache** | Redis | Graph query cache + learner state + shared agent memory |
-| **Knowledge Graph** | LightRAG + networkx + react-force-graph-2d | Course material ingestion → interactive concept graph |
+| **Database** | PostgreSQL | Curricula storage, mock xAPI statements, and student feedback |
+| **Cache & Memory**| Redis | Graph query cache, learner state, and A2A shared memory |
+| **Knowledge Graph**| LightRAG + networkx + react-force-graph-2d| Course material ingestion → interactive concept graph |
 | **Behavior Data** | xAPI 1.0.3 + mini-LRS | Statement ingestion → Redis learner state → professor analytics panel |
-| **Analytics** | A2A multi-agent (Hive-style) | Behavior analysis, risk detection, content optimization, cohort comparison |
+| **Analytics Engine**| A2A multi-agent (Hive-style) | Orchestrator + 4 specialized agents for behavior, risk, content, & cohort analysis |
 | **Report Export** | ReportLab + python-docx + openpyxl + matplotlib | PDF/DOCX with branded charts, Excel with raw data |
 | **Export** | IMS Common Cartridge + DOCX + PDF | LMS-compatible output in multiple formats |
 | **Dev** | Docker Compose | Single-command local environment |

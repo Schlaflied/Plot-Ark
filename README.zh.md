@@ -221,15 +221,15 @@ xAPI 行为事件 → 课程 Agent → Redis 学习者状态 → 叙事引擎 �
 
 | 层级 | 技术 | 职责 |
 |------|------|------|
-| **前端** | React + TypeScript + Vite | 模块编辑器、SSE 客户端、拖拽排序 |
-| **后端** | Python + Flask Blueprints + SSE | 模块化路由 API（7 个 Blueprints + 3 个 services） |
-| **AI** | OpenAI GPT-4o-mini / Google Gemini | 内容生成（通过 `AI_PROVIDER` 可插拔切换） |
+| **前端** | React + TypeScript + Vite | 模块编辑器、A2A 仪表板、SSE 客户端、拖拽排序 |
+| **后端** | Python + Flask Blueprints | 模块化路由 API（8 个 Blueprints + 6 个 Agents + 5 个 Services） |
+| **AI** | OpenAI GPT-4o / Google Gemini | 内容生成与 A2A 分析（通过 `AI_PROVIDER` 可插拔） |
 | **研究 Agent** | Tavily Search API | 生成前学术信源检索 |
-| **历史记录** | PostgreSQL | 课程持久化存储，支持收藏 |
-| **缓存** | Redis | 图谱查询缓存 + 学习者状态 + Agent 共享内存 |
-| **知识图谱** | LightRAG + networkx + react-force-graph-2d | 课程材料导入 → 交互式概念图谱 |
+| **数据库** | PostgreSQL | 课程存储、Mock xAPI 语句、学生反馈 |
+| **缓存与内存**| Redis | 图谱查询缓存、学习者状态、A2A 共享内存 |
+| **知识图谱** | LightRAG + networkx + react-force-graph-2d| 课程材料导入 → 交互式概念图谱 |
 | **行为数据** | xAPI 1.0.3 + mini-LRS | 语句采集 → Redis 学习者状态 → 教授分析面板 |
-| **分析引擎** | A2A 多 Agent（Hive 风格） | 行为分析、风险检测、内容优化、群组对比 |
+| **分析引擎** | A2A 多 Agent（Hive 风格） | 协调器 + 4 个专业 Agent（行为分析、风险检测、内容优化、群组对比） |
 | **报告导出** | ReportLab + python-docx + openpyxl + matplotlib | PDF/DOCX 含品牌图表，Excel 含原始数据 |
 | **导出** | IMS Common Cartridge + DOCX + PDF | 多格式兼容主流 LMS 的输出 |
 | **开发** | Docker Compose | 一键启动本地环境 |
