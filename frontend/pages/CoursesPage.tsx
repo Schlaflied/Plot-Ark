@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  X, Star, Globe, Cpu, Moon, Sun, Settings, Plus, Network,
+  X, Star, Globe, Moon, Sun, Settings, Plus, Network,
   ChevronLeft, ChevronRight,
 } from 'lucide-react';
 
@@ -112,51 +112,17 @@ const ToolbarDropdown: React.FC<ToolbarDropdownProps> = ({
   );
 };
 
-// ─── Settings dropdown ────────────────────────────────────────────────────────
+// ─── Settings button ──────────────────────────────────────────────────────────
 
-const SettingsDropdown: React.FC = () => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen(p => !p)}
-        title="Settings"
-        className="p-1.5 rounded-lg text-stone-500 hover:text-stone-900 hover:bg-stone-100 transition-colors"
-      >
-        <Settings size={18} />
-      </button>
-      {open && (
-        <div className="absolute top-full right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg z-50 w-52 py-1">
-          <div className="px-4 py-2 text-xs font-semibold text-stone-400 uppercase tracking-wider">
-            Preferences
-          </div>
-          {['Long-term memory', 'Default course level', 'Export format'].map(label => (
-            <button
-              key={label}
-              className="w-full text-left px-4 py-2 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-            >
-              {label}
-            </button>
-          ))}
-          <div className="border-t border-stone-100 my-1" />
-          <button className="w-full text-left px-4 py-2 text-sm text-stone-700 hover:bg-stone-50 transition-colors">
-            Account
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
+const SettingsButton: React.FC = () => (
+  <Link
+    to="/settings"
+    title="Settings"
+    className="p-1.5 rounded-lg text-stone-500 hover:text-stone-900 hover:bg-stone-100 transition-colors inline-flex items-center"
+  >
+    <Settings size={18} />
+  </Link>
+);
 
 // ─── Course card ──────────────────────────────────────────────────────────────
 
@@ -480,13 +446,6 @@ const CoursesPage: React.FC = () => {
               onSelect={v => setLanguage(v as Language)}
               title="Language"
             />
-            <ToolbarDropdown
-              icon={<Cpu size={18} />}
-              items={modelItems}
-              selected={modelProvider}
-              onSelect={v => setModelProvider(v as ModelProvider)}
-              title="Model provider"
-            />
             <button
               onClick={() => setDarkMode(p => !p)}
               title={darkMode ? 'Light mode' : 'Dark mode'}
@@ -494,7 +453,7 @@ const CoursesPage: React.FC = () => {
             >
               {darkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <SettingsDropdown />
+            <SettingsButton />
           </div>
         </div>
 

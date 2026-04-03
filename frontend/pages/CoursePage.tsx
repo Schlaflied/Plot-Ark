@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Globe, Cpu, Moon, Settings, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Globe, Moon, Settings, BookOpen } from 'lucide-react';
 import { arrayMove } from '@dnd-kit/sortable';
 import type { DragEndEvent } from '@dnd-kit/core';
 
@@ -230,7 +230,7 @@ const CoursePage: React.FC = () => {
           <span className="font-serif text-stone-900 text-sm truncate block">{courseTitle}</span>
         </div>
         <div className="flex items-center gap-1">
-          {[Globe, Cpu, Moon, Settings].map((Icon, i) => (
+          {[Globe, Moon, Settings].map((Icon, i) => (
             <button key={i} className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors">
               <Icon size={16} />
             </button>
