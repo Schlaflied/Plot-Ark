@@ -160,8 +160,8 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 │  │   Page    │ │   Page   │ │   Page   │ │   Graph   │ │    Page       │  │
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └──────┬────────┘  │
 │       │            │            │              │              │           │
-│  components/ui/  constants/  components/generate/     SSE streaming      │
-│  (Select, Input) (formOptions) (SyllabusUpload, SourceReview)            │
+│  components/ui/  components/generate/    hooks/ (useIngest, useQuery)    │
+│  (Select, Input)   (SyllabusUpload)             SSE streaming            │
 └───────┼────────────┼────────────┼──────────────┼──────────────┼──────────┘
         │            │            │              │              │
         ▼            ▼            ▼              ▼              ▼
@@ -330,9 +330,20 @@ plot-ark/
 │   │   │   └── Input.tsx                ← Reusable text input
 │   │   ├── generate/
 │   │   │   └── SyllabusUpload.tsx        ← Drag-and-drop syllabus upload
-│   │   ├── GraphViewer.tsx              ← Force-directed graph + query panel
+│   │   ├── GraphViewer.tsx              ← Core force-directed graph rendering
+│   │   ├── GraphToolbar.tsx             ← Subject tabs, node/course search
+│   │   ├── CourseBanner.tsx             ← Course pills, DnD, inline rename
+│   │   ├── NodeDetailPanel.tsx          ← Node detail floating sidebar
+│   │   ├── IngestPanel.tsx              ← File upload and lightrag pipeline
+│   │   ├── QueryPanel.tsx               ← RAG query input and history
+│   │   ├── YearSidebar.tsx              ← Year 1-4 lateral navigation
 │   │   └── Diagrams.tsx                 ← Mermaid diagram component
+│   ├── hooks/
+│   │   ├── useIngest.ts                 ← Upload polling logic and state
+│   │   ├── useQuery.ts                  ← RAG answer logic and history state
+│   │   └── useCourseManager.ts          ← Course CRUD and persistence
 │   ├── constants/
+│   │   ├── theme.ts                     ← Shared GraphViewer UI constants
 │   │   └── formOptions.ts               ← LEVELS, COURSE_TYPES, SESSION_DURATIONS
 │   ├── Dockerfile
 │   └── vite.config.ts

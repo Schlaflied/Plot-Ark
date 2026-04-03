@@ -159,8 +159,8 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 │  │   Page    │ │   Page   │ │   Page   │ │   Graph   │ │    Page       │  │
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └──────┬────────┘  │
 │       │            │            │              │              │           │
-│  components/ui/  constants/  components/generate/     SSE 流式传输       │
-│  (Select, Input) (formOptions) (SyllabusUpload, SourceReview)            │
+│  components/ui/  components/generate/    hooks/ (useIngest, useQuery)    │
+│  (Select, Input)   (SyllabusUpload)             SSE 流式传输             │
 └───────┼────────────┼────────────┼──────────────┼──────────────┼──────────┘
         │            │            │              │              │
         ▼            ▼            ▼              ▼              ▼
@@ -329,9 +329,20 @@ plot-ark/
 │   │   │   └── Input.tsx                ← 可复用文本输入
 │   │   ├── generate/
 │   │   │   └── SyllabusUpload.tsx        ← 拖拽上传大纲解析
-│   │   ├── GraphViewer.tsx              ← 力导向图 + 查询面板
+│   │   ├── GraphViewer.tsx              ← 核心力导向图渲染
+│   │   ├── GraphToolbar.tsx             ← 学科标签页、节点/课程搜索
+│   │   ├── CourseBanner.tsx             ← 课程药丸、拖拽、内联重命名
+│   │   ├── NodeDetailPanel.tsx          ← 节点详情悬浮面板
+│   │   ├── IngestPanel.tsx              ← 文件上传与 LightRAG 摄入逻辑
+│   │   ├── QueryPanel.tsx               ← RAG 查询输入与历史记录
+│   │   ├── YearSidebar.tsx              ← 学年 1-4 侧边导航
 │   │   └── Diagrams.tsx                 ← Mermaid 图表组件
+│   ├── hooks/
+│   │   ├── useIngest.ts                 ← 上传轮询逻辑与状态
+│   │   ├── useQuery.ts                  ← RAG 问答逻辑与历史状态
+│   │   └── useCourseManager.ts          ← 课程 CRUD 与持久化
 │   ├── constants/
+│   │   ├── theme.ts                     ← GraphViewer 共享 UI 常量
 │   │   └── formOptions.ts               ← LEVELS, COURSE_TYPES, SESSION_DURATIONS
 │   ├── Dockerfile
 │   └── vite.config.ts
