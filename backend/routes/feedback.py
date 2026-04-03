@@ -3,7 +3,7 @@
 import json
 from flask import Blueprint, request, jsonify
 from db import get_db
-from config import redis_client
+from extensions import redis_client
 
 feedback_bp = Blueprint("feedback", __name__)
 

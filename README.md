@@ -166,29 +166,31 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
         │            │            │              │              │
         ▼            ▼            ▼              ▼              ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
-│  Backend (Flask + Blueprints)                    app.py (~30 lines)       │
-│  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │  routes/                                                            │  │
-│  │  ├── curriculum.py    generate / skeleton / expand / save           │  │
-│  │  ├── history.py       CRUD + favorite + DOCX export                │  │
-│  │  ├── analytics.py     A2A SSE analysis + PDF/DOCX/Excel export     │  │
-│  │  ├── xapi.py          xAPI statements + mock data seed             │  │
-│  │  ├── graph.py         KG data + RAG query                          │  │
-│  │  ├── sources.py       Tavily source preview                        │  │
-│  │  ├── syllabus.py      PDF/DOCX parse + import                      │  │
-│  │  └── materials.py     LightRAG ingest                              │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│  ┌─────────────────────────────┐  ┌────────────────────────────────────┐  │
-│  │  agents/ (Hive-style A2A)   │  │  services/                        │  │
-│  │  ├── base.py (BaseNode)     │  │  ├── research.py (Tavily)         │  │
-│  │  ├── orchestrator.py        │  │  ├── file_parser.py               │  │
-│  │  ├── behavior_analyst.py    │  │  ├── lightrag_service.py          │  │
-│  │  ├── risk_detector.py       │  │  ├── xapi_generator.py            │  │
-│  │  ├── content_optimizer.py   │  │  └── report_exporter.py           │  │
-│  │  └── cohort_comparator.py   │  │     (PDF + DOCX + Excel + charts) │  │
-│  └──────────┬──────────────────┘  └─────────────┬────────────────────┘  │
-│             │  SharedMemory (Redis)              │                       │
-└─────────────┼───────────────────────────────────┼───────────────────────┘
+│  Backend (Flask + Blueprints)                                              │
+│  ├── app.py (~30 lines, routing)         ├── config.py (Env constants)     │
+│  ├── extensions.py (Global instances)    ├── async_loop.py (Event loop)    │
+│  ├─────────────────────────────────────────────────────────────────────┐   │
+│  │  routes/                                                            │   │
+│  │  ├── curriculum.py    generate / skeleton / expand / save           │   │
+│  │  ├── history.py       CRUD + favorite + DOCX export                 │   │
+│  │  ├── analytics.py     A2A SSE analysis + PDF/DOCX/Excel export      │   │
+│  │  ├── xapi.py          xAPI statements + mock data seed              │   │
+│  │  ├── graph.py         KG data + RAG query                           │   │
+│  │  ├── sources.py       Tavily source preview                         │   │
+│  │  ├── syllabus.py      PDF/DOCX parse + import                       │   │
+│  │  └── materials.py     LightRAG ingest                               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────┐  ┌────────────────────────────────────┐   │
+│  │  agents/ (Hive-style A2A)   │  │  services/                         │   │
+│  │  ├── base.py (BaseNode)     │  │  ├── research.py (Tavily)          │   │
+│  │  ├── orchestrator.py        │  │  ├── file_parser.py                │   │
+│  │  ├── behavior_analyst.py    │  │  ├── prompt_builder.py             │   │
+│  │  ├── risk_detector.py       │  │  ├── xapi_generator.py             │   │
+│  │  ├── content_optimizer.py   │  │  ├── report_exporter.py (facade)   │   │
+│  │  └── cohort_comparator.py   │  │  ├── chart_generator.py            │   │
+│  └──────────┬──────────────────┘  │  └── export_{pdf,docx,excel}.py    │   │
+│             │  SharedMemory       └─────────────┬──────────────────────┘   │
+└─────────────┼───────────────────────────────────┼──────────────────────────┘
               │                                   │
               ▼                                   ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
@@ -288,7 +290,9 @@ plot-ark/
 │
 ├── backend/                             ← Flask (modular Blueprints)
 │   ├── app.py                           ← Entry point (~30 lines, registers Blueprints)
-│   ├── config.py                        ← Flask app, AI clients, Redis, async loop
+│   ├── config.py                        ← Pure setup constants and environment variables
+│   ├── extensions.py                    ← Global service singletons (Flask app, AI, Redis)
+│   ├── async_loop.py                    ← Background event loop manager
 │   ├── db.py                            ← PostgreSQL operations
 │   ├── constants.py                     ← Bloom's taxonomy, session constraints, formats
 │   ├── routes/
@@ -297,7 +301,7 @@ plot-ark/
 │   │   ├── sources.py                   ← Tavily source preview
 │   │   ├── graph.py                     ← KG data + RAG query
 │   │   ├── xapi.py                      ← xAPI statements + seed generator
-│   │   ├── analytics.py                 ← A2A SSE analysis + PDF/DOCX/Excel export
+│   │   ├── analytics.py                 ← A2A SSE analysis + export endpoints
 │   │   ├── syllabus.py                  ← PDF/DOCX parse + import
 │   │   └── materials.py                 ← LightRAG ingest
 │   ├── agents/
@@ -310,9 +314,14 @@ plot-ark/
 │   ├── services/
 │   │   ├── research.py                  ← Tavily search + credibility scoring
 │   │   ├── file_parser.py               ← PDF/PPTX/DOCX text extraction
+│   │   ├── prompt_builder.py            ← Centralized AI prompt templates
 │   │   ├── lightrag_service.py          ← LightRAG instance management
 │   │   ├── xapi_generator.py            ← Mock xAPI data with noise injection
-│   │   └── report_exporter.py           ← PDF/DOCX/Excel report generation
+│   │   ├── report_exporter.py           ← Thin facade for report generation
+│   │   ├── chart_generator.py           ← Matplotlib visualizations & brand colors
+│   │   ├── export_pdf.py                ← ReportLab PDF layout & structure
+│   │   ├── export_docx.py               ← python-docx Word document builder
+│   │   └── export_excel.py              ← openpyxl Excel spreadsheet builder
 │   ├── Dockerfile
 │   └── requirements.txt
 │
@@ -329,7 +338,13 @@ plot-ark/
 │   │   │   ├── Select.tsx               ← Reusable dropdown
 │   │   │   └── Input.tsx                ← Reusable text input
 │   │   ├── generate/
-│   │   │   └── SyllabusUpload.tsx        ← Drag-and-drop syllabus upload
+│   │   │   ├── SyllabusUpload.tsx       ← Drag-and-drop syllabus upload
+│   │   │   ├── SourceReview.tsx         ← Review Tavily research sources
+│   │   │   └── SkeletonReview.tsx       ← Review course module skeleton
+│   │   ├── analytics/
+│   │   │   └── ReportSections.tsx       ← A2A analytics report viewer component
+│   │   ├── ModuleCard.tsx               ← Individual curriculum module card
+│   │   ├── ModuleSidebar.tsx            ← Navigation sidebar for modules
 │   │   ├── GraphViewer.tsx              ← Core force-directed graph rendering
 │   │   ├── GraphToolbar.tsx             ← Subject tabs, node/course search
 │   │   ├── CourseBanner.tsx             ← Course pills, DnD, inline rename

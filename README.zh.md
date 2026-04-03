@@ -165,29 +165,31 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
         │            │            │              │              │
         ▼            ▼            ▼              ▼              ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
-│  后端 (Flask + Blueprints)                       app.py (~30 行)          │
-│  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │  routes/                                                            │  │
-│  │  ├── curriculum.py    生成 / 验架 / 展开 / 保存                     │  │
-│  │  ├── history.py       CRUD + 收藏 + DOCX 导出                      │  │
-│  │  ├── analytics.py     A2A SSE 分析 + PDF/DOCX/Excel 导出           │  │
-│  │  ├── xapi.py          xAPI 语句 + Mock 数据种子                    │  │
-│  │  ├── graph.py         知识图谱 + RAG 查询                          │  │
-│  │  ├── sources.py       Tavily 源预览                                │  │
-│  │  ├── syllabus.py      PDF/DOCX 解析 + 导入                        │  │
-│  │  └── materials.py     LightRAG 材料摄入                            │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│  ┌─────────────────────────────┐  ┌────────────────────────────────────┐  │
-│  │  agents/ (Hive 风格 A2A)    │  │  services/                        │  │
-│  │  ├── base.py (BaseNode)     │  │  ├── research.py (Tavily)         │  │
-│  │  ├── orchestrator.py        │  │  ├── file_parser.py               │  │
-│  │  ├── behavior_analyst.py    │  │  ├── lightrag_service.py          │  │
-│  │  ├── risk_detector.py       │  │  ├── xapi_generator.py            │  │
-│  │  ├── content_optimizer.py   │  │  └── report_exporter.py           │  │
-│  │  └── cohort_comparator.py   │  │     (PDF + DOCX + Excel + 图表)   │  │
-│  └──────────┬──────────────────┘  └─────────────┬────────────────────┘  │
-│             │  SharedMemory (Redis)              │                       │
-└─────────────┼───────────────────────────────────┼───────────────────────┘
+│  后端 (Flask + Blueprints)                                                 │
+│  ├── app.py (~30 行，仅路由)             ├── config.py (仅环境常量)        │
+│  ├── extensions.py (单例：AI、Redis 等)  ├── async_loop.py (后台异步循环)  │
+│  ├─────────────────────────────────────────────────────────────────────┐   │
+│  │  routes/                                                            │   │
+│  │  ├── curriculum.py    生成 / 验架 / 展开 / 保存                     │   │
+│  │  ├── history.py       CRUD + 收藏 + DOCX 导出                       │   │
+│  │  ├── analytics.py     A2A SSE 分析 + PDF/DOCX/Excel 导出            │   │
+│  │  ├── xapi.py          xAPI 语句 + Mock 数据种子                     │   │
+│  │  ├── graph.py         知识图谱 + RAG 查询                           │   │
+│  │  ├── sources.py       Tavily 源预览                                 │   │
+│  │  ├── syllabus.py      PDF/DOCX 解析 + 导入                          │   │
+│  │  └── materials.py     LightRAG 材料摄入                             │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────┐  ┌────────────────────────────────────┐   │
+│  │  agents/ (Hive 风格 A2A)    │  │  services/                         │   │
+│  │  ├── base.py (BaseNode)     │  │  ├── research.py (Tavily)          │   │
+│  │  ├── orchestrator.py        │  │  ├── file_parser.py                │   │
+│  │  ├── behavior_analyst.py    │  │  ├── prompt_builder.py             │   │
+│  │  ├── risk_detector.py       │  │  ├── xapi_generator.py             │   │
+│  │  ├── content_optimizer.py   │  │  ├── report_exporter.py (facade)   │   │
+│  │  └── cohort_comparator.py   │  │  ├── chart_generator.py            │   │
+│  └──────────┬──────────────────┘  │  └── export_{pdf,docx,excel}.py    │   │
+│             │  SharedMemory       └─────────────┬──────────────────────┘   │
+└─────────────┼───────────────────────────────────┼──────────────────────────┘
               │                                   │
               ▼                                   ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
@@ -287,7 +289,9 @@ plot-ark/
 │
 ├── backend/                             ← Flask（模块化 Blueprints）
 │   ├── app.py                           ← 入口文件（~30 行，注册 Blueprints）
-│   ├── config.py                        ← Flask app、AI 客户端、Redis、异步循环
+│   ├── config.py                        ← 纯环境常量与配置变量
+│   ├── extensions.py                    ← 全局单例服务（Flask app、AI 客户端、Redis）
+│   ├── async_loop.py                    ← 后台事件异步循环管理器
 │   ├── db.py                            ← PostgreSQL 操作
 │   ├── constants.py                     ← Bloom's 分类、会话约束、评估格式
 │   ├── routes/
@@ -296,7 +300,7 @@ plot-ark/
 │   │   ├── sources.py                   ← Tavily 源预览
 │   │   ├── graph.py                     ← 知识图谱 + RAG 查询
 │   │   ├── xapi.py                      ← xAPI 语句 + 种子生成器
-│   │   ├── analytics.py                 ← A2A SSE 分析 + PDF/DOCX/Excel 导出
+│   │   ├── analytics.py                 ← A2A SSE 分析 + 导出接口
 │   │   ├── syllabus.py                  ← PDF/DOCX 解析 + 导入
 │   │   └── materials.py                 ← LightRAG 材料摄入
 │   ├── agents/
@@ -309,9 +313,14 @@ plot-ark/
 │   ├── services/
 │   │   ├── research.py                  ← Tavily 搜索 + 可信度评分
 │   │   ├── file_parser.py               ← PDF/PPTX/DOCX 文本提取
+│   │   ├── prompt_builder.py            ← 集中组装的 AI Prompt 模板
 │   │   ├── lightrag_service.py          ← LightRAG 实例管理
 │   │   ├── xapi_generator.py            ← Mock xAPI 数据 + 噪声注入
-│   │   └── report_exporter.py           ← PDF/DOCX/Excel 报告生成
+│   │   ├── report_exporter.py           ← 用于报告生成的薄调度 Facade
+│   │   ├── chart_generator.py           ← Matplotlib 数据可视化与品牌颜色
+│   │   ├── export_pdf.py                ← ReportLab PDF 绘制逻辑
+│   │   ├── export_docx.py               ← python-docx Word 文档生成
+│   │   └── export_excel.py              ← openpyxl Excel 表格生成
 │   ├── Dockerfile
 │   └── requirements.txt
 │
@@ -328,7 +337,13 @@ plot-ark/
 │   │   │   ├── Select.tsx               ← 可复用下拉选择
 │   │   │   └── Input.tsx                ← 可复用文本输入
 │   │   ├── generate/
-│   │   │   └── SyllabusUpload.tsx        ← 拖拽上传大纲解析
+│   │   │   ├── SyllabusUpload.tsx       ← 拖拽上传大纲解析
+│   │   │   ├── SourceReview.tsx         ← 审核 Tavily 检索的学术信源
+│   │   │   └── SkeletonReview.tsx       ← 审核课程模块骨架
+│   │   ├── analytics/
+│   │   │   └── ReportSections.tsx       ← A2A 分析报告的展示组件
+│   │   ├── ModuleCard.tsx               ← 拆分的单个课程模块卡片
+│   │   ├── ModuleSidebar.tsx            ← 课程模块侧边导航栏
 │   │   ├── GraphViewer.tsx              ← 核心力导向图渲染
 │   │   ├── GraphToolbar.tsx             ← 学科标签页、节点/课程搜索
 │   │   ├── CourseBanner.tsx             ← 课程药丸、拖拽、内联重命名

@@ -5,7 +5,7 @@ import random
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
 from db import get_db
-from config import redis_client
+from extensions import redis_client
 
 xapi_bp = Blueprint("xapi", __name__)
 

@@ -4,7 +4,8 @@ import os
 import re
 import json
 from flask import Blueprint, request, jsonify
-from config import redis_client, run_async
+from extensions import redis_client
+from async_loop import run_async
 from services.lightrag_service import (
     get_lightrag_instance, get_graphml_path, get_all_graphml_paths,
     build_graph_response, _initialized_instances,

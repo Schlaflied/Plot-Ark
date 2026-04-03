@@ -42,7 +42,7 @@ def get_risks(course_id):
     """Quick risk query — runs only the risk detector agent."""
     from agents.risk_detector import RiskDetectorNode
     from agents.base import SharedMemory
-    from config import redis_client
+    from extensions import redis_client
 
     sm = SharedMemory(f"risk-{course_id}", redis_client)
     sm.set("course_id", course_id)
@@ -55,7 +55,7 @@ def get_optimization(course_id):
     """Quick content optimization query."""
     from agents.content_optimizer import ContentOptimizerNode
     from agents.base import SharedMemory
-    from config import redis_client
+    from extensions import redis_client
 
     sm = SharedMemory(f"opt-{course_id}", redis_client)
     sm.set("course_id", course_id)
@@ -68,7 +68,7 @@ def get_cohort(course_id):
     """Quick cohort comparison query."""
     from agents.cohort_comparator import CohortComparatorNode
     from agents.base import SharedMemory
-    from config import redis_client
+    from extensions import redis_client
 
     sm = SharedMemory(f"coh-{course_id}", redis_client)
     sm.set("course_id", course_id)

@@ -5,7 +5,7 @@ import uuid
 import asyncio
 import threading as _t
 from flask import Blueprint, request, jsonify
-from config import bg_loop
+from async_loop import bg_loop
 from services.file_parser import extract_text_from_bytes
 from services.lightrag_service import (
     get_lightrag_instance, slug, _ingest_jobs, _initialized_instances,

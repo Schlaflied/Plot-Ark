@@ -15,7 +15,7 @@ from agents.behavior_analyst import BehaviorAnalystNode
 from agents.risk_detector import RiskDetectorNode
 from agents.content_optimizer import ContentOptimizerNode
 from agents.cohort_comparator import CohortComparatorNode
-from config import redis_client
+from extensions import redis_client
 
 
 class OrchestratorNode(BaseNode):

@@ -3,7 +3,8 @@
 import os
 import json
 from flask import Blueprint, request, jsonify
-from config import AI_PROVIDER, openai_client
+from config import AI_PROVIDER
+from extensions import openai_client
 import google.generativeai as genai
 from services.file_parser import extract_text_from_bytes
 

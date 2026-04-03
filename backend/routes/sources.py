@@ -2,7 +2,7 @@
 
 import json
 from flask import Blueprint, request
-from config import openai_client, redis_client
+from extensions import openai_client, redis_client
 from services.research import research_sources, score_credibility
 
 sources_bp = Blueprint("sources", __name__)

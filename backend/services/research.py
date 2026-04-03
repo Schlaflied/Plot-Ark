@@ -1,6 +1,6 @@
 """Tavily source research and credibility scoring."""
 
-from config import tavily_client
+from extensions import tavily_client
 from constants import RESOURCE_TYPES, ACADEMIC_DOMAINS, NEWS_DOMAINS, VIDEO_DOMAINS
 
 

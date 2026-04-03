@@ -1,7 +1,7 @@
 """Plot-Ark backend entry point — registers all Blueprints and initializes DB."""
 
 import os
-from config import app
+from extensions import app
 from db import init_db
 
 # Import and register all route Blueprints
