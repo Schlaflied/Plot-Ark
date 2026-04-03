@@ -19,10 +19,20 @@ COLORS = {
     "amber_500": "#f59e0b",
     "amber_600": "#d97706",
     "amber_300": "#fcd34d",
+    "amber_50":  "#fffbeb",
+    "coffee":    "#7C5C44",
+    "coffee_light": "#F5EDE6",
+    "coffee_mid":   "#E8D5C8",
+    "stone_900": "#1c1917",
+    "stone_800": "#292524",
     "stone_700": "#44403c",
     "stone_500": "#78716c",
     "stone_300": "#d6d3d1",
     "stone_200": "#e7e5e4",
+    "stone_100": "#f5f5f4",
+    "oat_white": "#F9F8F4",
+    "oat_mid":   "#F2F1ED",
+    "oat_dark":  "#E8E0D0",
     "red_500": "#ef4444",
     "red_400": "#f87171",
     "green_500": "#22c55e",
@@ -37,15 +47,22 @@ BAR_COLORS = [COLORS["amber_500"], COLORS["stone_500"], COLORS["red_400"],
 
 
 def _setup_chart_style():
-    """Apply Plot-Ark McKinsey/Google style to matplotlib."""
+    """Apply Plot-Ark warm oat style to matplotlib."""
     plt.rcParams.update({
         "figure.facecolor": "#FFFFFF",
         "axes.facecolor": "#FFFFFF",
-        "axes.edgecolor": "#D1D5DB",
-        "axes.labelcolor": "#555555",
-        "text.color": "#333333",
-        "xtick.color": "#555555",
-        "ytick.color": "#555555",
+        "axes.edgecolor": "none",
+        "axes.labelcolor": COLORS["stone_700"],
+        "axes.grid": True,
+        "grid.color": COLORS["stone_200"],
+        "grid.linestyle": "--",
+        "grid.linewidth": 0.6,
+        "grid.alpha": 0.8,
+        "text.color": COLORS["stone_800"],
+        "xtick.color": COLORS["stone_500"],
+        "ytick.color": COLORS["stone_500"],
+        "xtick.bottom": False,
+        "ytick.left": False,
         "font.family": "sans-serif",
         "font.size": 10,
     })
@@ -54,7 +71,7 @@ def _setup_chart_style():
 def _fig_to_bytes(fig) -> bytes:
     """Convert a matplotlib figure to PNG bytes and close it."""
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#FFFFFF")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
@@ -81,12 +98,15 @@ class ReportExporter:
             struggles = [m.get("struggles", 0) for m in modules]
 
             x = range(len(names))
-            ax.bar(x, rates, color=COLORS["amber_500"], alpha=0.9, label="Completion %")
+            bars = ax.bar(x, rates, color=COLORS["coffee_light"], edgecolor=COLORS["coffee"], linewidth=1.5)
+            for bar, rate in zip(bars, rates):
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.8,
+                        f"{rate:.0f}%", ha="center", va="bottom", fontsize=8, color=COLORS["stone_700"])
+            short_labels = [f"M{i+1}" for i in range(len(names))]
             ax.set_xticks(x)
-            ax.set_xticklabels(names, rotation=45, ha="right", fontsize=9)
+            ax.set_xticklabels(short_labels, rotation=0, fontsize=9)
             ax.set_ylabel("Completion Rate (%)")
-            ax.set_title("Module Completion Rates", fontweight="bold")
-            ax.legend()
+            ax.set_title("Module Completion Rates", fontweight="bold", color=COLORS["stone_900"])
             plt.tight_layout()
             charts["module_completion_bar"] = _fig_to_bytes(fig)
 
@@ -98,16 +118,16 @@ class ReportExporter:
             users = [d.get("active_users", 0) for d in daily]
             actions = [d.get("actions", 0) for d in daily]
 
-            ax.plot(dates, users, color=COLORS["amber_500"], marker="o", linewidth=2.5, label="Active Students")
+            ax.plot(dates, users, color=COLORS["coffee"], marker="o", linewidth=2.5, label="Active Students")
             ax2 = ax.twinx()
             ax2.plot(dates, actions, color=COLORS["stone_500"], marker="s", linewidth=1.5, linestyle="--", label="Total Actions")
             ax2.set_ylabel("Actions", color=COLORS["stone_500"])
-            ax.set_ylabel("Active Students", color=COLORS["amber_500"])
+            ax.set_ylabel("Active Students", color=COLORS["coffee"])
             ax.set_title("Daily Engagement Trend", fontweight="bold")
             ax.tick_params(axis="x", rotation=45)
             lines1, labels1 = ax.get_legend_handles_labels()
             lines2, labels2 = ax2.get_legend_handles_labels()
-            ax.legend(lines1 + lines2, labels1 + labels2, loc="upper left")
+            ax.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
             plt.tight_layout()
             charts["engagement_trend_line"] = _fig_to_bytes(fig)
 
@@ -127,9 +147,21 @@ class ReportExporter:
                     colors.append(color_map[level])
 
             if sizes:
-                ax.pie(sizes, labels=labels_list, colors=colors, autopct="%1.0f%%",
-                       textprops={"color": "white", "fontsize": 11}, startangle=90)
-                ax.set_title("Student Risk Distribution")
+                wedges, texts, autotexts = ax.pie(
+                    sizes, colors=colors, autopct="%1.0f%%",
+                    textprops={"fontsize": 12, "fontweight": "bold"},
+                    startangle=90, pctdistance=0.55,
+                )
+                # Make percentage text white so it's visible on colored wedges
+                for at in autotexts:
+                    at.set_color("white")
+                # Add legend indicator so readers know what each color means
+                ax.legend(
+                    wedges, labels_list,
+                    loc="center left", bbox_to_anchor=(1.0, 0.5),
+                    fontsize=10, frameon=False,
+                )
+                ax.set_title("Student Risk Distribution", pad=16)
                 plt.tight_layout()
                 charts["risk_distribution_pie"] = _fig_to_bytes(fig)
 
@@ -139,10 +171,14 @@ class ReportExporter:
             fig, ax = plt.subplots(figsize=(8, 3.5))
             v_names = list(verbs.keys())
             v_counts = list(verbs.values())
-            colors_list = [COLORS["amber_500"] if i == 0 else COLORS["stone_500"] for i in range(len(v_names))]
-            ax.barh(v_names, v_counts, color=colors_list)
+            colors_list = [COLORS["coffee_light"] if i == 0 else COLORS["oat_mid"] for i in range(len(v_names))]
+            edge_list = [COLORS["coffee"] if i == 0 else COLORS["stone_500"] for i in range(len(v_names))]
+            bars = ax.barh(v_names, v_counts, color=colors_list, edgecolor=edge_list, linewidth=1.5)
+            for bar, count in zip(bars, v_counts):
+                ax.text(bar.get_width() + 0.5, bar.get_y() + bar.get_height()/2,
+                        str(count), va="center", fontsize=8, color=COLORS["stone_700"])
             ax.set_xlabel("Count")
-            ax.set_title("Learning Activity Distribution", fontweight="bold")
+            ax.set_title("Learning Activity Distribution", fontweight="bold", color=COLORS["stone_900"])
             plt.tight_layout()
             charts["verb_distribution_bar"] = _fig_to_bytes(fig)
 
@@ -158,8 +194,12 @@ class ReportExporter:
             x = range(len(g_names))
             width = 0.35
 
-            ax.bar([i - width/2 for i in x], comp_rates, width, color=COLORS["amber_500"], label="Avg Completion %")
-            ax.bar([i + width/2 for i in x], struggle_rates, width, color=COLORS["stone_500"], label="Avg Struggle %")
+            comp_bars = ax.bar([i - width/2 for i in x], comp_rates, width, color=COLORS["coffee_light"], edgecolor=COLORS["coffee"], linewidth=1.5, label="Avg Completion %")
+            str_bars = ax.bar([i + width/2 for i in x], struggle_rates, width, color=COLORS["oat_mid"], edgecolor=COLORS["stone_500"], linewidth=1.5, label="Avg Struggle %")
+            for bar, val in zip(list(comp_bars) + list(str_bars), comp_rates + struggle_rates):
+                if val > 0:
+                    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                            f"{val:.0f}%", ha="center", va="bottom", fontsize=7, color=COLORS["stone_700"])
 
             ax.set_xticks(x)
             ax.set_xticklabels([f"{n}\n(n={c})" for n, c in zip(g_names, counts)])
@@ -195,30 +235,30 @@ class ReportExporter:
 
         # Custom styles
         title_style = ParagraphStyle("PlotArkTitle", parent=styles["Title"],
-                                     textColor=colors.HexColor(COLORS["amber_500"]),
+                                     textColor=colors.HexColor(COLORS["stone_900"]),
                                      fontSize=24, spaceAfter=4)
         subtitle_style = ParagraphStyle("PlotArkSubtitle", parent=styles["Heading1"],
                                         textColor=colors.HexColor(COLORS["stone_700"]),
-                                        fontSize=18, spaceAfter=4)
+                                        fontSize=18, spaceBefore=4, spaceAfter=4)
         meta_style = ParagraphStyle("PlotArkMeta", parent=styles["Normal"],
                                     textColor=colors.HexColor(COLORS["stone_500"]),
                                     fontSize=9, spaceAfter=12)
         h2_style = ParagraphStyle("PlotArkH2", parent=styles["Heading2"],
-                                  textColor=colors.HexColor(COLORS["amber_500"]),
+                                  textColor=colors.HexColor(COLORS["stone_900"]),
                                   fontSize=16, spaceAfter=2, spaceBefore=12)
         body_style = ParagraphStyle("PlotArkBody", parent=styles["Normal"],
                                     fontSize=10, spaceAfter=6)
         
-        stat_card_num = ParagraphStyle("StatNum", textColor=colors.HexColor(COLORS["amber_500"]), fontSize=36, fontName="Helvetica-Bold", leading=40, alignment=1, spaceAfter=4)
+        stat_card_num = ParagraphStyle("StatNum", textColor=colors.HexColor(COLORS["coffee"]), fontSize=36, fontName="Helvetica-Bold", leading=40, alignment=1, spaceAfter=4)
         stat_card_lbl = ParagraphStyle("StatLbl", textColor=colors.HexColor(COLORS["stone_500"]), fontSize=9, fontName="Helvetica-Bold", alignment=1)
         insight_style = ParagraphStyle("PlotArkInsight", parent=styles["Normal"], textColor=colors.HexColor(COLORS["stone_500"]), fontSize=9, fontName="Helvetica-Oblique", spaceBefore=4, spaceAfter=8, leftIndent=10, rightIndent=10)
-        callout_style = ParagraphStyle("PlotArkCallout", textColor=colors.HexColor(COLORS["amber_500"]), fontSize=48, fontName="Helvetica-Bold", leading=56, spaceAfter=8, spaceBefore=4)
+        callout_style = ParagraphStyle("PlotArkCallout", textColor=colors.HexColor(COLORS["coffee"]), fontSize=48, fontName="Helvetica-Bold", leading=56, spaceAfter=8, spaceBefore=4)
         callout_label = ParagraphStyle("PlotArkCalloutLbl", textColor=colors.HexColor(COLORS["stone_500"]), fontSize=12, fontName="Helvetica-Bold", spaceAfter=16)
 
         def draw_header_footer(canvas, doc_obj):
             canvas.saveState()
             canvas.setFont("Helvetica-Bold", 10)
-            canvas.setFillColor(colors.HexColor(COLORS["amber_500"]))
+            canvas.setFillColor(colors.HexColor(COLORS["coffee"]))
             canvas.drawString(0.5*inch, letter[1] - 0.4*inch, "Plot Ark Analytics")
             canvas.setFont("Helvetica", 9)
             canvas.setFillColor(colors.HexColor(COLORS["stone_500"]))
@@ -231,6 +271,7 @@ class ReportExporter:
 
         # ── Cover with course metadata ─────────────────────────────────────
         cm = report.get("course_meta", {})
+        elements.append(Spacer(1, 1.5*inch))
         elements.append(Paragraph("Plot-Ark Analytics Report", title_style))
         elements.append(Paragraph(cm.get("topic", "Untitled Course"), subtitle_style))
         meta_parts = []
@@ -317,15 +358,15 @@ class ReportExporter:
             
             t = Table(table_data, colWidths=[1.5*inch]*4)
             t.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fafaf9")),  # stone-50
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(COLORS["coffee_light"])),
                 ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor(COLORS["stone_700"])),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor(COLORS["stone_300"])),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor(COLORS["stone_200"])),
-                ("TOPPADDING", (0, 0), (-1, -1), 8),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LINEBELOW", (0, 0), (-1, -2), 0.3, colors.HexColor(COLORS["oat_dark"])),
+                ("LINEBEFORE", (1, 0), (-1, -1), 0.3, colors.HexColor(COLORS["oat_dark"])),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
             ]))
             elements.append(t)
             elements.append(Spacer(1, 0.2*inch))
@@ -384,12 +425,14 @@ class ReportExporter:
 
             t = Table(table_data, colWidths=[1.5*inch, 0.8*inch, 0.6*inch, 3.5*inch], repeatRows=1)
             t.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#444444")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(COLORS["oat_dark"])),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor(COLORS["stone_800"])),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor(COLORS["stone_700"])),
                 ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor(COLORS["stone_300"])),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5f5f4")]),
+                ("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.HexColor(COLORS["stone_300"])),
+                ("LINEBELOW", (0, 1), (-1, -2), 0.3, colors.HexColor(COLORS["stone_200"])),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor(COLORS["oat_white"]), colors.HexColor(COLORS["oat_mid"])]),
             ]))
             risk_section_elements.append(t)
 
@@ -404,23 +447,26 @@ class ReportExporter:
         modules = report.get("behavior_analysis", {}).get("module_engagement", [])
         if modules:
             elements.append(Paragraph("Module Engagement Summary", ParagraphStyle("PlotArkH3", parent=h2_style, fontSize=12, spaceBefore=0)))
-            table_data = [["Module", "Students", "Completion", "Struggle"]]
-            for m in modules:
+            table_data = [["#", "Module", "Students", "Completion", "Struggle"]]
+            for idx, m in enumerate(modules, 1):
                 name_str = m.get("module_name", "")
                 table_data.append([
+                    f"M{idx}",
                     Paragraph(name_str, body_style),
                     str(m.get("unique_students", 0)),
                     f"{m.get('completion_rate', 0)*100:.0f}%",
                     f"{m.get('struggle_rate', 0)*100:.0f}%"
                 ])
-            t = Table(table_data, colWidths=[3.2*inch, 0.8*inch, 1.0*inch, 1.0*inch])
+            t = Table(table_data, colWidths=[0.4*inch, 2.8*inch, 0.8*inch, 1.0*inch, 1.0*inch])
             t.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#444444")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(COLORS["oat_dark"])),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor(COLORS["stone_800"])),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor(COLORS["stone_700"])),
                 ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor(COLORS["stone_300"])),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5f5f4")]),
+                ("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.HexColor(COLORS["stone_300"])),
+                ("LINEBELOW", (0, 1), (-1, -2), 0.3, colors.HexColor(COLORS["stone_200"])),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor(COLORS["oat_white"]), colors.HexColor(COLORS["oat_mid"])]),
             ]))
             elements.append(t)
             elements.append(Spacer(1, 0.2*inch))
@@ -479,16 +525,27 @@ class ReportExporter:
         except ImportError:
             return self._fallback_text_report(report, "docx")
 
+        COFFEE = RGBColor(0x7C, 0x5C, 0x44)
+        STONE = RGBColor(0x44, 0x40, 0x3C)
+
+        def _color_heading(heading, color=COFFEE):
+            for run in heading.runs:
+                run.font.color.rgb = color
+
         doc = Document()
         charts = self.generate_charts(report)
 
         # Title
         title = doc.add_heading("Plot-Ark Analytics Report", level=0)
-        for run in title.runs:
-            run.font.color.rgb = RGBColor(0xD9, 0x77, 0x06)  # amber_600
+        _color_heading(title)
+
+        # Course subtitle
+        cm = report.get("course_meta", {})
+        if cm.get("topic"):
+            sub = doc.add_heading(cm["topic"], level=1)
+            _color_heading(sub, STONE)
 
         # Course metadata
-        cm = report.get("course_meta", {})
         p_meta = doc.add_paragraph()
         meta_parts = []
         if cm.get("level"):
@@ -500,36 +557,30 @@ class ReportExporter:
         if cm.get("course_code"):
             meta_parts.append(cm["course_code"])
         meta_parts.append(f"Generated: {report.get('generated_at', '')[:10]}")
-        p_meta.add_run(" · ".join(meta_parts)).font.size = Pt(9)
+        meta_run = p_meta.add_run(" · ".join(meta_parts))
+        meta_run.font.size = Pt(9)
+        meta_run.font.color.rgb = STONE
+
+        # Table of Contents — manual list
+        toc_heading = doc.add_heading("Table of Contents", level=1)
+        _color_heading(toc_heading)
+        for item in ["1. Behavior Analysis", "2. Risk Assessment",
+                     "3. Content Optimization", "4. Cohort Comparison",
+                     "5. Overview & Recommended Actions"]:
+            p_toc = doc.add_paragraph(item)
+            p_toc.runs[0].font.color.rgb = COFFEE
+            p_toc.runs[0].font.size = Pt(11)
 
         # Executive Summary
-        doc.add_heading("Executive Summary", level=1)
+        ex_heading = doc.add_heading("Executive Summary", level=1)
+        _color_heading(ex_heading)
         for point in report.get("executive_summary", []):
             doc.add_paragraph(f"• {point}")
 
-        # Table of Contents
-        from docx.oxml import OxmlElement
-        from docx.oxml.ns import qn
-        doc.add_heading("Table of Contents", level=1)
-        p = doc.add_paragraph()
-        run = p.add_run()
-        fldChar1 = OxmlElement('w:fldChar')
-        fldChar1.set(qn('w:fldCharType'), 'begin')
-        instrText = OxmlElement('w:instrText')
-        instrText.set(qn('xml:space'), 'preserve')
-        instrText.text = 'TOC \\o "1-3" \\h \\z \\u'
-        fldChar2 = OxmlElement('w:fldChar')
-        fldChar2.set(qn('w:fldCharType'), 'separate')
-        fldChar3 = OxmlElement('w:fldChar')
-        fldChar3.set(qn('w:fldCharType'), 'end')
-        run._r.append(fldChar1)
-        run._r.append(instrText)
-        run._r.append(fldChar2)
-        run._r.append(fldChar3)
         doc.add_page_break()
 
         # Section 1: Behavior Analysis
-        doc.add_heading("1. Behavior Analysis", level=1)
+        _color_heading(doc.add_heading("1. Behavior Analysis", level=1))
         
         ba = report.get("behavior_analysis", {})
         verbs = ba.get("verb_distribution", {})
@@ -558,14 +609,14 @@ class ReportExporter:
             doc.add_picture(io.BytesIO(charts["verb_distribution_bar"]), width=Inches(5))
 
         # Section 2: Risk Assessment
-        doc.add_heading("2. Risk Assessment", level=1)
+        _color_heading(doc.add_heading("2. Risk Assessment", level=1))
         if "risk_distribution_pie" in charts:
             doc.add_picture(io.BytesIO(charts["risk_distribution_pie"]), width=Inches(3.5))
 
         ra = report.get("risk_assessment", {})
         at_risk = ra.get("at_risk_students", [])
         if at_risk:
-            doc.add_heading("At-Risk Students", level=2)
+            _color_heading(doc.add_heading("At-Risk Students", level=2))
             table = doc.add_table(rows=1, cols=4)
             table.style = "Table Grid"
             hdr = table.rows[0].cells
@@ -578,11 +629,11 @@ class ReportExporter:
                 row[3].text = s.get("signals", [""])[0] if s.get("signals") else ""
 
         # Section 3: Content
-        doc.add_heading("3. Content Optimization", level=1)
-        
+        _color_heading(doc.add_heading("3. Content Optimization", level=1))
+
         modules = report.get("behavior_analysis", {}).get("module_engagement", [])
         if modules:
-            doc.add_heading("Module Engagement Summary", level=2)
+            _color_heading(doc.add_heading("Module Engagement Summary", level=2))
             table = doc.add_table(rows=1, cols=4)
             table.style = 'Table Grid'
             hdr = table.rows[0].cells
@@ -600,7 +651,7 @@ class ReportExporter:
         co = report.get("content_optimization", {})
         under = co.get("underperforming_content", [])
         if under:
-            doc.add_heading("Modules Needing Attention", level=2)
+            _color_heading(doc.add_heading("Modules Needing Attention", level=2))
             for m in under[:5]:
                 p = doc.add_paragraph()
                 run = p.add_run(m["module_name"])
@@ -610,14 +661,14 @@ class ReportExporter:
                     doc.add_paragraph(f"  → {s}")
 
         # Section 4: Cohort
-        doc.add_heading("4. Cohort Comparison", level=1)
+        _color_heading(doc.add_heading("4. Cohort Comparison", level=1))
         if "cohort_comparison_bar" in charts:
             doc.add_picture(io.BytesIO(charts["cohort_comparison_bar"]), width=Inches(5.5))
         for insight in report.get("cohort_comparison", {}).get("insights", []):
             doc.add_paragraph(f"• {insight}")
 
         # Section 5: Overview
-        doc.add_heading("5. Overview & Recommended Actions", level=1)
+        _color_heading(doc.add_heading("5. Overview & Recommended Actions", level=1))
         for line in self._generate_overview(report):
             doc.add_paragraph(line)
 
@@ -804,28 +855,28 @@ class ReportExporter:
         lines.append("<b>Recommended Improvements</b>")
         if len(at_risk) > 5:
             lines.append(
-                f"🔴 HIGH — {len(at_risk)} students are at risk. Schedule 1-on-1 check-ins "
+                f"HIGH — {len(at_risk)} students are at risk. Schedule 1-on-1 check-ins "
                 f"with high-risk students and provide supplementary materials."
             )
         for m in under:
             sug = m.get("suggestions", ["Review and simplify content."])[0]
             lines.append(
-                f"🟡 MEDIUM — Module \"{m['module_name']}\" has a "
+                f"MEDIUM — Module \"{m['module_name']}\" has a "
                 f"{m['struggle_rate']:.0%} struggle rate. {sug}"
             )
         if dis.get("count", 0) > 3:
             lines.append(
-                f"🟡 MEDIUM — {dis['count']} students show disengaged behavior. "
+                f"MEDIUM — {dis['count']} students show disengaged behavior. "
                 f"Consider implementing engagement incentives or personal outreach."
             )
         peak = ba.get("engagement_metrics", {}).get("peak_activity_hours", [])
         if any(h >= 22 or h <= 5 for h in peak):
             lines.append(
-                "⚪ LOW — Unusual late-night/early-morning activity detected. "
+                "LOW — Unusual late-night/early-morning activity detected. "
                 "May indicate different time zones or poor time management."
             )
         if len(at_risk) == 0 and len(under) == 0:
-            lines.append("✅ No critical issues found. Continue monitoring student progress.")
+            lines.append("No critical issues found. Continue monitoring student progress.")
 
         return lines
 
