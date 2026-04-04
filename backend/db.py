@@ -67,6 +67,26 @@ def init_db():
                     ON student_feedback(course_id)
                 """)
                 cur.execute("""
+                    CREATE TABLE IF NOT EXISTS course_analysis_snapshots (
+                        id SERIAL PRIMARY KEY,
+                        course_id INTEGER NOT NULL,
+                        run_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        noise_label TEXT DEFAULT 'unknown',
+                        risk_distribution JSONB,
+                        total_students INTEGER,
+                        at_risk_count INTEGER,
+                        high_risk_count INTEGER,
+                        top_signals JSONB,
+                        module_engagement_summary JSONB,
+                        verb_distribution JSONB,
+                        cohort_groups JSONB
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_snapshots_course
+                    ON course_analysis_snapshots(course_id, run_at DESC)
+                """)
+                cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_xapi_actor
                     ON xapi_statements(actor_email)
                 """)

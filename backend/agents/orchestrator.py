@@ -341,7 +341,7 @@ class OrchestratorNode(BaseNode):
         if hp_count > 0:
             summary_points.append(f"{hp_count} high-performing students identified")
 
-        return {
+        report = {
             "course_id": course_id,
             "course_meta": course_meta,
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -359,6 +359,56 @@ class OrchestratorNode(BaseNode):
                 for name, r in agent_results.items()
             },
         }
+        self._save_snapshot(report)
+        return report
+
+    def _save_snapshot(self, report: dict) -> None:
+        """Persist a summary snapshot of this analysis run for LTM."""
+        try:
+            from db import get_db
+            conn = get_db()
+            if not conn:
+                return
+            cur = conn.cursor()
+            ra = report.get("risk_assessment", {})
+            ba = report.get("behavior_analysis", {})
+            cc = report.get("cohort_comparison", {})
+
+            risk_dist = ra.get("risk_distribution", {})
+            at_risk = ra.get("at_risk_students", [])
+            high_risk_count = sum(1 for s in at_risk if s.get("risk_level") == "high")
+
+            # Top signals: collect all unique signals from at-risk students
+            signals = []
+            for s in at_risk[:10]:
+                signals.extend(s.get("signals", []))
+            top_signals = list(dict.fromkeys(signals))[:8]  # dedupe, keep order, cap at 8
+
+            # Module engagement summary: just name + completion_rate
+            modules = ba.get("module_engagement", [])
+            mod_summary = [{"name": m.get("module_name", ""), "completion_rate": m.get("completion_rate", 0)} for m in modules]
+
+            cur.execute("""
+                INSERT INTO course_analysis_snapshots
+                    (course_id, risk_distribution, total_students, at_risk_count, high_risk_count,
+                     top_signals, module_engagement_summary, verb_distribution, cohort_groups)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                report.get("course_id"),
+                json.dumps(risk_dist),
+                ra.get("total_students_analyzed", 0),
+                len(at_risk),
+                high_risk_count,
+                json.dumps(top_signals),
+                json.dumps(mod_summary),
+                json.dumps(ba.get("verb_distribution", {})),
+                json.dumps(cc.get("groups", {})),
+            ))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            print(f"[Orchestrator] Snapshot save error (non-fatal): {e}")
 
 
 def _sse_event(agent: str, status: str, message: str, result: dict = None) -> str:
