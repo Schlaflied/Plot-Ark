@@ -111,10 +111,10 @@ class RiskDetectorNode(BaseNode):
             # course, not wall-clock time, so mock data timestamps stay fair.
             if last_seen:
                 days_inactive = (reference_now - last_seen.replace(tzinfo=None)).days
-                if days_inactive > 10:
+                if days_inactive > 21:
                     signals.append(f"No activity in {days_inactive} days")
                     risk_score += 3
-                elif days_inactive > 5:
+                elif days_inactive > 14:
                     signals.append(f"Inactive for {days_inactive} days")
                     risk_score += 1
 
