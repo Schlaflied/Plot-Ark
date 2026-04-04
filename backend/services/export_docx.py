@@ -59,6 +59,43 @@ def export_docx(report: dict) -> bytes:
     meta_run.font.size = Pt(9)
     meta_run.font.color.rgb = STONE
 
+    # Cover stats
+    ra = report.get("risk_assessment", {})
+    ba_cover = report.get("behavior_analysis", {})
+    mods_cover = ba_cover.get("module_engagement", [])
+    avg_comp_cover = sum(m.get("completion_rate", 0) for m in mods_cover) / len(mods_cover) if mods_cover else 0
+    total_students_cover = sum(ra.get("risk_distribution", {}).values()) or max(
+        [m.get("unique_students", 0) for m in mods_cover] + [0]
+    )
+    total_at_risk = len(ra.get("at_risk_students", []))
+    high = ra.get("risk_distribution", {}).get("high", 0)
+    medium = ra.get("risk_distribution", {}).get("medium", 0)
+    low = ra.get("risk_distribution", {}).get("low", 0)
+
+    p_stats = doc.add_paragraph()
+    p_stats.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r1 = p_stats.add_run(
+        f"{total_students_cover}  TOTAL STUDENTS     {avg_comp_cover * 100:.0f}%  AVG COMPLETION"
+    )
+    r1.font.size = Pt(14)
+    r1.font.bold = True
+    r1.font.color.rgb = COFFEE
+
+    p_risk_lbl = doc.add_paragraph()
+    p_risk_lbl.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r2 = p_risk_lbl.add_run("AT-RISK BREAKDOWN")
+    r2.font.size = Pt(9)
+    r2.font.bold = True
+    r2.font.color.rgb = STONE
+
+    p_risk_val = doc.add_paragraph()
+    p_risk_val.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r3 = p_risk_val.add_run(
+        f"{total_at_risk} at-risk total  |  {high} high-risk  |  {medium} medium-risk  |  {low} low-risk"
+    )
+    r3.font.size = Pt(12)
+    r3.font.color.rgb = COFFEE
+
     # Table of Contents — manual list
     toc_heading = doc.add_heading("Table of Contents", level=1)
     _color_heading(toc_heading)

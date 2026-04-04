@@ -157,20 +157,49 @@ def export_pdf(report: dict) -> bytes:
     mods = ba.get("module_engagement", [])
     avg_comp = sum(m.get("completion_rate", 0) for m in mods) / len(mods) if mods else 0
     total_at_risk = len(ra.get("at_risk_students", []))
+    high = ra.get("risk_distribution", {}).get("high", 0)
+    medium = ra.get("risk_distribution", {}).get("medium", 0)
+    low = ra.get("risk_distribution", {}).get("low", 0)
 
-    stat_data = [
+    # Row 1: 2-column top stats
+    top_stat_data = [
         [
             [Paragraph(str(total_students), stat_card_num), Paragraph("TOTAL STUDENTS", stat_card_lbl)],
             [Paragraph(f"{avg_comp * 100:.0f}%", stat_card_num), Paragraph("AVG COMPLETION", stat_card_lbl)],
-            [Paragraph(str(total_at_risk), stat_card_num), Paragraph("AT-RISK STUDENTS", stat_card_lbl)],
         ]
     ]
-    t = Table(stat_data, colWidths=[2.5*inch]*3)
-    t.setStyle(TableStyle([
+    t_top = Table(top_stat_data, colWidths=[3.75*inch]*2)
+    t_top.setStyle(TableStyle([
         ("ALIGN", (0,0), (-1,-1), "CENTER"),
         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
     ]))
-    elements.append(t)
+    elements.append(t_top)
+    elements.append(Spacer(1, 0.18*inch))
+
+    # Row 2: At-risk breakdown — full-width
+    breakdown_num_style = ParagraphStyle(
+        "BreakdownNum",
+        parent=stat_card_num,
+        fontSize=18,
+    )
+    breakdown_line = (
+        f"{total_at_risk} at-risk total  |  "
+        f"{high} high-risk  |  "
+        f"{medium} medium-risk  |  "
+        f"{low} low-risk"
+    )
+    risk_data = [
+        [Paragraph("AT-RISK BREAKDOWN", stat_card_lbl)],
+        [Paragraph(breakdown_line, breakdown_num_style)],
+    ]
+    t_risk = Table(risk_data, colWidths=[7.5*inch])
+    t_risk.setStyle(TableStyle([
+        ("ALIGN", (0,0), (-1,-1), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING", (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+    ]))
+    elements.append(t_risk)
     elements.append(Spacer(1, 0.2*inch))
 
     # ── Table of Contents ──────────────────────────────────────────────
