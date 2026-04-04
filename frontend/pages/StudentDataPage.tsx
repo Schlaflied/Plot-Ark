@@ -139,11 +139,11 @@ const StudentDataPage: React.FC = () => {
     };
   };
 
-  const reseedData = async () => {
+  const reseedData = async (ratio: number) => {
     setSeeding(true);
     setSeedDone(false);
     try {
-      await fetch(`/api/xapi/seed?noise=${noiseRatio}`, { method: 'POST' });
+      await fetch(`/api/xapi/seed?noise=${ratio}`, { method: 'POST' });
       setSeedDone(true);
       setTimeout(() => setSeedDone(false), 3000);
     } catch {}
@@ -238,30 +238,22 @@ const StudentDataPage: React.FC = () => {
               {[0.05, 0.10, 0.15, 0.20].map(n => (
                 <button
                   key={n}
-                  onClick={() => { setNoiseRatio(n); setSeedDone(false); }}
-                  className={`py-1.5 rounded text-[10px] font-medium transition-colors ${
+                  disabled={seeding}
+                  onClick={() => { setNoiseRatio(n); reseedData(n); }}
+                  className={`py-1.5 rounded text-[10px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                     noiseRatio === n
-                      ? 'bg-amber-500 text-white'
+                      ? seedDone ? 'bg-green-600 text-white' : seeding ? 'bg-amber-600 text-white' : 'bg-amber-500 text-white'
                       : 'bg-stone-800 text-stone-400 hover:bg-stone-700'
                   }`}
                 >
-                  {(n * 100).toFixed(0)}%
+                  {noiseRatio === n && seeding
+                    ? <span className="inline-block w-2.5 h-2.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : noiseRatio === n && seedDone
+                    ? '✓'
+                    : `${(n * 100).toFixed(0)}%`}
                 </button>
               ))}
             </div>
-            <button
-              onClick={reseedData}
-              disabled={seeding}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-stone-700 text-stone-300 hover:bg-stone-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {seeding ? (
-                <><span className="animate-spin inline-block w-3 h-3 border-2 border-stone-300 border-t-transparent rounded-full" /> Seeding…</>
-              ) : seedDone ? (
-                <>✓ Seeded ({(noiseRatio * 100).toFixed(0)}%)</>
-              ) : (
-                <>↺ Re-seed All Courses</>
-              )}
-            </button>
           </div>
 
           {/* Analysis actions */}
