@@ -34,7 +34,8 @@ interface AnalyticsReport {
   risk_assessment: any;
   content_optimization: any;
   cohort_comparison: any;
-  agent_performance: Record<string, { status: string; duration_ms: number; retries: number }>;
+  agent_performance: Record<string, { status: string; duration_ms: number; retries: number; tokens_in: number; tokens_out: number; tokens_cache_read: number }>;
+  token_summary?: { total_in: number; total_out: number; cache_read: number; cache_write: number; llm_used: boolean };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -327,6 +328,31 @@ const StudentDataPage: React.FC = () => {
                     <span className="text-stone-600">{perf.duration_ms}ms</span>
                   </div>
                 ))}
+              </div>
+
+              {/* Token usage summary */}
+              <div className="mt-3 pt-2 border-t border-stone-700/50">
+                <p className="text-[10px] uppercase tracking-wider text-stone-500 mb-1.5">Token Usage</p>
+                {report.token_summary?.llm_used ? (
+                  <div className="space-y-0.5 text-[10px]">
+                    <div className="flex justify-between">
+                      <span className="text-stone-500">Input</span>
+                      <span className="text-stone-300 font-mono">{report.token_summary.total_in.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-stone-500">Output</span>
+                      <span className="text-stone-300 font-mono">{report.token_summary.total_out.toLocaleString()}</span>
+                    </div>
+                    {report.token_summary.cache_read > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-stone-500">Cache read</span>
+                        <span className="text-amber-500/70 font-mono">{report.token_summary.cache_read.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-stone-600 italic">SQL-only — no LLM tokens</p>
+                )}
               </div>
             </div>
           )}
