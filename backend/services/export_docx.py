@@ -103,7 +103,8 @@ def export_docx(report: dict) -> bytes:
         engagement_count = _group_count(engagement_verbs)
 
         p_total = doc.add_paragraph()
-        p_total.add_run(f"Total: {total} interactions").font.size = Pt(9)
+        total_students = report.get("risk_assessment", {}).get("total_students_analyzed", 0)
+        p_total.add_run(f"Total: {total} learning events across {total_students} students").font.size = Pt(9)
 
         table = doc.add_table(rows=4, cols=3)
         table.style = 'Table Grid'

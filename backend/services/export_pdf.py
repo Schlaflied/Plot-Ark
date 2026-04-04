@@ -240,7 +240,8 @@ def export_pdf(report: dict) -> bytes:
                                                     textColor=colors.HexColor(COLORS["stone_700"]), leading=12)),
             ]
 
-        total_label = f"Total: {total} interactions"
+        total_students = report.get("risk_assessment", {}).get("total_students_analyzed", 0)
+        total_label = f"Total: {total} learning events across {total_students} students"
         elements.append(Paragraph(total_label, ParagraphStyle("VerbTotal", fontSize=9,
                                                                textColor=colors.HexColor(COLORS["stone_500"]),
                                                                spaceAfter=6)))

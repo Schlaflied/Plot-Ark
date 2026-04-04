@@ -129,7 +129,11 @@ const ReportSections: React.FC<ReportSectionsProps> = ({ report, activeSection, 
                   <>
                     <div className="flex items-baseline justify-between mb-2">
                       <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Learning Activity Distribution</h4>
-                      {total > 0 && <span className="text-xs text-stone-400">Total: {total} interactions</span>}
+                      {total > 0 && (
+                        <span className="text-xs text-stone-400">
+                          Total: {total} learning events across {report.risk_assessment?.total_students_analyzed || 0} students
+                        </span>
+                      )}
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                       {groups.map(g => {
