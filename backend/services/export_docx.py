@@ -33,18 +33,33 @@ def export_docx(report: dict) -> bytes:
     doc = Document()
     charts = generate_charts(report)
 
-    # Title
-    title = doc.add_heading("Plot-Ark Analytics Report", level=0)
+    # Brand line
+    p_brand = doc.add_paragraph()
+    p_brand.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    r_brand = p_brand.add_run("PLOT ARK ANALYTICS")
+    r_brand.font.size = Pt(10)
+    r_brand.font.bold = True
+    r_brand.font.color.rgb = COFFEE
+
+    # Spacer paragraph
+    doc.add_paragraph()
+
+    # Report type line
+    p_type = doc.add_paragraph()
+    p_type.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    r_type = p_type.add_run("Plot-Ark Analytics Report")
+    r_type.font.size = Pt(12)
+    r_type.font.color.rgb = STONE
+
+    # Course name (large title)
+    cm = report.get("course_meta", {})
+    title = doc.add_heading(cm.get("topic", "Untitled Course"), level=0)
+    title.alignment = WD_ALIGN_PARAGRAPH.LEFT
     _color_heading(title)
 
-    # Course subtitle
-    cm = report.get("course_meta", {})
-    if cm.get("topic"):
-        sub = doc.add_heading(cm["topic"], level=1)
-        _color_heading(sub, STONE)
-
-    # Course metadata
+    # Course metadata line
     p_meta = doc.add_paragraph()
+    p_meta.alignment = WD_ALIGN_PARAGRAPH.LEFT
     meta_parts = []
     if cm.get("level"):
         meta_parts.append(cm["level"])
@@ -54,12 +69,28 @@ def export_docx(report: dict) -> bytes:
         meta_parts.append(f"{cm['module_count']} modules")
     if cm.get("course_code"):
         meta_parts.append(cm["course_code"])
-    meta_parts.append(f"Generated: {report.get('generated_at', '')[:10]}")
     meta_run = p_meta.add_run(" · ".join(meta_parts))
     meta_run.font.size = Pt(9)
     meta_run.font.color.rgb = STONE
 
-    # Cover stats
+    # Blank line before rule
+    doc.add_paragraph()
+
+    # Horizontal rule (thin paragraph border at bottom)
+    p_rule = doc.add_paragraph()
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    pPr = p_rule._p.get_or_add_pPr()
+    pBdr = OxmlElement("w:pBdr")
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), "4")
+    bottom.set(qn("w:space"), "1")
+    bottom.set(qn("w:color"), "6B7280")
+    pBdr.append(bottom)
+    pPr.append(pBdr)
+
+    # Compute stats
     ra = report.get("risk_assessment", {})
     ba_cover = report.get("behavior_analysis", {})
     mods_cover = ba_cover.get("module_engagement", [])
@@ -70,31 +101,57 @@ def export_docx(report: dict) -> bytes:
     total_at_risk = len(ra.get("at_risk_students", []))
     high = ra.get("risk_distribution", {}).get("high", 0)
     medium = ra.get("risk_distribution", {}).get("medium", 0)
-    low = ra.get("risk_distribution", {}).get("low", 0)
+    generated_date = report.get("generated_at", "")[:10]
 
-    p_stats = doc.add_paragraph()
-    p_stats.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r1 = p_stats.add_run(
-        f"{total_students_cover}  TOTAL STUDENTS     {avg_comp_cover * 100:.0f}%  AVG COMPLETION"
-    )
-    r1.font.size = Pt(14)
-    r1.font.bold = True
-    r1.font.color.rgb = COFFEE
+    # 4-column metadata table (no borders)
+    from docx.oxml import OxmlElement as _OXE
+    tbl = doc.add_table(rows=2, cols=4)
+    tbl.style = "Table Grid"
+    # Remove all borders
+    tbl_pr = tbl._tbl.get_or_add_tblPr()
+    tbl_bdr = _OXE("w:tblBorders")
+    for side in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        el = _OXE(f"w:{side}")
+        el.set(qn("w:val"), "none")
+        tbl_bdr.append(el)
+    tbl_pr.append(tbl_bdr)
 
-    p_risk_total = doc.add_paragraph()
-    p_risk_total.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r2 = p_risk_total.add_run(f"{total_at_risk} AT RISK IN TOTAL")
-    r2.font.size = Pt(16)
-    r2.font.bold = True
-    r2.font.color.rgb = COFFEE
+    # Column widths: roughly equal
+    col_widths = [1.5, 1.5, 1.5, 2.0]
+    for i, w in enumerate(col_widths):
+        for row in tbl.rows:
+            row.cells[i].width = int(w * 914400)  # EMU: 1 inch = 914400
 
-    p_risk_detail = doc.add_paragraph()
-    p_risk_detail.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r3 = p_risk_detail.add_run(
-        f"{high} HIGH-RISK  |  {medium} MEDIUM-RISK  |  {low} LOW-RISK"
-    )
-    r3.font.size = Pt(10)
-    r3.font.color.rgb = STONE
+    labels = ["GENERATED", "TOTAL STUDENTS", "AVG COMPLETION", "AT-RISK"]
+    values = [
+        generated_date,
+        str(total_students_cover),
+        f"{avg_comp_cover * 100:.0f}%",
+        f"{total_at_risk} total  ({high} high / {medium} med)",
+    ]
+
+    STONE_500 = RGBColor(0x6B, 0x72, 0x80)
+    STONE_700 = RGBColor(0x37, 0x41, 0x51)
+
+    for col_idx, (lbl, val) in enumerate(zip(labels, values)):
+        # Label row
+        lbl_cell = tbl.rows[0].cells[col_idx]
+        lbl_p = lbl_cell.paragraphs[0]
+        lbl_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        lbl_r = lbl_p.add_run(lbl)
+        lbl_r.font.size = Pt(8)
+        lbl_r.font.bold = True
+        lbl_r.font.color.rgb = STONE_500
+        # Value row
+        val_cell = tbl.rows[1].cells[col_idx]
+        val_p = val_cell.paragraphs[0]
+        val_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        val_r = val_p.add_run(val)
+        val_r.font.size = Pt(11)
+        val_r.font.color.rgb = STONE_700
+
+    # Blank line after table
+    doc.add_paragraph()
 
     # Table of Contents — manual list
     toc_heading = doc.add_heading("Table of Contents", level=1)

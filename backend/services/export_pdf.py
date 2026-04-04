@@ -114,6 +114,14 @@ def export_pdf(report: dict) -> bytes:
     callout_style = ParagraphStyle("PlotArkCallout", textColor=colors.HexColor(COLORS["coffee"]), fontSize=48, fontName="Helvetica-Bold", leading=56, spaceAfter=8, spaceBefore=4)
     callout_label = ParagraphStyle("PlotArkCalloutLbl", textColor=colors.HexColor(COLORS["stone_500"]), fontSize=12, fontName="Helvetica-Bold", spaceAfter=16)
 
+    # Cover page — Anthropic-style left-aligned layout
+    brand_style = ParagraphStyle("PlotArkBrand", textColor=colors.HexColor(COLORS["coffee"]), fontSize=10, fontName="Helvetica-Bold", spaceAfter=0, alignment=0)
+    report_type_style = ParagraphStyle("PlotArkReportType", textColor=colors.HexColor(COLORS["stone_500"]), fontSize=12, fontName="Helvetica", spaceAfter=6, alignment=0)
+    cover_title_style = ParagraphStyle("PlotArkCoverTitle", textColor=colors.HexColor(COLORS["coffee"]), fontSize=30, fontName="Helvetica-Bold", leading=36, spaceAfter=8, alignment=0)
+    cover_meta_style = ParagraphStyle("PlotArkCoverMeta", textColor=colors.HexColor(COLORS["stone_500"]), fontSize=9, fontName="Helvetica", spaceAfter=0, alignment=0)
+    col_label_style = ParagraphStyle("PlotArkColLbl", textColor=colors.HexColor(COLORS["stone_500"]), fontSize=8, fontName="Helvetica-Bold", spaceAfter=3, alignment=0)
+    col_val_style = ParagraphStyle("PlotArkColVal", textColor=colors.HexColor(COLORS["stone_700"]), fontSize=11, fontName="Helvetica", spaceAfter=0, alignment=0)
+
     def draw_header_footer(canvas, doc_obj):
         canvas.saveState()
         canvas.setFont("Helvetica-Bold", 10)
@@ -128,25 +136,10 @@ def export_pdf(report: dict) -> bytes:
     elements = []
     charts = generate_charts(report)
 
-    # ── Cover with course metadata ─────────────────────────────────────
+    # ── Cover — Anthropic-style left-aligned layout ────────────────────
     cm = report.get("course_meta", {})
-    elements.append(Spacer(1, 1.5*inch))
-    elements.append(Paragraph("Plot-Ark Analytics Report", title_style))
-    elements.append(Paragraph(cm.get("topic", "Untitled Course"), subtitle_style))
-    meta_parts = []
-    if cm.get("level"):
-        meta_parts.append(cm["level"])
-    if cm.get("course_type"):
-        meta_parts.append(cm["course_type"])
-    if cm.get("module_count"):
-        meta_parts.append(f"{cm['module_count']} modules")
-    if cm.get("course_code"):
-        meta_parts.append(cm["course_code"])
-    meta_parts.append(f"Generated: {report.get('generated_at', datetime.now().isoformat())[:10]}")
-    elements.append(Paragraph(" · ".join(meta_parts), meta_style))
-    elements.append(Spacer(1, 0.3*inch))
 
-    # Executive Summary Stat Cards
+    # Compute stats used in bottom metadata table
     ba = report.get("behavior_analysis", {})
     ra = report.get("risk_assessment", {})
 
@@ -159,37 +152,63 @@ def export_pdf(report: dict) -> bytes:
     total_at_risk = len(ra.get("at_risk_students", []))
     high = ra.get("risk_distribution", {}).get("high", 0)
     medium = ra.get("risk_distribution", {}).get("medium", 0)
-    low = ra.get("risk_distribution", {}).get("low", 0)
 
-    # Row 1: 2-column top stats
-    top_stat_data = [
+    generated_date = report.get("generated_at", datetime.now().isoformat())[:10]
+
+    # Brand line
+    elements.append(Paragraph("PLOT ARK ANALYTICS", brand_style))
+    elements.append(Spacer(1, 1.2*inch))
+
+    # Report type line
+    elements.append(Paragraph("Plot-Ark Analytics Report", report_type_style))
+
+    # Course name (large title)
+    elements.append(Paragraph(cm.get("topic", "Untitled Course"), cover_title_style))
+
+    # Meta line: level · type · modules · course_code
+    meta_parts = []
+    if cm.get("level"):
+        meta_parts.append(cm["level"])
+    if cm.get("course_type"):
+        meta_parts.append(cm["course_type"])
+    if cm.get("module_count"):
+        meta_parts.append(f"{cm['module_count']} modules")
+    if cm.get("course_code"):
+        meta_parts.append(cm["course_code"])
+    elements.append(Paragraph(" · ".join(meta_parts), cover_meta_style))
+    elements.append(Spacer(1, 0.3*inch))
+
+    # Thin horizontal rule
+    elements.append(HRFlowable(width="100%", thickness=0.5,
+                                color=colors.HexColor(COLORS["stone_500"]),
+                                spaceBefore=4, spaceAfter=16))
+
+    # Bottom 4-column metadata table
+    meta_table_data = [
         [
-            [Paragraph(str(total_students), stat_card_num), Paragraph("TOTAL STUDENTS", stat_card_lbl)],
-            [Paragraph(f"{avg_comp * 100:.0f}%", stat_card_num), Paragraph("AVG COMPLETION", stat_card_lbl)],
-        ]
+            Paragraph("GENERATED", col_label_style),
+            Paragraph("TOTAL STUDENTS", col_label_style),
+            Paragraph("AVG COMPLETION", col_label_style),
+            Paragraph("AT-RISK", col_label_style),
+        ],
+        [
+            Paragraph(generated_date, col_val_style),
+            Paragraph(str(total_students), col_val_style),
+            Paragraph(f"{avg_comp * 100:.0f}%", col_val_style),
+            Paragraph(f"{total_at_risk} total  ({high} high / {medium} med)", col_val_style),
+        ],
     ]
-    t_top = Table(top_stat_data, colWidths=[3.75*inch]*2)
-    t_top.setStyle(TableStyle([
-        ("ALIGN", (0,0), (-1,-1), "CENTER"),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+    t_meta = Table(meta_table_data, colWidths=[1.8*inch, 1.8*inch, 1.8*inch, 2.1*inch])
+    t_meta.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
-    elements.append(t_top)
-    elements.append(Spacer(1, 0.18*inch))
-
-    # Row 2: At-risk breakdown — two centered lines
-    breakdown_total_style = ParagraphStyle(
-        "BreakdownTotal", parent=stat_card_num, fontSize=20, alignment=1,
-    )
-    breakdown_detail_style = ParagraphStyle(
-        "BreakdownDetail", parent=stat_card_lbl, fontSize=11, alignment=1, spaceAfter=0,
-    )
-    elements.append(Paragraph(f"{total_at_risk} AT RISK IN TOTAL", breakdown_total_style))
-    elements.append(Spacer(1, 0.06*inch))
-    elements.append(Paragraph(
-        f"{high} HIGH-RISK  |  {medium} MEDIUM-RISK  |  {low} LOW-RISK",
-        breakdown_detail_style,
-    ))
-    elements.append(Spacer(1, 0.2*inch))
+    elements.append(t_meta)
+    elements.append(Spacer(1, 0.4*inch))
 
     # ── Table of Contents ──────────────────────────────────────────────
     toc_heading = ParagraphStyle("PlotArkToC", parent=styles["Heading2"],
