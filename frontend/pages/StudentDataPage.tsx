@@ -68,12 +68,14 @@ const StudentDataPage: React.FC = () => {
   const [events, setEvents] = useState<AnalyticsEvent[]>([]);
   const [report, setReport] = useState<AnalyticsReport | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [courseDropdownOpen, setCourseDropdownOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string>('summary');
   const [noiseRatio, setNoiseRatio] = useState<number>(0.15);
   const [seeding, setSeeding] = useState(false);
   const [seedDone, setSeedDone] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(224);
   const exportRef = useRef<HTMLDivElement>(null);
+  const courseDropdownRef = useRef<HTMLDivElement>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
 
@@ -101,6 +103,7 @@ const StudentDataPage: React.FC = () => {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false);
+      if (courseDropdownRef.current && !courseDropdownRef.current.contains(e.target as Node)) setCourseDropdownOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -176,16 +179,43 @@ const StudentDataPage: React.FC = () => {
           {/* Course selector */}
           <div className="p-3 border-b border-stone-700">
             <label className="text-[10px] uppercase tracking-wider text-stone-500 mb-1.5 block">Select Course</label>
-            <select
-              id="sd-course-select"
-              value={selectedCourseId ?? ''}
-              onChange={e => { const val = e.target.value ? Number(e.target.value) : null; setSelectedCourseId(val); setReport(null); setEvents([]); }}
-              className="w-full text-xs bg-stone-800 text-stone-200 border border-stone-600 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-amber-500"
-              style={{ textOverflow: 'ellipsis' }}
-            >
-              <option value="">Choose…</option>
-              {courses.map(c => <option key={c.id} value={c.id}>{c.topic} ({c.level})</option>)}
-            </select>
+            <div className="relative" ref={courseDropdownRef}>
+              <button
+                onClick={() => setCourseDropdownOpen(o => !o)}
+                className="w-full flex items-center justify-between text-xs bg-stone-800 text-stone-200 border border-stone-600 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-amber-500 hover:border-stone-500 transition-colors"
+              >
+                <span className="truncate">
+                  {selectedCourse ? selectedCourse.topic : 'Choose…'}
+                </span>
+                <svg className={`ml-1 shrink-0 transition-transform ${courseDropdownOpen ? 'rotate-180' : ''}`} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              {courseDropdownOpen && (
+                <div className="absolute z-50 mt-1 w-full bg-stone-800 border border-stone-700 rounded-lg shadow-xl overflow-hidden">
+                  <div className="max-h-64 overflow-y-auto">
+                    <button
+                      onClick={() => { setSelectedCourseId(null); setReport(null); setEvents([]); setCourseDropdownOpen(false); }}
+                      className="w-full text-left px-3 py-2 text-xs text-stone-500 hover:bg-stone-700 transition-colors"
+                    >
+                      Choose…
+                    </button>
+                    {courses.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => { setSelectedCourseId(c.id); setReport(null); setEvents([]); setCourseDropdownOpen(false); }}
+                        className={`w-full text-left px-3 py-2 text-xs transition-colors truncate block ${
+                          selectedCourseId === c.id
+                            ? 'border-l-2 border-amber-500 bg-amber-500/10 text-amber-400 pl-2.5'
+                            : 'text-stone-300 hover:bg-stone-700 border-l-2 border-transparent'
+                        }`}
+                        title={`${c.topic} (${c.level})`}
+                      >
+                        {c.topic} ({c.level})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Course info */}
