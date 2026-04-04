@@ -143,7 +143,7 @@ const StudentDataPage: React.FC = () => {
     setSeeding(true);
     setSeedDone(false);
     try {
-      await fetch(`/api/xapi/seed?noise=${ratio}`, { method: 'POST' });
+      await fetch(`/api/xapi/seed?noise=${ratio}&force=true`, { method: 'POST' });
       setSeedDone(true);
       setTimeout(() => setSeedDone(false), 3000);
     } catch {}
