@@ -176,7 +176,8 @@ const StudentDataPage: React.FC = () => {
       <div className="flex flex-1 overflow-hidden">
 
         {/* Sidebar */}
-        <aside style={{ width: sidebarWidth }} className="bg-stone-900 flex flex-col shrink-0 overflow-y-auto relative">
+        <aside style={{ width: sidebarWidth }} className="bg-stone-900 flex flex-col shrink-0 relative">
+          <div className="flex-1 overflow-y-auto flex flex-col">
           {/* Course selector */}
           <div className="p-3 border-b border-stone-700">
             <label className="text-[10px] uppercase tracking-wider text-stone-500 mb-1.5 block">Select Course</label>
@@ -298,7 +299,7 @@ const StudentDataPage: React.FC = () => {
           </div>
 
           {/* Section nav */}
-          <nav className="flex-1 p-2 space-y-0.5">
+          <nav className="p-2 space-y-0.5">
             {sections.map(s => (
               <button
                 key={s.id}
@@ -315,10 +316,11 @@ const StudentDataPage: React.FC = () => {
               </button>
             ))}
           </nav>
+          </div>{/* end scrollable area */}
 
-          {/* Agent status */}
+          {/* Agent status — pinned to sidebar bottom */}
           {report?.agent_performance && (
-            <div className="p-3 border-t border-stone-700">
+            <div className="p-3 border-t-2 border-stone-700 bg-stone-950/60">
               <p className="text-[10px] uppercase tracking-wider text-stone-500 mb-2">Agent Status</p>
               <div className="space-y-1">
                 {Object.entries(report.agent_performance).map(([name, perf]: [string, any]) => (
