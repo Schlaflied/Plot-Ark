@@ -83,17 +83,64 @@ def export_docx(report: dict) -> bytes:
     ba = report.get("behavior_analysis", {})
     verbs = ba.get("verb_distribution", {})
     if verbs:
-        v_items = list(verbs.items())
-        num_rows = (len(v_items) + 3) // 4
-        table = doc.add_table(rows=num_rows, cols=4)
+        MASTERY_VERBS = ["completed", "passed"]
+        STRUGGLE_VERBS = ["struggled", "failed"]
+        engagement_verbs = [v for v in verbs if v not in MASTERY_VERBS and v not in STRUGGLE_VERBS]
+
+        total = sum(verbs.values())
+
+        def _group_count(verb_list):
+            return sum(verbs.get(v, 0) for v in verb_list)
+
+        def _pct(count):
+            return f"{(count / total * 100):.1f}%" if total > 0 else "0.0%"
+
+        def _breakdown(verb_list):
+            return ", ".join(f"{v}: {verbs[v]}" for v in verb_list if v in verbs) or "—"
+
+        mastery_count = _group_count(MASTERY_VERBS)
+        struggle_count = _group_count(STRUGGLE_VERBS)
+        engagement_count = _group_count(engagement_verbs)
+
+        p_total = doc.add_paragraph()
+        p_total.add_run(f"Total: {total} interactions").font.size = Pt(9)
+
+        table = doc.add_table(rows=4, cols=3)
         table.style = 'Table Grid'
-        for idx, (v, count) in enumerate(v_items):
-            r = idx // 4
-            c = idx % 4
-            cell = table.cell(r, c)
-            cell.text = f"{count}\n{v.title()}"
-            for paragraph in cell.paragraphs:
-                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        headers = ["Mastery", "Struggle", "Engagement"]
+        counts = [mastery_count, struggle_count, engagement_count]
+        pcts = [_pct(mastery_count), _pct(struggle_count), _pct(engagement_count)]
+        breakdowns = [_breakdown(MASTERY_VERBS), _breakdown(STRUGGLE_VERBS), _breakdown(engagement_verbs)]
+
+        # Row 0: group labels (bold)
+        for col, label in enumerate(headers):
+            cell = table.cell(0, col)
+            cell.text = ""
+            run = cell.paragraphs[0].add_run(label)
+            run.bold = True
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Row 1: counts (bold, large)
+        for col, count in enumerate(counts):
+            cell = table.cell(1, col)
+            cell.text = ""
+            run = cell.paragraphs[0].add_run(str(count))
+            run.bold = True
+            run.font.size = Pt(18)
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Row 2: percentages
+        for col, pct in enumerate(pcts):
+            cell = table.cell(2, col)
+            cell.text = pct + " of total"
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Row 3: verb breakdown
+        for col, bd in enumerate(breakdowns):
+            cell = table.cell(3, col)
+            cell.text = bd
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     peak = ba.get("engagement_metrics", {}).get("peak_activity_hours", [])
     if peak:

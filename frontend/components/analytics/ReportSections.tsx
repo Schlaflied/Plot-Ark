@@ -92,15 +92,72 @@ const ReportSections: React.FC<ReportSectionsProps> = ({ report, activeSection, 
         <Section title="Behavior Analysis" icon="📈">
           <div className="space-y-4">
             <div>
-              <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Learning Activity Distribution</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {Object.entries(report.behavior_analysis?.verb_distribution || {}).map(([verb, count]: [string, any]) => (
-                  <div key={verb} className="bg-stone-50 rounded-lg p-3 text-center border border-stone-100">
-                    <p className="text-lg font-semibold text-stone-800">{count}</p>
-                    <p className="text-xs text-stone-500 capitalize">{verb}</p>
-                  </div>
-                ))}
-              </div>
+              {(() => {
+                const verbDist: Record<string, number> = report.behavior_analysis?.verb_distribution || {};
+                const MASTERY_VERBS = ["completed", "passed"];
+                const STRUGGLE_VERBS = ["struggled", "failed"];
+                const total = Object.values(verbDist).reduce((sum, c) => sum + (c as number), 0);
+
+                const groups = [
+                  {
+                    key: "mastery",
+                    label: "Mastery",
+                    verbs: MASTERY_VERBS,
+                    cardCls: "border-green-300 bg-green-50",
+                    countCls: "text-green-700",
+                    pillCls: "bg-green-100 text-green-700",
+                  },
+                  {
+                    key: "struggle",
+                    label: "Struggle",
+                    verbs: STRUGGLE_VERBS,
+                    cardCls: "border-red-300 bg-red-50",
+                    countCls: "text-red-700",
+                    pillCls: "bg-red-100 text-red-700",
+                  },
+                  {
+                    key: "engagement",
+                    label: "Engagement",
+                    verbs: Object.keys(verbDist).filter(v => !MASTERY_VERBS.includes(v) && !STRUGGLE_VERBS.includes(v)),
+                    cardCls: "border-amber-200 bg-amber-50",
+                    countCls: "text-amber-700",
+                    pillCls: "bg-amber-100 text-amber-700",
+                  },
+                ];
+
+                return (
+                  <>
+                    <div className="flex items-baseline justify-between mb-2">
+                      <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Learning Activity Distribution</h4>
+                      {total > 0 && <span className="text-xs text-stone-400">Total: {total} interactions</span>}
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      {groups.map(g => {
+                        const groupCount = g.verbs.reduce((sum, v) => sum + ((verbDist[v] as number) || 0), 0);
+                        const pct = total > 0 ? ((groupCount / total) * 100).toFixed(1) : "0.0";
+                        const breakdown = g.verbs.filter(v => verbDist[v] != null);
+                        return (
+                          <div key={g.key} className={`rounded-xl border p-3 ${g.cardCls}`}>
+                            <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${g.countCls}`}>{g.label}</p>
+                            <p className={`text-2xl font-bold leading-tight ${g.countCls}`}>{groupCount}</p>
+                            <p className="text-xs text-stone-400 mb-2">{pct}% of total</p>
+                            <div className="flex flex-wrap gap-1">
+                              {breakdown.map(v => (
+                                <span key={v} className={`px-1.5 py-0.5 rounded text-xs font-medium ${g.pillCls}`}>
+                                  {v}: {verbDist[v]}
+                                </span>
+                              ))}
+                              {breakdown.length === 0 && (
+                                <span className="text-xs text-stone-400 italic">no data</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
             <div>
               <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Module Engagement</h4>

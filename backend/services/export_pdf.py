@@ -201,28 +201,69 @@ def export_pdf(report: dict) -> bytes:
 
     verbs = ba.get("verb_distribution", {})
     if verbs:
-        v_items = list(verbs.items())
-        table_data = []
-        row = []
-        for i, (v, count) in enumerate(v_items):
-            row.append(f"{count}\n{v.title()}")
-            if len(row) == 4 or i == len(v_items) - 1:
-                while len(row) < 4:
-                    row.append("")
-                table_data.append(row)
-                row = []
+        MASTERY_VERBS = ["completed", "passed"]
+        STRUGGLE_VERBS = ["struggled", "failed"]
+        engagement_verbs = [v for v in verbs if v not in MASTERY_VERBS and v not in STRUGGLE_VERBS]
 
-        t = Table(table_data, colWidths=[1.5*inch]*4)
+        total = sum(verbs.values())
+
+        def _group_count(verb_list):
+            return sum(verbs.get(v, 0) for v in verb_list)
+
+        def _pct(count):
+            return f"{(count / total * 100):.1f}%" if total > 0 else "0.0%"
+
+        def _breakdown_str(verb_list):
+            parts = [f"{v}: {verbs[v]}" for v in verb_list if v in verbs]
+            return "\n".join(parts) if parts else "—"
+
+        group_style_normal = ParagraphStyle("VGNormal", fontSize=9, textColor=colors.HexColor(COLORS["stone_700"]), leading=13)
+        group_style_count = ParagraphStyle("VGCount", fontSize=22, fontName="Helvetica-Bold", leading=28, alignment=1)
+        group_style_label = ParagraphStyle("VGLabel", fontSize=8, fontName="Helvetica-Bold", leading=12, alignment=1)
+        group_style_pct = ParagraphStyle("VGPct", fontSize=9, textColor=colors.HexColor(COLORS["stone_500"]), leading=12, alignment=1)
+        group_style_breakdown = ParagraphStyle("VGBreak", fontSize=8, textColor=colors.HexColor(COLORS["stone_700"]), leading=12, alignment=1)
+
+        mastery_count = _group_count(MASTERY_VERBS)
+        struggle_count = _group_count(STRUGGLE_VERBS)
+        engagement_count = _group_count(engagement_verbs)
+
+        def _cell(label, count, pct_str, verb_list, count_color):
+            breakdown = "\n".join(f"{v}: {verbs[v]}" for v in verb_list if v in verbs) or "—"
+            return [
+                Paragraph(label, ParagraphStyle("VGLbl", fontSize=8, fontName="Helvetica-Bold", alignment=1,
+                                                textColor=colors.HexColor(count_color), leading=12)),
+                Paragraph(str(count), ParagraphStyle("VGCt", fontSize=22, fontName="Helvetica-Bold",
+                                                     alignment=1, textColor=colors.HexColor(count_color), leading=28)),
+                Paragraph(pct_str + " of total", ParagraphStyle("VGP", fontSize=8, alignment=1,
+                                                                 textColor=colors.HexColor(COLORS["stone_500"]), leading=12)),
+                Paragraph(breakdown, ParagraphStyle("VGB", fontSize=8, alignment=1,
+                                                    textColor=colors.HexColor(COLORS["stone_700"]), leading=12)),
+            ]
+
+        total_label = f"Total: {total} interactions"
+        elements.append(Paragraph(total_label, ParagraphStyle("VerbTotal", fontSize=9,
+                                                               textColor=colors.HexColor(COLORS["stone_500"]),
+                                                               spaceAfter=6)))
+
+        verb_table_data = [[
+            _cell("MASTERY", mastery_count, _pct(mastery_count), MASTERY_VERBS, "#15803D"),
+            _cell("STRUGGLE", struggle_count, _pct(struggle_count), STRUGGLE_VERBS, "#B91C1C"),
+            _cell("ENGAGEMENT", engagement_count, _pct(engagement_count), engagement_verbs, "#92400E"),
+        ]]
+
+        t = Table(verb_table_data, colWidths=[2.17*inch]*3)
         t.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(COLORS["coffee_light"])),
-            ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor(COLORS["stone_700"])),
+            ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#D1FAE5")),
+            ("BACKGROUND", (1, 0), (1, 0), colors.HexColor("#FEE2E2")),
+            ("BACKGROUND", (2, 0), (2, 0), colors.HexColor("#FFFBEB")),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ("LINEBELOW", (0, 0), (-1, -2), 0.3, colors.HexColor(COLORS["oat_dark"])),
-            ("LINEBEFORE", (1, 0), (-1, -1), 0.3, colors.HexColor(COLORS["oat_dark"])),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("TOPPADDING", (0, 0), (-1, -1), 10),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("LINEBEFORE", (1, 0), (2, 0), 0.5, colors.HexColor(COLORS["oat_dark"])),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor(COLORS["oat_dark"])),
         ]))
         elements.append(t)
         elements.append(Spacer(1, 0.2*inch))
