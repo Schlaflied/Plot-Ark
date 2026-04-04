@@ -176,30 +176,19 @@ def export_pdf(report: dict) -> bytes:
     elements.append(t_top)
     elements.append(Spacer(1, 0.18*inch))
 
-    # Row 2: At-risk breakdown — full-width
-    breakdown_num_style = ParagraphStyle(
-        "BreakdownNum",
-        parent=stat_card_num,
-        fontSize=18,
+    # Row 2: At-risk breakdown — two centered lines
+    breakdown_total_style = ParagraphStyle(
+        "BreakdownTotal", parent=stat_card_num, fontSize=20, alignment=1,
     )
-    breakdown_line = (
-        f"{total_at_risk} at-risk total  |  "
-        f"{high} high-risk  |  "
-        f"{medium} medium-risk  |  "
-        f"{low} low-risk"
+    breakdown_detail_style = ParagraphStyle(
+        "BreakdownDetail", parent=stat_card_lbl, fontSize=11, alignment=1, spaceAfter=0,
     )
-    risk_data = [
-        [Paragraph("AT-RISK BREAKDOWN", stat_card_lbl)],
-        [Paragraph(breakdown_line, breakdown_num_style)],
-    ]
-    t_risk = Table(risk_data, colWidths=[7.5*inch])
-    t_risk.setStyle(TableStyle([
-        ("ALIGN", (0,0), (-1,-1), "CENTER"),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("TOPPADDING", (0,0), (-1,-1), 4),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
-    ]))
-    elements.append(t_risk)
+    elements.append(Paragraph(f"{total_at_risk} at risk in total", breakdown_total_style))
+    elements.append(Spacer(1, 0.06*inch))
+    elements.append(Paragraph(
+        f"{high} high-risk  |  {medium} medium-risk  |  {low} low-risk",
+        breakdown_detail_style,
+    ))
     elements.append(Spacer(1, 0.2*inch))
 
     # ── Table of Contents ──────────────────────────────────────────────

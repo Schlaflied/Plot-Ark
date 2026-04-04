@@ -81,20 +81,20 @@ def export_docx(report: dict) -> bytes:
     r1.font.bold = True
     r1.font.color.rgb = COFFEE
 
-    p_risk_lbl = doc.add_paragraph()
-    p_risk_lbl.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r2 = p_risk_lbl.add_run("AT-RISK BREAKDOWN")
-    r2.font.size = Pt(9)
+    p_risk_total = doc.add_paragraph()
+    p_risk_total.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r2 = p_risk_total.add_run(f"{total_at_risk} at risk in total")
+    r2.font.size = Pt(16)
     r2.font.bold = True
-    r2.font.color.rgb = STONE
+    r2.font.color.rgb = COFFEE
 
-    p_risk_val = doc.add_paragraph()
-    p_risk_val.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r3 = p_risk_val.add_run(
-        f"{total_at_risk} at-risk total  |  {high} high-risk  |  {medium} medium-risk  |  {low} low-risk"
+    p_risk_detail = doc.add_paragraph()
+    p_risk_detail.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r3 = p_risk_detail.add_run(
+        f"{high} high-risk  |  {medium} medium-risk  |  {low} low-risk"
     )
-    r3.font.size = Pt(12)
-    r3.font.color.rgb = COFFEE
+    r3.font.size = Pt(10)
+    r3.font.color.rgb = STONE
 
     # Table of Contents — manual list
     toc_heading = doc.add_heading("Table of Contents", level=1)
