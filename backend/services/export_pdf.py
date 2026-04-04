@@ -442,5 +442,5 @@ def export_pdf(report: dict) -> bytes:
     for line in overview_lines:
         elements.append(Paragraph(line, body_style))
 
-    doc.build(elements, onFirstPage=draw_header_footer, onLaterPages=draw_header_footer)
+    doc.build(elements, onFirstPage=lambda c, d: None, onLaterPages=draw_header_footer)
     return buf.getvalue()
