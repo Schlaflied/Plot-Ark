@@ -74,24 +74,24 @@ VERB_DIST = {
 # ── Level → student count mapping ────────────────────────────────────────────
 LEVEL_STUDENT_COUNTS = {
     # Large intro courses
-    "undergraduate-year-1": (30, 50),
-    "esl-beginner": (25, 40),
-    "k12-elementary": (25, 35),
-    "k12-middle": (25, 35),
-    "k12-highschool": (25, 35),
-    "professional-beginner": (20, 35),
+    "undergraduate-year-1": (300, 400),
+    "esl-beginner": (200, 300),
+    "k12-elementary": (150, 250),
+    "k12-middle": (150, 250),
+    "k12-highschool": (150, 250),
+    "professional-beginner": (100, 200),
     # Medium courses
-    "undergraduate-year-2": (20, 35),
-    "undergraduate-year-3": (15, 25),
-    "esl-intermediate": (15, 25),
-    "professional-intermediate": (15, 25),
+    "undergraduate-year-2": (150, 250),
+    "undergraduate-year-3": (80, 150),
+    "esl-intermediate": (80, 150),
+    "professional-intermediate": (60, 120),
     # Small advanced courses
-    "undergraduate-year-4": (10, 18),
-    "master-year-1": (10, 18),
-    "master-year-2": (8, 15),
-    "doctoral": (5, 12),
-    "esl-advanced": (10, 18),
-    "professional-advanced": (8, 15),
+    "undergraduate-year-4": (40, 80),
+    "master-year-1": (80, 120),
+    "master-year-2": (30, 60),
+    "doctoral": (10, 25),
+    "esl-advanced": (40, 80),
+    "professional-advanced": (30, 60),
     "other-custom": (10, 20),
 }
 
