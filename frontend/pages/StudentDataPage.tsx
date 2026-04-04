@@ -395,7 +395,12 @@ const StudentDataPage: React.FC = () => {
               )}
               {/* Report sections */}
               {report && (
-                <ReportSections report={report} activeSection={activeSection} selectedCourse={selectedCourse} />
+                <>
+                  <ReportSections report={report} activeSection={activeSection} selectedCourse={selectedCourse} />
+                  <p className="text-xs text-stone-400 italic mt-2">
+                    AI-generated insights. For reference only — use alongside your professional judgment.
+                  </p>
+                </>
               )}
             </div>
           )}

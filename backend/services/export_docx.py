@@ -315,6 +315,13 @@ def export_docx(report: dict) -> bytes:
         clean = line.replace("<b>", "").replace("</b>", "")
         doc.add_paragraph(clean)
 
+    # AI disclaimer
+    disclaimer_para = doc.add_paragraph()
+    disclaimer_run = disclaimer_para.add_run("AI-generated insights. For reference only — use alongside your professional judgment. Data source: xAPI learner records.")
+    disclaimer_run.font.size = Pt(7)
+    disclaimer_run.font.color.rgb = RGBColor(0x9E, 0x8E, 0x7E)
+    disclaimer_para.paragraph_format.space_before = Pt(12)
+
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()

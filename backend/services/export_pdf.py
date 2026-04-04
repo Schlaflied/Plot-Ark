@@ -131,6 +131,11 @@ def export_pdf(report: dict) -> bytes:
         canvas.setFillColor(colors.HexColor(COLORS["stone_500"]))
         canvas.drawRightString(letter[0] - 0.5*inch, letter[1] - 0.4*inch, report.get("course_meta", {}).get("topic", "Untitled Course"))
         canvas.drawCentredString(letter[0]/2, 0.3*inch, f"Page {doc_obj.page} | Generated: {report.get('generated_at', datetime.now().isoformat())[:10]}")
+        # Add disclaimer to footer
+        canvas.setFont("Helvetica", 6.5)
+        canvas.setFillColor(colors.HexColor("#9E8E7E"))
+        disclaimer = "AI-generated insights. For reference only — use alongside your professional judgment. Data source: xAPI learner records."
+        canvas.drawString(inch * 0.65, 0.45 * inch, disclaimer)
         canvas.restoreState()
 
     elements = []
