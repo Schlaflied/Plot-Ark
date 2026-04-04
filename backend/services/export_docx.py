@@ -83,7 +83,7 @@ def export_docx(report: dict) -> bytes:
 
     p_risk_total = doc.add_paragraph()
     p_risk_total.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r2 = p_risk_total.add_run(f"{total_at_risk} at risk in total")
+    r2 = p_risk_total.add_run(f"{total_at_risk} AT RISK IN TOTAL")
     r2.font.size = Pt(16)
     r2.font.bold = True
     r2.font.color.rgb = COFFEE
@@ -91,7 +91,7 @@ def export_docx(report: dict) -> bytes:
     p_risk_detail = doc.add_paragraph()
     p_risk_detail.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r3 = p_risk_detail.add_run(
-        f"{high} high-risk  |  {medium} medium-risk  |  {low} low-risk"
+        f"{high} HIGH-RISK  |  {medium} MEDIUM-RISK  |  {low} LOW-RISK"
     )
     r3.font.size = Pt(10)
     r3.font.color.rgb = STONE

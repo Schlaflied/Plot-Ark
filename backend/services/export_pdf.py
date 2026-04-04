@@ -183,10 +183,10 @@ def export_pdf(report: dict) -> bytes:
     breakdown_detail_style = ParagraphStyle(
         "BreakdownDetail", parent=stat_card_lbl, fontSize=11, alignment=1, spaceAfter=0,
     )
-    elements.append(Paragraph(f"{total_at_risk} at risk in total", breakdown_total_style))
+    elements.append(Paragraph(f"{total_at_risk} AT RISK IN TOTAL", breakdown_total_style))
     elements.append(Spacer(1, 0.06*inch))
     elements.append(Paragraph(
-        f"{high} high-risk  |  {medium} medium-risk  |  {low} low-risk",
+        f"{high} HIGH-RISK  |  {medium} MEDIUM-RISK  |  {low} LOW-RISK",
         breakdown_detail_style,
     ))
     elements.append(Spacer(1, 0.2*inch))
