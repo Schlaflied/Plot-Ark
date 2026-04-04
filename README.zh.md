@@ -118,15 +118,18 @@
 <details>
 <summary><strong>🤖 A2A 多 Agent 分析系统</strong></summary>
 
-- **xAPI Mock 数据引擎** — 为所有课程种入真实学习行为数据（experienced/completed/struggled/passed/failed/attempted），注入 15% 异常行为噪声
-- **多 Agent 分析流水线** — Orchestrator 协调 4 个专业 Agent：Behavior Analyst、Risk Detector、Content Optimizer、Cohort Comparator
-- **Hive 风格节点架构** — 每个 Agent 继承 `BaseNode`，支持 reflexion/重试、L3 JSON Schema 校验、SQL Fallback
-- **SharedMemory (Redis)** — Agent 间通过 Redis 共享内存通信，支持本地 dict 降级
+- **5 节点流水线** — `Orchestrator → [BehaviorAnalyst ‖ RiskDetector ‖ ContentOptimizer ‖ CohortComparator] → aggregate → LTM snapshot`。当前所有 Agent 均为 sql-only（Phase 2 = LLM 集成待开发）。
+- **PII 匿名化** — 学生姓名/邮箱在进入 Agent 前全部匿名化；真实身份仅在最终报告聚合后恢复，供教授查看。
+- **xAPI Mock 数据引擎** — 支持 4 种噪声级别（5%/10%/15%/20%），通过前端 UI 选择；基于 `HOUR_WEIGHTS` 的真实 6 周时间戳分布；按学生画像分布（高绩效/普通/挣扎/脱离）。适配本科一年级群体规模（300–400 人）。
+- **Hive 风格节点架构** — 每个 Agent 继承 `BaseNode`，支持 reflexion/重试（最多 3 次）、L3 JSON Schema 校验、SQL Fallback
+- **SharedMemory (Redis)** — Agent 间通过 `a2a:{session_id}:{key}` 键名在 Redis 共享内存通信，支持本地 dict 降级
+- **Token 用量追踪** — `NodeResult` 携带 `tokens_in / tokens_out / tokens_cache_read / tokens_cache_write` 字段；Orchestrator 在每次运行后向后端日志打印 Token 汇总表；报告 JSON 包含 `token_summary` 块；前端侧边栏显示 Token Usage 面板（Phase 1 sql-only 阶段均为零）。
+- **LTM 暖层** — 每次运行后向 PostgreSQL 写入一条 `course_analysis_snapshots` 快照：包含 `risk_distribution`、`module_engagement_summary`、`verb_distribution`、`cohort_groups`、`noise_label` 等字段。
 - **SSE 实时流式反馈** — 分析进度通过 Server-Sent Events 流式传输；前端实时显示 Agent 状态
-- **Student Data 仪表板** — 独立全页分析视图，可拖拽侧边栏、分区导航、课程元数据展示
-- **风险评估** — 多信号评分（低活跃、高困难率、未完成模块），包含风险学生表格
-- **群组对比** — 学生分为高绩效/普通/高风险/脱离四个群组，含平均完成率与困难率
-- **报告导出** — PDF（ReportLab + matplotlib 图表）、DOCX（python-docx + 图表）、Excel（openpyxl），均使用品牌色可视化
+- **Student Data 仪表板** — 独立全页分析视图，可拖拽侧边栏、分区导航、噪声级别选择器、Token Usage 面板
+- **风险检测** — 6 个信号；阈值：中风险 ≥ 4，高风险 ≥ 7；不活跃窗口：14 / 21 天
+- **群组对比** — 学生分为 high_performers / average / at_risk / disengaged 四个群组，含平均完成率与困难率
+- **报告导出** — PDF（Anthropic 风格封面：左对齐品牌行、大标题、`HRFlowable`、4 列元数据表）、DOCX（相同布局）、Excel；文件名含课程 slug + 噪声标签
 - **Section 5 总览** — 数据驱动的改进建议，按优先级标注（🔴 HIGH / 🟡 MEDIUM / ⚪ LOW）
 
 </details>
@@ -212,6 +215,38 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 
 <img src="docs/A2A%20agent%20Structure.png" alt="A2A 多 Agent 分析架构" width="800"/>
 
+**A2A 分析流水线**
+
+```
+前端（噪声选择器 + 种子按钮）
+        │
+        ▼ POST /api/xapi/seed   POST /api/analytics/report (SSE)
+        │                               │
+        ▼                               ▼
+  xapi_generator.py            OrchestratorNode
+  （4 种噪声级别，                       │
+   HOUR_WEIGHTS，              ┌─────────┼──────────────┐
+   画像化学生分布）             │         │              │
+                              ▼         ▼              ▼
+                       BehaviorAnalyst  RiskDetector   ContentOptimizer
+                       （verb/模块       （6 信号，      （低绩效
+                         参与度）        中≥4 高≥7）      模块）
+                              │         │              │
+                              └────┬────┘──────────────┘
+                                   │         │
+                              CohortComparator
+                              （4 个群组）
+                                   │
+                                   ▼
+                              aggregate
+                         （token_summary，执行摘要）
+                                   │
+                          ┌────────┴────────┐
+                          ▼                 ▼
+               course_analysis_snapshots  最终报告 JSON
+               （PostgreSQL LTM）         → PDF / DOCX / Excel
+```
+
 **规划中的主动式循环：**
 ```
 xAPI 行为事件 → 课程 Agent → Redis 学习者状态 → 叙事引擎 → LMS
@@ -227,14 +262,14 @@ xAPI 行为事件 → 课程 Agent → Redis 学习者状态 → 叙事引擎 �
 | **后端** | Python + Flask Blueprints | 模块化路由 API（8 个 Blueprints + 6 个 Agents + 5 个 Services） |
 | **AI** | OpenAI GPT-4o / Google Gemini | 内容生成与 A2A 分析（通过 `AI_PROVIDER` 可插拔） |
 | **研究 Agent** | Tavily Search API | 生成前学术信源检索 |
-| **数据库** | PostgreSQL | 课程存储、Mock xAPI 语句、学生反馈 |
-| **缓存与内存**| Redis | 图谱查询缓存、学习者状态、A2A 共享内存 |
+| **数据库** | PostgreSQL | 课程、xAPI 语句、学生反馈、`course_analysis_snapshots`（LTM） |
+| **缓存与内存**| Redis | 图谱查询缓存、学习者状态、A2A 共享内存（`a2a:{session}:{key}`） |
 | **知识图谱** | LightRAG + networkx + react-force-graph-2d| 课程材料导入 → 交互式概念图谱 |
-| **行为数据** | xAPI 1.0.3 + mini-LRS | 语句采集 → Redis 学习者状态 → 教授分析面板 |
-| **分析引擎** | A2A 多 Agent（Hive 风格） | 协调器 + 4 个专业 Agent（行为分析、风险检测、内容优化、群组对比） |
-| **报告导出** | ReportLab + python-docx + openpyxl + matplotlib | PDF/DOCX 含品牌图表，Excel 含原始数据 |
-| **导出** | IMS Common Cartridge + DOCX + PDF | 多格式兼容主流 LMS 的输出 |
-| **开发** | Docker Compose | 一键启动本地环境 |
+| **行为数据** | xAPI 1.0.3 + mini-LRS | 语句采集 → Mock 数据引擎（4 种噪声级别）→ 教授分析面板 |
+| **分析引擎** | A2A 多 Agent（Hive 风格，sql-only Phase 1） | 5 节点流水线：Orchestrator + 4 个并行 Agent；Token 追踪；LTM 快照 |
+| **报告导出** | ReportLab + python-docx + openpyxl + matplotlib | PDF（Anthropic 风格封面）、DOCX、Excel；文件名含课程 slug + 噪声标签 |
+| **课程导出** | IMS Common Cartridge + DOCX + PDF + Markdown | 多格式兼容主流 LMS 的输出 |
+| **开发** | Docker Compose | 一键启动本地环境（前端 :5173，后端 :5000） |
 
 ---
 
@@ -401,11 +436,14 @@ plot-ark/
 - [x] 前端代码拆分 — 提取可复用 UI 组件（Select、Input、SyllabusUpload）
 - [x] Session Duration pill 选择器 — 快捷预设 + 自定义 hr/min 输入
 - [x] Module Count pill 选择器 — 快捷预设 + 自定义输入
-- [x] A2A 多 Agent 分析 — Orchestrator + 4 个 Agent（Behavior Analyst、Risk Detector、Content Optimizer、Cohort Comparator）
-- [x] Student Data 仪表板 — 独立分析页面，可拖拽侧边栏、分区导航、SSE 实时进度
-- [x] 分析报告导出 — PDF 含品牌图表 + DOCX + Excel
-- [x] xAPI Mock 数据引擎 — 15% 异常噪声，覆盖全部课程
-- [ ] Redis 学习者状态管理
+- [x] A2A 多 Agent 分析 — 5 节点流水线（Orchestrator + 4 个并行 Agent，sql-only Phase 1）
+- [x] Student Data 仪表板 — 独立分析页面，可拖拽侧边栏、分区导航、噪声级别选择器、Token Usage 面板
+- [x] 分析报告导出 — PDF（Anthropic 风格封面）、DOCX、Excel；文件名含课程 slug + 噪声标签
+- [x] xAPI Mock 数据引擎 — 4 种噪声级别（5/10/15/20%）、HOUR_WEIGHTS、画像化学生分布
+- [x] PII 匿名化 — Agent 处理前匿名化，最终报告中恢复真实身份
+- [x] Token 用量追踪 — NodeResult tokens 字段；token_summary 写入报告 JSON；后端日志打印汇总表
+- [x] LTM 暖层 — course_analysis_snapshots PostgreSQL 表（risk_distribution、verb_distribution、noise_label 等）
+- [ ] A2A Phase 2 — 为四个专业 Agent 集成 LLM 分析能力
 - [ ] Professor LTM — 从编辑历史学习偏好
 - [ ] LTI 1.3 — 推送至 Canvas / Moodle
 

@@ -119,15 +119,18 @@
 <details>
 <summary><strong>🤖 A2A Multi-Agent Analytics</strong></summary>
 
-- **xAPI mock data engine** — seeds realistic learner behavior (experienced/completed/struggled/passed/failed/attempted) across all courses with 15% anomaly noise injection
-- **Multi-agent analysis pipeline** — Orchestrator dispatches 4 specialized agents: Behavior Analyst, Risk Detector, Content Optimizer, Cohort Comparator
-- **Hive-style node architecture** — each agent inherits `BaseNode` with reflexion/retry, L3 JSON Schema validation, and SQL fallback
-- **SharedMemory (Redis)** — agents communicate through Redis-backed shared memory with local dict fallback
+- **5-node pipeline** — `Orchestrator → [BehaviorAnalyst ‖ RiskDetector ‖ ContentOptimizer ‖ CohortComparator] → aggregate → LTM snapshot`. All agents are currently sql-only (Phase 2 = LLM integration pending).
+- **PII anonymisation** — student names/emails are anonymised before agent processing; real identities are restored only in the final aggregated report for the professor.
+- **xAPI mock data engine** — 4 noise levels (5%/10%/15%/20%) seeded from frontend UI; realistic 6-week timestamp distribution with `HOUR_WEIGHTS` and profile-based student spread (high_performer / average / struggling / disengaged). Designed for undergraduate-year-1 cohort sizes (300–400 students).
+- **Hive-style node architecture** — each agent inherits `BaseNode` with reflexion/retry (max 3), L3 JSON Schema validation, and SQL fallback
+- **SharedMemory (Redis)** — agents communicate through Redis-backed shared memory (`a2a:{session_id}:{key}`) with local dict fallback
+- **Token usage tracking** — `NodeResult` carries `tokens_in / tokens_out / tokens_cache_read / tokens_cache_write`. Orchestrator prints a token summary table to backend log after each run; report JSON includes a `token_summary` block. Frontend sidebar shows a Token Usage panel (currently all zero — sql-only Phase 1).
+- **LTM warm layer** — every run persists a `course_analysis_snapshots` row to PostgreSQL: `risk_distribution`, `module_engagement_summary`, `verb_distribution`, `cohort_groups`, `noise_label`, counts.
 - **SSE real-time streaming** — analysis progress streams via Server-Sent Events; frontend shows live agent status
-- **Student Data dashboard** — dedicated full-page analytics view with resizable sidebar, section navigation, and course metadata
-- **Risk assessment** — multi-signal scoring (low activity, high struggle, incomplete modules) with at-risk student table
-- **Cohort comparison** — students grouped into high-performers / average / at-risk / disengaged with avg completion and struggle rates
-- **Report export** — PDF (ReportLab + matplotlib charts), DOCX (python-docx + charts), Excel (openpyxl) with brand-colored visualizations
+- **Student Data dashboard** — dedicated full-page analytics view with resizable sidebar, section navigation, noise-level selector, and Token Usage panel
+- **Risk detection** — 6 signals; thresholds: medium ≥ 4, high ≥ 7; inactivity windows: 14 / 21 days
+- **Cohort comparison** — students grouped into high_performers / average / at_risk / disengaged with avg completion and struggle rates
+- **Report export** — PDF (Anthropic-style cover: left-aligned brand line, large title, `HRFlowable`, 4-col metadata table), DOCX (matching layout), Excel. Filenames include course slug + noise label.
 - **Section 5 Overview** — data-driven recommended actions with priority levels (🔴 HIGH / 🟡 MEDIUM / ⚪ LOW)
 
 </details>
@@ -213,6 +216,38 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 
 <img src="docs/A2A%20agent%20Structure.png" alt="A2A Multi-Agent Analytics Architecture" width="800"/>
 
+**A2A Analytics Pipeline**
+
+```
+Frontend (noise selector + seed button)
+        │
+        ▼ POST /api/xapi/seed   POST /api/analytics/report (SSE)
+        │                               │
+        ▼                               ▼
+  xapi_generator.py            OrchestratorNode
+  (4 noise levels,                      │
+   HOUR_WEIGHTS,              ┌─────────┼──────────────┐
+   profile spread)            │         │              │
+                              ▼         ▼              ▼
+                       BehaviorAnalyst  RiskDetector   ContentOptimizer
+                       (verb/module     (6 signals,    (underperforming
+                        engagement)      med≥4 hi≥7)    modules)
+                              │         │              │
+                              └────┬────┘──────────────┘
+                                   │         │
+                              CohortComparator
+                              (4 groups)
+                                   │
+                                   ▼
+                              aggregate
+                         (token_summary, exec summary)
+                                   │
+                          ┌────────┴────────┐
+                          ▼                 ▼
+               course_analysis_snapshots  final report JSON
+               (PostgreSQL LTM)           → PDF / DOCX / Excel
+```
+
 **Planned agentic loop:**
 ```
 xAPI behavior events → Curriculum Agent → Redis learner state → Narrative Engine → LMS
@@ -228,14 +263,14 @@ xAPI behavior events → Curriculum Agent → Redis learner state → Narrative 
 | **Backend** | Python + Flask Blueprints | Modular route-based API (8 Blueprints + 6 Agents + 5 Services) |
 | **AI** | OpenAI GPT-4o / Google Gemini | Content generation & A2A analysis (via `AI_PROVIDER`) |
 | **Research Agent** | Tavily Search API | Pre-generation academic source retrieval |
-| **Database** | PostgreSQL | Curricula storage, mock xAPI statements, and student feedback |
-| **Cache & Memory**| Redis | Graph query cache, learner state, and A2A shared memory |
+| **Database** | PostgreSQL | Curricula, xAPI statements, student feedback, `course_analysis_snapshots` (LTM) |
+| **Cache & Memory**| Redis | Graph query cache, learner state, A2A shared memory (`a2a:{session}:{key}`) |
 | **Knowledge Graph**| LightRAG + networkx + react-force-graph-2d| Course material ingestion → interactive concept graph |
-| **Behavior Data** | xAPI 1.0.3 + mini-LRS | Statement ingestion → Redis learner state → professor analytics panel |
-| **Analytics Engine**| A2A multi-agent (Hive-style) | Orchestrator + 4 specialized agents for behavior, risk, content, & cohort analysis |
-| **Report Export** | ReportLab + python-docx + openpyxl + matplotlib | PDF/DOCX with branded charts, Excel with raw data |
-| **Export** | IMS Common Cartridge + DOCX + PDF | LMS-compatible output in multiple formats |
-| **Dev** | Docker Compose | Single-command local environment |
+| **Behavior Data** | xAPI 1.0.3 + mini-LRS | Statement ingestion → mock data engine (4 noise levels) → professor analytics panel |
+| **Analytics Engine**| A2A multi-agent (Hive-style, sql-only Phase 1) | 5-node pipeline: Orchestrator + 4 parallel agents; token tracking; LTM snapshot |
+| **Report Export** | ReportLab + python-docx + openpyxl + matplotlib | PDF (Anthropic-style cover), DOCX, Excel; filenames include course slug + noise label |
+| **Curriculum Export** | IMS Common Cartridge + DOCX + PDF + Markdown | LMS-compatible output in multiple formats |
+| **Dev** | Docker Compose | Single-command local environment (frontend :5173, backend :5000) |
 
 ---
 
@@ -402,11 +437,14 @@ plot-ark/
 - [x] Frontend code splitting — extracted reusable UI components (Select, Input, SyllabusUpload)
 - [x] Session Duration pill selector — quick presets + custom hr/min input
 - [x] Module Count pill selector — quick presets + custom input
-- [x] A2A multi-agent analytics — Orchestrator + 4 agents (Behavior Analyst, Risk Detector, Content Optimizer, Cohort Comparator)
-- [x] Student Data dashboard — dedicated analytics page with resizable sidebar, section nav, SSE progress
-- [x] Analytics report export — PDF with branded charts + DOCX + Excel
-- [x] xAPI mock data engine — 15% anomaly noise, full course coverage
-- [ ] Redis learner state management
+- [x] A2A multi-agent analytics — 5-node pipeline (Orchestrator + 4 parallel agents, sql-only Phase 1)
+- [x] Student Data dashboard — analytics page with resizable sidebar, section nav, noise selector, Token Usage panel
+- [x] Analytics report export — PDF (Anthropic-style cover), DOCX, Excel; filename includes course slug + noise label
+- [x] xAPI mock data engine — 4 noise levels (5/10/15/20%), HOUR_WEIGHTS, profile-based student spread
+- [x] PII anonymisation — student data anonymised before agent processing, de-anonymised in final report
+- [x] Token usage tracking — NodeResult tokens_in/out/cache fields; token_summary in report JSON; backend log table
+- [x] LTM warm layer — course_analysis_snapshots PostgreSQL table (risk_distribution, verb_distribution, noise_label, etc.)
+- [ ] A2A Phase 2 — LLM integration for BehaviorAnalyst, RiskDetector, ContentOptimizer, CohortComparator
 - [ ] Professor LTM — preference learning from edit history
 - [ ] LTI 1.3 — push into Canvas / Moodle
 

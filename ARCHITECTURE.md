@@ -1,53 +1,223 @@
 # Plot Ark Architecture
 
 ## Stack
-- **Frontend**: React + TypeScript + Vite, `frontend/`, port 5173
-- **Backend**: Flask + SSE, `backend/app.py`, port 5000
-- **Database**: PostgreSQL (plotark/plotark), port 5432
-- **Cache**: Redis, port 6380
-- **Docker**: frontend, backend, redis, postgres
 
-## Frontend Structure
+| Layer | Technology | Port |
+|-------|-----------|------|
+| **Frontend** | React + TypeScript + Vite | 5173 |
+| **Backend** | Python 3.11 + Flask Blueprints | 5000 |
+| **Database** | PostgreSQL | 5432 |
+| **Cache / Shared Memory** | Redis | 6380 |
+| **Knowledge Graph** | LightRAG (embedded) | — |
+| **Orchestration** | Docker Compose | — |
+
+---
+
+## System Architecture
+
 ```
-frontend/
-├── App.tsx          — 路由文件（26行，#23完成后）
-├── types.ts         — 共享类型
-├── pages/
-│   ├── GeneratePage.tsx   — 课程生成主页面（/generate）
-│   ├── CoursesPage.tsx    — 课程历史 (/courses)
-│   ├── CoursePage.tsx     — 课程编辑器 (/course/:id)
-│   └── GraphPage.tsx      — 知识图谱 (/graph)
-└── components/
-    ├── GraphViewer.tsx    — LightRAG力导向图
-    ├── QuantumScene.tsx   — 3D装饰
-    └── Diagrams.tsx       — 图表组件
+┌────────────────────────────────────────────────────────────────────────────┐
+│  Frontend (React + TypeScript + Vite, :5173)                               │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌───────────────┐  │
+│  │ Generate  │ │ Courses  │ │  Course  │ │ Knowledge │ │ Student Data  │  │
+│  │   Page    │ │   Page   │ │   Page   │ │   Graph   │ │    Page       │  │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └──────┬────────┘  │
+│       │            │            │              │              │           │
+│  components/ui/  components/generate/    hooks/ (useIngest, useQuery)    │
+│  (Select, Input)   (SyllabusUpload)             SSE streaming            │
+└───────┼────────────┼────────────┼──────────────┼──────────────┼──────────┘
+        │            │            │              │              │
+        ▼            ▼            ▼              ▼              ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│  Backend (Flask + Blueprints, :5000)                                       │
+│  ├── app.py (~30 lines)            ├── config.py (env constants)           │
+│  ├── extensions.py (singletons)    ├── async_loop.py (bg event loop)       │
+│  ├── db.py (PostgreSQL ops)        ├── constants.py (Bloom's, formats)     │
+│  ├─────────────────────────────────────────────────────────────────────┐   │
+│  │  routes/                                                            │   │
+│  │  ├── curriculum.py    generate / skeleton / expand / save           │   │
+│  │  ├── history.py       CRUD + favorite + DOCX export                 │   │
+│  │  ├── analytics.py     A2A SSE analysis + PDF/DOCX/Excel export      │   │
+│  │  ├── xapi.py          xAPI statements + mock data seed              │   │
+│  │  ├── graph.py         KG data + RAG query                           │   │
+│  │  ├── sources.py       Tavily source preview                         │   │
+│  │  ├── syllabus.py      PDF/DOCX parse + import                       │   │
+│  │  └── materials.py     LightRAG ingest                               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────┐  ┌────────────────────────────────────┐   │
+│  │  agents/ (Hive-style A2A)   │  │  services/                         │   │
+│  │  ├── base.py (BaseNode)     │  │  ├── research.py (Tavily)          │   │
+│  │  ├── orchestrator.py        │  │  ├── file_parser.py                │   │
+│  │  ├── behavior_analyst.py    │  │  ├── prompt_builder.py             │   │
+│  │  ├── risk_detector.py       │  │  ├── xapi_generator.py             │   │
+│  │  ├── content_optimizer.py   │  │  ├── report_exporter.py (facade)   │   │
+│  │  └── cohort_comparator.py   │  │  ├── chart_generator.py            │   │
+│  └──────────┬──────────────────┘  │  └── export_{pdf,docx,excel}.py    │   │
+│             │  SharedMemory       └─────────────┬──────────────────────┘   │
+└─────────────┼───────────────────────────────────┼──────────────────────────┘
+              │                                   │
+              ▼                                   ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  PostgreSQL  │  │    Redis     │  │   LightRAG   │
+│  curricula   │  │  cache +     │  │  KG storage  │
+│  xapi_stmts  │  │  shared mem  │  │              │
+│  snapshots   │  │  (a2a:*)     │  │              │
+└──────────────┘  └──────────────┘  └──────────────┘
 ```
+
+---
+
+## A2A Multi-Agent Analytics Pipeline
+
+```
+Frontend (noise selector: 5/10/15/20% + seed button)
+        │
+        ├─── POST /api/xapi/seed ──► xapi_generator.py
+        │                            (HOUR_WEIGHTS, profile spread,
+        │                             realistic 6-week timestamps)
+        │
+        └─── POST /api/analytics/report (SSE stream)
+                        │
+                        ▼
+               OrchestratorNode
+                        │
+               ① anonymise PII
+               (Student_001..N ↔ real names/emails)
+                        │
+               ② dispatch (sequential, SSE per agent)
+                        │
+          ┌─────────────┼─────────────┬─────────────┐
+          ▼             ▼             ▼             ▼
+   BehaviorAnalyst  RiskDetector  ContentOptimizer  CohortComparator
+   verb/module      6 signals     underperforming   4 groups
+   engagement       med≥4 hi≥7    & high-perf       (high_performers /
+                    inactivity:   modules            average /
+                    14/21 days                       at_risk /
+                                                     disengaged)
+          │             │             │             │
+          └─────────────┴─────────────┴─────────────┘
+                        │
+               ③ anonymise agent outputs
+                        │
+               ④ aggregate
+               (de-anonymise at_risk_students,
+                build token_summary,
+                executive_summary)
+                        │
+               ⑤ _save_snapshot()
+                        │
+          ┌─────────────┴──────────────────┐
+          ▼                                ▼
+course_analysis_snapshots           final report JSON
+(PostgreSQL LTM)                    → SSE "report done"
+  risk_distribution                 → PDF / DOCX / Excel
+  module_engagement_summary           (Anthropic-style cover,
+  verb_distribution                    course slug + noise label
+  cohort_groups                        in filename)
+  noise_label
+  at_risk_count / high_risk_count
+```
+
+**Phase status:** All 4 agents are currently `sql-only`. Token fields in `NodeResult` are ready for Phase 2 LLM integration — `tokens_in / tokens_out / tokens_cache_read / tokens_cache_write`.
+
+---
+
+## Database Schema
+
+```
+curricula
+  id, topic, level, audience, course_code, course_type,
+  module_count, modules (JSONB), sources (JSONB),
+  is_favorite, created_at
+
+xapi_statements
+  id, actor_email, actor_name, verb, object_id, object_name,
+  timestamp, curriculum_topic
+  indexes: actor_email, verb, object_id, curriculum_topic, timestamp
+
+student_feedback
+  id, course_id, module_index, module_title, sentiment,
+  comment, student_id, created_at
+  index: course_id
+
+course_analysis_snapshots          ← LTM warm layer
+  id, course_id, run_at, noise_label,
+  risk_distribution (JSONB), total_students, at_risk_count, high_risk_count,
+  top_signals (JSONB), module_engagement_summary (JSONB),
+  verb_distribution (JSONB), cohort_groups (JSONB)
+  index: course_id, run_at DESC
+```
+
+---
+
+## BaseNode / NodeResult
+
+```python
+@dataclass
+class NodeResult:
+    status: str          # "success" | "fallback" | "error"
+    data: dict
+    agent_name: str
+    duration_ms: int
+    retries_used: int
+    error: Optional[str]
+    tokens_in: int       # 0 in Phase 1 (sql-only)
+    tokens_out: int
+    tokens_cache_read: int
+    tokens_cache_write: int
+```
+
+`BaseNode.execute()` implements the Hive reflexion pattern:
+`try → L3 JSON Schema judge → retry (max 3) → SQL fallback`
+
+SharedMemory keys use namespace `a2a:{session_id}:{key}` in Redis (TTL 1h), with local dict fallback when Redis is unavailable.
+
+---
 
 ## Key Backend Endpoints
-- `POST /api/curriculum/generate` — SSE流式生成（两阶段：skeleton→expand）
-- `POST /api/sources/preview` — Tavily research + 人工审核
-- `GET /api/history` — 课程历史
-- `POST /api/syllabus/import` — PDF/DOCX syllabus解析
-- `POST /api/graph/query` — LightRAG知识图谱查询（Redis缓存）
-- `POST /api/xapi/statement` — xAPI学习追踪
 
-## Database Tables
-- `curricula` — 课程数据（modules/sources存JSONB）
-- `xapi_statements` — 学习者行为日志
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/curriculum/generate` | SSE: skeleton → expand (two-phase) |
+| `POST` | `/api/sources/preview` | Tavily research + credibility score |
+| `GET`  | `/api/history` | Curricula CRUD |
+| `POST` | `/api/syllabus/import` | PDF/DOCX → form auto-fill |
+| `POST` | `/api/xapi/seed` | Generate mock xAPI data (noise level param) |
+| `GET`  | `/api/analytics/report` | SSE: run A2A pipeline for course_id |
+| `POST` | `/api/analytics/export/pdf` | ReportLab PDF (Anthropic-style cover) |
+| `POST` | `/api/analytics/export/docx` | python-docx report |
+| `POST` | `/api/analytics/export/excel` | openpyxl spreadsheet |
+| `POST` | `/api/graph/query` | LightRAG NL query (Redis-cached) |
+| `POST` | `/api/materials/ingest` | LightRAG PDF/PPTX/DOCX ingestion |
+
+---
 
 ## AI Integration
-- OpenAI GPT-4o-mini (主要生成)
-- Google Gemini 2.5 flash (可选)
-- Tavily (research agent)
-- LightRAG (知识图谱，HKU开源)
+
+- **OpenAI GPT-4o-mini** — primary content generation (via `AI_PROVIDER=openai`)
+- **Google Gemini 2.5 Flash** — alternative (via `AI_PROVIDER=gemini`)
+- **Tavily Search API** — pre-generation academic source retrieval
+- **LightRAG** (HKUDS, MIT) — knowledge graph construction and NL query
+
+---
 
 ## Pedagogical Engine
-- Bloom's Taxonomy mapping（按课程代码自动映射认知层级）
-- i+1 difficulty progression（模块复杂度递进验证）
-- Human-in-the-loop（Tavily源审核）
 
-## Roadmap Priority
-1. #23 Multi-page routing（进行中）→ 解锁R18
-2. R17 AI免责声明（上线前必须）
-3. R18 BYOK Settings页面（依赖#23）
-4. #11 Assignment Timeline
+- **Bloom's Taxonomy mapping** — course code (e.g. ACCT 301) → cognitive level (Remember → Create)
+- **i+1 difficulty progression** — `complexity_level` validated to increase across modules
+- **Cognitive Load constraints** — max 2 readings per module, each with explicit rationale
+- **Human-in-the-loop** — Tavily sources reviewed and approved/rejected before generation
+
+---
+
+## Export Formats
+
+| Output | Library | Notes |
+|--------|---------|-------|
+| PDF (analytics) | ReportLab | Anthropic-style cover: left-aligned brand line, large title, HRFlowable, 4-col metadata table; matplotlib charts embedded |
+| DOCX (analytics) | python-docx | Matching layout to PDF; charts as images |
+| Excel | openpyxl | Raw data sheets per section |
+| PDF (curriculum) | jsPDF (client-side) | Readings inline per module, References section |
+| DOCX (curriculum) | python-docx | Same structure as curriculum PDF |
+| IMS Common Cartridge | Python zip | Direct import to Canvas / Moodle / D2L |
+| Markdown | Plain text | Full curriculum with readings and assignments |
