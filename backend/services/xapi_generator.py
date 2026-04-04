@@ -211,7 +211,7 @@ def _generate_statements_for_student(
     topic: str,
     num_modules: int,
     base_time: datetime,
-    days_span: int = 14,
+    days_span: int = 42,
 ) -> list[tuple]:
     """Generate a sequence of xAPI statements for one student."""
     profile = student["profile"]
@@ -236,10 +236,32 @@ def _generate_statements_for_student(
         objects_by_module[mi].append(obj)
 
     # Generate learning path
-    time_cursor = base_time + timedelta(hours=random.uniform(0, 48))
+    # Students enter at different points in the course based on their profile
+    # High performers start early, disengaged students start late or drop in randomly
+    profile_start_ranges = {
+        "high_performer": (0, 7),
+        "average": (3, 21),
+        "struggling": (7, 35),
+        "disengaged": (14, 42),
+    }
+    lo, hi = profile_start_ranges.get(profile, (0, 42))
+    start_day = random.uniform(lo, hi)
+
+    # Realistic hour-of-day: weighted toward 9am-11pm (index = hour 0-23)
+    HOUR_WEIGHTS = [1,1,1,1,1,1,2,3,5,8,9,9,8,7,8,9,8,7,6,5,4,3,2,1]
+    start_hour = random.choices(range(24), weights=HOUR_WEIGHTS)[0]
+    time_cursor = base_time + timedelta(days=start_day, hours=start_hour, minutes=random.randint(0, 59))
+
     for mod_idx in range(modules_reached):
         if mod_idx not in objects_by_module:
             continue
+
+        # Jump forward by 1-5 days between modules (simulate weekly/bi-weekly pacing)
+        if mod_idx > 0:
+            days_between = random.uniform(1, 5)
+            next_hour = random.choices(range(24), weights=HOUR_WEIGHTS)[0]
+            time_cursor = time_cursor + timedelta(days=days_between, hours=next_hour - time_cursor.hour, minutes=random.randint(0, 59))
+
         mod_objects = objects_by_module[mod_idx]
 
         # Number of interactions per module varies by profile
@@ -270,7 +292,7 @@ def _generate_statements_for_student(
                 )[0]
 
             ts = time_cursor + timedelta(
-                minutes=random.randint(5, 180),
+                minutes=random.randint(5, 90),
                 seconds=random.randint(0, 59),
             )
             time_cursor = ts
@@ -388,8 +410,8 @@ def generate_for_course(course_id: int, course_data: dict, noise_ratio: float = 
     if not objects:
         return []
 
-    # Base time: 14 days ago
-    base_time = datetime.now() - timedelta(days=14)
+    # Base time: 42 days ago
+    base_time = datetime.now() - timedelta(days=42)
 
     # Generate statements for each student
     all_statements = []
