@@ -226,6 +226,9 @@ class OrchestratorNode(BaseNode):
                 "duration_ms": duration,
                 "retries_used": result.retries_used,
                 "error": safe_error,
+                "tokens_in": result.tokens_in,
+                "tokens_out": result.tokens_out,
+                "tokens_cache_read": result.tokens_cache_read,
             }
 
             if result.status == "success":
@@ -278,6 +281,9 @@ class OrchestratorNode(BaseNode):
                 "duration_ms": result.duration_ms,
                 "retries_used": result.retries_used,
                 "error": safe_error,
+                "tokens_in": result.tokens_in,
+                "tokens_out": result.tokens_out,
+                "tokens_cache_read": result.tokens_cache_read,
             }
 
         return self._aggregate_report(course_id, agent_results, anon_map)
@@ -341,6 +347,24 @@ class OrchestratorNode(BaseNode):
         if hp_count > 0:
             summary_points.append(f"{hp_count} high-performing students identified")
 
+        # ── Token usage summary ───────────────────────────────────────────────
+        total_in = sum(r.get("tokens_in", 0) for r in agent_results.values())
+        total_out = sum(r.get("tokens_out", 0) for r in agent_results.values())
+        total_cache_read = sum(r.get("tokens_cache_read", 0) for r in agent_results.values())
+        total_cache_write = sum(r.get("tokens_cache_write", 0) for r in agent_results.values())
+
+        # Print token summary to backend log for visibility
+        print("\n[Token Usage] ─────────────────────────────────")
+        for name, r in agent_results.items():
+            tin = r.get("tokens_in", 0)
+            tout = r.get("tokens_out", 0)
+            if tin or tout:
+                print(f"  {name:25s}  in={tin:>6}  out={tout:>5}  cache_read={r.get('tokens_cache_read',0):>6}")
+            else:
+                print(f"  {name:25s}  sql-only (no LLM)")
+        print(f"  {'TOTAL':25s}  in={total_in:>6}  out={total_out:>5}  cache_read={total_cache_read:>6}")
+        print("────────────────────────────────────────────────\n")
+
         report = {
             "course_id": course_id,
             "course_meta": course_meta,
@@ -355,8 +379,18 @@ class OrchestratorNode(BaseNode):
                     "status": r["status"],
                     "duration_ms": r["duration_ms"],
                     "retries": r["retries_used"],
+                    "tokens_in": r.get("tokens_in", 0),
+                    "tokens_out": r.get("tokens_out", 0),
+                    "tokens_cache_read": r.get("tokens_cache_read", 0),
                 }
                 for name, r in agent_results.items()
+            },
+            "token_summary": {
+                "total_in": total_in,
+                "total_out": total_out,
+                "cache_read": total_cache_read,
+                "cache_write": total_cache_write,
+                "llm_used": total_in > 0 or total_out > 0,
             },
         }
         self._save_snapshot(report)

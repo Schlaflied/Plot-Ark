@@ -24,6 +24,11 @@ class NodeResult:
     duration_ms: int = 0
     retries_used: int = 0
     error: Optional[str] = None
+    # Token usage — populated when agent uses an LLM; zero for sql-only agents
+    tokens_in: int = 0
+    tokens_out: int = 0
+    tokens_cache_read: int = 0
+    tokens_cache_write: int = 0
 
 
 class SharedMemory:
