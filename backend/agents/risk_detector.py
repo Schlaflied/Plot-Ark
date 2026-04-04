@@ -135,10 +135,10 @@ class RiskDetectorNode(BaseNode):
                 signals.append(f"Only {total} total interaction")
                 risk_score += 1
 
-            # Classify risk level — high ~5% of cohort, medium ~20-25%.
-            if risk_score >= 5:
+            # Classify risk level — high ~5% of cohort, medium ~15-20%.
+            if risk_score >= 7:
                 level = "high"
-            elif risk_score >= 2:
+            elif risk_score >= 4:
                 level = "medium"
             else:
                 level = "low"
