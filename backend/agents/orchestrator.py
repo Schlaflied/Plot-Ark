@@ -388,11 +388,24 @@ class OrchestratorNode(BaseNode):
             modules = ba.get("module_engagement", [])
             mod_summary = [{"name": m.get("module_name", ""), "completion_rate": m.get("completion_rate", 0)} for m in modules]
 
+            # Read current noise label from Redis
+            noise_label = "unknown"
+            try:
+                from extensions import redis_client
+                if redis_client:
+                    val = redis_client.get("plotark:current_noise")
+                    if val:
+                        ratio = float(val)
+                        noise_label = f"{int(ratio * 100)}pct"
+            except Exception:
+                pass
+
             cur.execute("""
                 INSERT INTO course_analysis_snapshots
                     (course_id, risk_distribution, total_students, at_risk_count, high_risk_count,
-                     top_signals, module_engagement_summary, verb_distribution, cohort_groups)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     top_signals, module_engagement_summary, verb_distribution, cohort_groups,
+                     noise_label)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 report.get("course_id"),
                 json.dumps(risk_dist),
@@ -403,6 +416,7 @@ class OrchestratorNode(BaseNode):
                 json.dumps(mod_summary),
                 json.dumps(ba.get("verb_distribution", {})),
                 json.dumps(cc.get("groups", {})),
+                noise_label,
             ))
             conn.commit()
             cur.close()

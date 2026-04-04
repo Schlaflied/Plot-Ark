@@ -272,6 +272,12 @@ def trigger_seed():
             print("Cleared existing xAPI statements.")
 
     result = generate_all_courses(noise_ratio=noise)
+    try:
+        from extensions import redis_client
+        if redis_client:
+            redis_client.set("plotark:current_noise", str(noise))
+    except Exception:
+        pass
     return jsonify(result)
 
 

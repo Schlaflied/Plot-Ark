@@ -69,6 +69,9 @@ const StudentDataPage: React.FC = () => {
   const [report, setReport] = useState<AnalyticsReport | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string>('summary');
+  const [noiseRatio, setNoiseRatio] = useState<number>(0.15);
+  const [seeding, setSeeding] = useState(false);
+  const [seedDone, setSeedDone] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(224);
   const exportRef = useRef<HTMLDivElement>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
@@ -133,6 +136,17 @@ const StudentDataPage: React.FC = () => {
     };
   };
 
+  const reseedData = async () => {
+    setSeeding(true);
+    setSeedDone(false);
+    try {
+      await fetch(`/api/xapi/seed?noise=${noiseRatio}`, { method: 'POST' });
+      setSeedDone(true);
+      setTimeout(() => setSeedDone(false), 3000);
+    } catch {}
+    setSeeding(false);
+  };
+
   const sections = [
     { id: 'summary', label: 'Executive Summary', icon: '📋' },
     { id: 'behavior', label: 'Behavior Analysis', icon: '📈' },
@@ -186,6 +200,39 @@ const StudentDataPage: React.FC = () => {
               {selectedCourse.course_code && <p className="text-[10px] text-stone-500">{selectedCourse.course_code}</p>}
             </div>
           )}
+
+          {/* Noise level selector */}
+          <div className="p-3 border-b border-stone-700 space-y-2">
+            <label className="text-[10px] uppercase tracking-wider text-stone-500 block">Mock Data Noise Level</label>
+            <div className="grid grid-cols-4 gap-1">
+              {[0.05, 0.10, 0.15, 0.20].map(n => (
+                <button
+                  key={n}
+                  onClick={() => { setNoiseRatio(n); setSeedDone(false); }}
+                  className={`py-1.5 rounded text-[10px] font-medium transition-colors ${
+                    noiseRatio === n
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-stone-800 text-stone-400 hover:bg-stone-700'
+                  }`}
+                >
+                  {(n * 100).toFixed(0)}%
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={reseedData}
+              disabled={seeding}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-stone-700 text-stone-300 hover:bg-stone-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {seeding ? (
+                <><span className="animate-spin inline-block w-3 h-3 border-2 border-stone-300 border-t-transparent rounded-full" /> Seeding…</>
+              ) : seedDone ? (
+                <>✓ Seeded ({(noiseRatio * 100).toFixed(0)}%)</>
+              ) : (
+                <>↺ Re-seed All Courses</>
+              )}
+            </button>
+          </div>
 
           {/* Analysis actions */}
           <div className="p-3 border-b border-stone-700 space-y-2">
