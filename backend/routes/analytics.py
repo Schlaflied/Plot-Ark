@@ -1,8 +1,25 @@
 """Analytics routes — SSE streaming A2A analysis + export endpoints."""
 
 import json
+import re
 from flask import Blueprint, request, jsonify, Response
 from agents.orchestrator import OrchestratorNode
+
+
+def _export_filename(report: dict, ext: str) -> str:
+    """Build a safe filename: course-name-noiseXXpct.ext"""
+    topic = report.get("course_meta", {}).get("topic", "") or f"course-{report.get('course_id', 0)}"
+    slug = re.sub(r"[^a-z0-9]+", "-", topic.lower()).strip("-")[:40]
+    noise_label = "unknown"
+    try:
+        from extensions import redis_client
+        if redis_client:
+            val = redis_client.get("plotark:current_noise")
+            if val:
+                noise_label = f"noise{int(float(val) * 100)}pct"
+    except Exception:
+        pass
+    return f"{slug}-{noise_label}.{ext}"
 
 analytics_bp = Blueprint("analytics", __name__)
 
@@ -89,7 +106,7 @@ def export_pdf(course_id):
         pdf_bytes,
         mimetype="application/pdf",
         headers={
-            "Content-Disposition": f"attachment; filename=plot-ark-report-{course_id}.pdf",
+            "Content-Disposition": f"attachment; filename={_export_filename(report, 'pdf')}",
         },
     )
 
@@ -107,7 +124,7 @@ def export_docx(course_id):
         docx_bytes,
         mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={
-            "Content-Disposition": f"attachment; filename=plot-ark-report-{course_id}.docx",
+            "Content-Disposition": f"attachment; filename={_export_filename(report, 'docx')}",
         },
     )
 
@@ -125,6 +142,6 @@ def export_excel(course_id):
         xlsx_bytes,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
-            "Content-Disposition": f"attachment; filename=plot-ark-data-{course_id}.xlsx",
+            "Content-Disposition": f"attachment; filename={_export_filename(report, 'xlsx')}",
         },
     )
