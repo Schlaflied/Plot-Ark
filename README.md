@@ -51,7 +51,13 @@
 
 ![Knowledge Graph](docs/Knowledge%20graph%20.gif)
 
+**xAPI Analytics** — seed mock learner data → run A2A multi-agent pipeline → export PDF/DOCX/Excel report
+
+![xAPI Analytics](docs/xAPI%20usage.gif)
+
 ▶ [Full demo video (Google Drive)](https://drive.google.com/file/d/14SLOJFImW9TqyyXipJL1wumkptir7WuU/view?usp=sharing)
+
+▶ [xAPI + A2A Analytics demo (Google Drive)](https://drive.google.com/file/d/1CVrWfrJ1gGUDf-VD1E9p443-7DKJs5MM/view?usp=drive_link)
 
 ---
 

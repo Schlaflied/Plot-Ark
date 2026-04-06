@@ -50,7 +50,13 @@
 
 ![Knowledge Graph](docs/Knowledge%20graph%20.gif)
 
+**xAPI 学习分析** — 注入模拟学习者数据 → 运行 A2A 多 Agent 流水线 → 导出 PDF/DOCX/Excel 报告
+
+![xAPI Analytics](docs/xAPI%20usage.gif)
+
 ▶ [完整演示视频（Google Drive）](https://drive.google.com/file/d/14SLOJFImW9TqyyXipJL1wumkptir7WuU/view?usp=sharing)
+
+▶ [xAPI + A2A 分析演示视频（Google Drive）](https://drive.google.com/file/d/1CVrWfrJ1gGUDf-VD1E9p443-7DKJs5MM/view?usp=drive_link)
 
 ---
 
