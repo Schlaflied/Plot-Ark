@@ -23,6 +23,10 @@
   <img src="Logo_Agentic.png" alt="Plot Ark Logo" width="200"/>
 </p>
 
+<h3 align="center">
+  👉 <a href="https://schlaflied.github.io/Plot-Ark/">Visit the Official Landing Page</a> 👈
+</h3>
+
 **An open-source agentic curriculum engine that generates pedagogically grounded course content through narrative frameworks.**
 
 > Unlike static AI course generators, Plot Ark applies evidence-based instructional design principles — Bloom's Taxonomy, Krashen's i+1 difficulty scaffolding, and Cognitive Load Theory — so the curriculum it generates is structured the way learning actually works.

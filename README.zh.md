@@ -22,6 +22,10 @@
   <img src="Logo_Agentic.png" alt="Plot Ark Logo" width="200"/>
 </p>
 
+<h3 align="center">
+  👉 <a href="https://schlaflied.github.io/Plot-Ark/">访问精美的互动式官方主页</a> 👈
+</h3>
+
 **一款开源主动式课程引擎，通过叙事框架生成基于教学理论的课程内容。**
 
 > 与静态 AI 课程生成器不同，Plot Ark 将循证教学设计原则落地于实践——布鲁姆认知分类法、Krashen 的 i+1 难度递进、以及认知负荷理论——确保生成的课程结构符合真实学习规律。
