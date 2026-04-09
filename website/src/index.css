@@ -1,0 +1,33 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Custom Select Dropdown Animation
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes selectOpen {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-selectOpen {
+  animation: selectOpen 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom scrollbar for dropdown lists */
+.max-h-64::-webkit-scrollbar {
+  width: 6px;
+}
+.max-h-64::-webkit-scrollbar-track {
+  background: transparent;
+}
+.max-h-64::-webkit-scrollbar-thumb {
+  background: #d6d3d1;
+  border-radius: 999px;
+}
+.max-h-64::-webkit-scrollbar-thumb:hover {
+  background: #a8a29e;
+}
