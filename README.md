@@ -268,11 +268,19 @@ Frontend (noise selector + seed button)
                           ▼                 ▼
                course_analysis_snapshots  final report JSON
                (PostgreSQL LTM)           → PDF / DOCX / Excel
+                          │
+                          ▼
+                   CurriculumAgent (AI Agent)
+             (Reads long-term trends, flags critical issues)
+                          │
+                          ▼
+                 change_log & module_flags
+              (Human-in-the-loop Dashboard Review)
 ```
 
-**Planned agentic loop:**
+**Active agentic loop:**
 ```
-xAPI behavior events → Curriculum Agent → Redis learner state → Narrative Engine → LMS
+xAPI behavior events → A2A Assessment → PostgreSQL LTM → Curriculum Agent Suggestions → Professor Review (HITL) → DB Changes → Module UI Banner
 ```
 
 ---
@@ -376,6 +384,8 @@ plot-ark/
 │   │   ├── prompt_builder.py            ← Centralized AI prompt templates
 │   │   ├── lightrag_service.py          ← LightRAG instance management
 │   │   ├── xapi_generator.py            ← Mock xAPI data with noise injection
+│   │   ├── ltm_writer.py                ← LTM (course_analysis_snapshots) read/write
+│   │   ├── threshold_checker.py         ← Parses agent thresholds and flags
 │   │   ├── report_exporter.py           ← Thin facade for report generation
 │   │   ├── chart_generator.py           ← Matplotlib visualizations & brand colors
 │   │   ├── export_pdf.py                ← ReportLab PDF layout & structure
@@ -403,7 +413,10 @@ plot-ark/
 │   │   ├── analytics/
 │   │   │   ├── ReportSections.tsx       ← A2A analytics report viewer component
 │   │   │   ├── CurriculumApplyModal.tsx ← AI suggestion apply confirmation modal
-│   │   │   └── CurriculumDrawer.tsx     ← Slide-out drawer for curriculum suggestions
+│   │   │   ├── CurriculumDrawer.tsx     ← Slide-out drawer for curriculum suggestions
+│   │   │   ├── AISuggestionsSection.tsx ← AI exclusive suggestions detail section
+│   │   │   ├── FlagBadge.tsx            ← Red/amber module issue flags
+│   │   │   └── FlagModal.tsx            ← Detailed flag description & signal source
 │   │   ├── ModuleCard.tsx               ← Individual curriculum module card
 │   │   ├── ModuleSidebar.tsx            ← Navigation sidebar for modules
 │   │   ├── GraphViewer.tsx              ← Core force-directed graph rendering

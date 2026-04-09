@@ -267,11 +267,19 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
                           ▼                 ▼
                course_analysis_snapshots  最终报告 JSON
                （PostgreSQL LTM）         → PDF / DOCX / Excel
+                          │
+                          ▼
+                   CurriculumAgent (AI Agent)
+                 (读取长期偏好，评估高频预警模块)
+                          │
+                          ▼
+                 change_log & module_flags
+              (人在回路的 Dashboard Review & Apply)
 ```
 
-**规划中的主动式循环：**
+**执行中的主动式循环：**
 ```
-xAPI 行为事件 → 课程 Agent → Redis 学习者状态 → 叙事引擎 → LMS
+xAPI 行为事件 → A2A 多 Agent 评估 → PostgreSQL LTM 暖层 → Curriculum Agent 建议 → 教授 (人在回路 Review) → 数据表变更 → 课程重构与 UI 横幅通知
 ```
 
 ---
@@ -375,6 +383,8 @@ plot-ark/
 │   │   ├── prompt_builder.py            ← 集中组装的 AI Prompt 模板
 │   │   ├── lightrag_service.py          ← LightRAG 实例管理
 │   │   ├── xapi_generator.py            ← Mock xAPI 数据 + 噪声注入
+│   │   ├── ltm_writer.py                ← LTM (course_analysis_snapshots) 存档读取/写入
+│   │   ├── threshold_checker.py         ← 解析 agent 评估多级门限值
 │   │   ├── report_exporter.py           ← 用于报告生成的薄调度 Facade
 │   │   ├── chart_generator.py           ← Matplotlib 数据可视化与品牌颜色
 │   │   ├── export_pdf.py                ← ReportLab PDF 绘制逻辑
@@ -402,7 +412,10 @@ plot-ark/
 │   │   ├── analytics/
 │   │   │   ├── ReportSections.tsx       ← A2A 分析报告的展示组件
 │   │   │   ├── CurriculumApplyModal.tsx ← AI 建议应用确认弹窗
-│   │   │   └── CurriculumDrawer.tsx     ← 课程建议滑出抽屉面板
+│   │   │   ├── CurriculumDrawer.tsx     ← 课程建议滑出抽屉面板
+│   │   │   ├── AISuggestionsSection.tsx ← AI 专属建议详情展示区块
+│   │   │   ├── FlagBadge.tsx            ← 模块预警状态红色/琥珀色徽章
+│   │   │   └── FlagModal.tsx            ← 详细预警说明与信号来源模态框
 │   │   ├── ModuleCard.tsx               ← 拆分的单个课程模块卡片
 │   │   ├── ModuleSidebar.tsx            ← 课程模块侧边导航栏
 │   │   ├── GraphViewer.tsx              ← 核心力导向图渲染
