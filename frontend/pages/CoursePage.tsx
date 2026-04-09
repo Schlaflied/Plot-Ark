@@ -14,6 +14,7 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import type { Module, CourseDetail, Source } from '../utils/courseExport';
 import CurriculumApplyModal from '../components/analytics/CurriculumApplyModal';
 import CurriculumDrawer from '../components/analytics/CurriculumDrawer';
+import StudentChangesDrawer from '../components/analytics/StudentChangesDrawer';
 import {
   formatCitation,
   exportPDF,
@@ -23,6 +24,108 @@ import {
 } from '../utils/courseExport';
 import ModuleSidebar from '../components/ModuleSidebar';
 import ModuleCard from '../components/ModuleCard';
+
+
+// ─── Draggable Floating Action Button ─────────────────────────────────────────
+
+interface DraggableFabProps {
+  variant: 'professor' | 'student';
+  badge: number;
+  onFabClick: () => void;
+  onDismiss: () => void;
+}
+
+const DraggableFab: React.FC<DraggableFabProps> = ({ variant, badge, onFabClick, onDismiss }) => {
+  const isProfessor = variant === 'professor';
+  const fabRef = React.useRef<HTMLDivElement>(null);
+  const dragState = React.useRef({ dragging: false, startX: 0, startY: 0, offsetX: 0, offsetY: 0, moved: false });
+  const [pos, setPos] = React.useState({ x: 0, y: 0 });   // offset from default bottom-right
+  const [isDragging, setIsDragging] = React.useState(false);
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    // Ignore if target is the close button
+    if ((e.target as HTMLElement).closest('[data-fab-close]')) return;
+    e.preventDefault();
+    const ds = dragState.current;
+    ds.dragging = true;
+    ds.moved = false;
+    ds.startX = e.clientX;
+    ds.startY = e.clientY;
+    ds.offsetX = pos.x;
+    ds.offsetY = pos.y;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!ds.dragging) return;
+      const dx = ev.clientX - ds.startX;
+      const dy = ev.clientY - ds.startY;
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+        ds.moved = true;
+        setIsDragging(true);
+      }
+      if (ds.moved) {
+        setPos({ x: ds.offsetX + dx, y: ds.offsetY + dy });
+      }
+    };
+    const onUp = () => {
+      ds.dragging = false;
+      setIsDragging(false);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      // Only fire click if we didn't drag
+      if (!ds.moved) {
+        onFabClick();
+      }
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  return (
+    <div
+      ref={fabRef}
+      className="fixed z-[60] group"
+      style={{
+        bottom: `${24 - pos.y}px`,
+        right: `${24 - pos.x}px`,
+        animation: pos.x === 0 && pos.y === 0 ? 'fabSlideIn 0.35s cubic-bezier(.4,0,.2,1)' : undefined,
+        cursor: isDragging ? 'grabbing' : 'grab',
+        userSelect: 'none',
+      }}
+    >
+      {/* Close FAB button */}
+      <button
+        data-fab-close
+        onClick={onDismiss}
+        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-stone-600/80 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-stone-800 shadow-md z-10"
+        title="Permanently dismiss"
+      >
+        ✕
+      </button>
+      {/* FAB body */}
+      <div
+        onMouseDown={onMouseDown}
+        className={`w-12 h-12 rounded-full text-white shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center text-lg relative ${
+          isProfessor
+            ? 'bg-gradient-to-br from-amber-400 to-amber-600'
+            : 'bg-gradient-to-br from-blue-400 to-blue-600'
+        }`}
+        title={isProfessor ? 'AI Curriculum Suggestions' : 'Module Updates'}
+      >
+        {isProfessor ? '🤖' : '✨'}
+        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+          {badge}
+        </span>
+      </div>
+      {/* Inline keyframes */}
+      <style>{`
+        @keyframes fabSlideIn {
+          from { opacity: 0; transform: translateY(20px) scale(0.8); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
+    </div>
+  );
+};
 
 // ─── CoursePage ───────────────────────────────────────────────────────────────
 
@@ -51,6 +154,10 @@ const CoursePage: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [moduleChanges, setModuleChanges] = useState<any[]>([]);
   const [changesExpanded, setChangesExpanded] = useState(true);
+  const [studentDrawerOpen, setStudentDrawerOpen] = useState(false);
+  const [notifDismissed, setNotifDismissed] = useState(false);
+  const [profFabDismissed, setProfFabDismissed] = useState(false);
+  const [studentFabDismissed, setStudentFabDismissed] = useState(false);
   const isResizing = React.useRef(false);
   const navigate = useNavigate();
 
@@ -264,22 +371,30 @@ const CoursePage: React.FC = () => {
           </div>
 
           {/* AI Suggestions Notification Bar */}
-          {currSuggestions.length > 0 && (
+          {currSuggestions.length > 0 && !notifDismissed && (
             <div className="w-full bg-amber-50 border-b border-amber-200 flex items-center justify-between px-6 py-2.5 text-sm shrink-0 animate-[fadeIn_0.3s_ease-out]">
               <div className="flex items-center gap-2.5">
                 <span className="text-base">🤖</span>
                 <span className="text-amber-900 font-medium">
-                  {currSuggestions.length} curriculum suggestion{currSuggestions.length > 1 ? 's' : ''} available
+                  {currSuggestions.filter(s => s.status !== 'applied').length} curriculum suggestion{currSuggestions.filter(s => s.status !== 'applied').length !== 1 ? 's' : ''} available
                 </span>
                 <span className="text-xs text-amber-600">based on student performance data</span>
               </div>
-              <button
-                onClick={() => setDrawerOpen(true)}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium text-xs transition-colors shadow-sm"
-              >
-                Review
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setNotifDismissed(true)}
+                  className="text-amber-400 hover:text-amber-600 transition-colors text-xs px-2 py-1"
+                >
+                  Dismiss
+                </button>
+                <button
+                  onClick={() => setDrawerOpen(true)}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium text-xs transition-colors shadow-sm"
+                >
+                  Review
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                </button>
+              </div>
             </div>
           )}
         </>
@@ -287,30 +402,28 @@ const CoursePage: React.FC = () => {
 
       {/* Student — Module Update Banner */}
       {isStudent && moduleChanges.length > 0 && changesExpanded && (
-        <div className="w-full bg-blue-50 border-b border-blue-200 px-6 py-3 shrink-0">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-2">
-              <span className="text-base">✨</span>
-              <span className="font-semibold text-blue-900 text-sm">Modules Updated</span>
-              <span className="text-xs text-blue-500 bg-blue-100 px-1.5 py-0.5 rounded-full font-medium">{moduleChanges.length}</span>
-            </div>
+        <div className="w-full bg-blue-50 border-b border-blue-200 flex items-center justify-between px-6 py-2.5 text-sm shrink-0 animate-[fadeIn_0.3s_ease-out]">
+          <div className="flex items-center gap-2.5">
+            <span className="text-base">✨</span>
+            <span className="text-blue-900 font-medium">
+              {moduleChanges.length} module{moduleChanges.length !== 1 ? 's' : ''} updated
+            </span>
+            <span className="text-xs text-blue-500">based on instructor optimization</span>
+          </div>
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setChangesExpanded(false)}
-              className="text-blue-400 hover:text-blue-600 transition-colors text-xs"
+              className="text-blue-400 hover:text-blue-600 transition-colors text-xs px-2 py-1"
             >
               Dismiss
             </button>
-          </div>
-          <div className="space-y-1">
-            {moduleChanges.slice(0, 3).map((c: any, i: number) => (
-              <div key={i} className="flex items-start gap-2 text-xs text-blue-800">
-                <span className="text-blue-400 mt-0.5">→</span>
-                <span><strong>{c.module_id}</strong>: {c.recommendation}</span>
-              </div>
-            ))}
-            {moduleChanges.length > 3 && (
-              <p className="text-xs text-blue-400 ml-4">+{moduleChanges.length - 3} more changes</p>
-            )}
+            <button
+              onClick={() => setStudentDrawerOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-medium text-xs transition-colors shadow-sm"
+            >
+              Review
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+            </button>
           </div>
         </div>
       )}
@@ -587,10 +700,18 @@ const CoursePage: React.FC = () => {
               }),
             });
             if (!res.ok) throw new Error('Failed to apply suggestion');
+            // Refresh suggestions list
             const refreshRes = await fetch(`/api/curriculum/suggestions/${id}`);
             if (refreshRes.ok) {
               const data = await refreshRes.json();
               setCurrSuggestions(data.suggestions || []);
+            }
+            // Refresh curriculum data so module content updates in the UI
+            const currRes = await fetch(`/api/history/${id}`);
+            if (currRes.ok) {
+              const currData = await currRes.json();
+              setCurriculum(currData);
+              setEditedModules({});
             }
           }}
         />
@@ -607,9 +728,72 @@ const CoursePage: React.FC = () => {
           setDrawerOpen(false);
           setApplyingSuggestion({ ...s, course_id: id });
         }}
+        onRedo={async (s) => {
+          try {
+            const res = await fetch('/api/curriculum/suggestions/redo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ course_id: id, module_id: s.module_id }),
+            });
+            if (!res.ok) throw new Error('Failed to redo');
+            // Refresh suggestions
+            const refreshRes = await fetch(`/api/curriculum/suggestions/${id}`);
+            if (refreshRes.ok) {
+              const data = await refreshRes.json();
+              setCurrSuggestions(data.suggestions || []);
+            }
+            // Refresh curriculum data to revert module content in UI
+            const currRes = await fetch(`/api/history/${id}`);
+            if (currRes.ok) {
+              const currData = await currRes.json();
+              setCurriculum(currData);
+              setEditedModules({});
+            }
+          } catch (e) {
+            console.error('Redo failed:', e);
+          }
+        }}
         onNavigateAnalytics={() => {
           setDrawerOpen(false);
-          navigate('/student-data');
+          navigate(`/student-data?course=${id}`);
+        }}
+      />
+
+      {/* ── Professor FAB (floating action button, draggable) ── */}
+      {!isStudent && notifDismissed && !profFabDismissed && currSuggestions.filter(s => s.status !== 'applied').length > 0 && (
+        <DraggableFab
+          variant="professor"
+          badge={currSuggestions.filter(s => s.status !== 'applied').length}
+          onFabClick={() => setDrawerOpen(true)}
+          onDismiss={() => setProfFabDismissed(true)}
+        />
+      )}
+
+      {/* ── Student FAB (floating action button, draggable) ── */}
+      {isStudent && !changesExpanded && !studentFabDismissed && moduleChanges.length > 0 && (
+        <DraggableFab
+          variant="student"
+          badge={moduleChanges.length}
+          onFabClick={() => setStudentDrawerOpen(true)}
+          onDismiss={() => setStudentFabDismissed(true)}
+        />
+      )}
+
+      {/* Student Changes Drawer */}
+      <StudentChangesDrawer
+        open={studentDrawerOpen}
+        changes={moduleChanges}
+        onClose={() => setStudentDrawerOpen(false)}
+        onNavigateToModule={(moduleId) => {
+          // Find module index by module_id pattern (module_1 -> index 0)
+          const match = moduleId.match(/module_(\d+)/);
+          if (match && curriculum?.modules) {
+            const idx = parseInt(match[1], 10) - 1;
+            if (idx >= 0 && idx < curriculum.modules.length) {
+              setCurrentModuleIndex(idx);
+            }
+          }
+          setStudentDrawerOpen(false);
         }}
       />
     </div>

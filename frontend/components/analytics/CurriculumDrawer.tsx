@@ -1,8 +1,9 @@
 /**
  * CurriculumDrawer — Slide-out drawer panel for AI curriculum suggestions.
  *
- * Opens from the right side when triggered by the notification bar.
- * Contains suggestion cards with Apply buttons + redirect to analytics.
+ * Split into two sections:
+ *  1. Pending Suggestions — with "Apply" button
+ *  2. Applied Changes — with "Redo" (undo) button
  */
 
 import React from 'react';
@@ -13,6 +14,7 @@ interface Suggestion {
   recommendation: string;
   reasons?: string[];
   source?: string;
+  status?: string; // 'pending' | 'applied'
 }
 
 interface CurriculumDrawerProps {
@@ -22,6 +24,7 @@ interface CurriculumDrawerProps {
   courseId: string | undefined;
   onClose: () => void;
   onApply: (suggestion: Suggestion) => void;
+  onRedo: (suggestion: Suggestion) => void;
   onNavigateAnalytics: () => void;
 }
 
@@ -32,8 +35,12 @@ const CurriculumDrawer: React.FC<CurriculumDrawerProps> = ({
   courseId,
   onClose,
   onApply,
+  onRedo,
   onNavigateAnalytics,
 }) => {
+  const pending = suggestions.filter(s => s.status !== 'applied');
+  const applied = suggestions.filter(s => s.status === 'applied');
+
   return (
     <>
       {/* Backdrop */}
@@ -79,50 +86,44 @@ const CurriculumDrawer: React.FC<CurriculumDrawerProps> = ({
               <p className="text-sm">Loading suggestions...</p>
             </div>
           ) : suggestions.length > 0 ? (
-            <div className="space-y-3">
-              {suggestions.map((s, i) => (
-                <div
-                  key={i}
-                  className="bg-amber-50/70 border border-amber-200/60 rounded-xl p-4 hover:shadow-sm transition-shadow"
-                >
-                  {/* Module name + Apply */}
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                      <p className="text-sm font-semibold text-stone-800">
-                        {s.module_name || s.module_id}
-                      </p>
-                    </div>
-                    {s.source === 'curriculum_agent' && (
-                      <button
-                        onClick={() => onApply(s)}
-                        className="text-xs px-3 py-1 bg-amber-500 text-white rounded-lg font-medium hover:bg-amber-600 transition-colors shadow-sm"
-                      >
-                        Apply
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Recommendation text */}
-                  <p className="text-sm text-stone-600 leading-relaxed mb-2.5">
-                    {s.recommendation}
+            <div className="space-y-6">
+              {/* ── Pending Suggestions ─────────────────────────── */}
+              {pending.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-3">
+                    Pending Suggestions ({pending.length})
                   </p>
-
-                  {/* Reason tags */}
-                  {s.reasons && s.reasons.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {s.reasons.map((r, j) => (
-                        <span
-                          key={j}
-                          className="text-[10px] px-2 py-0.5 bg-white border border-amber-200 text-amber-700 rounded-full font-medium"
-                        >
-                          {r.replace(/_/g, ' ')}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <div className="space-y-3">
+                    {pending.map((s, i) => (
+                      <SuggestionCard
+                        key={`p-${i}`}
+                        suggestion={s}
+                        variant="pending"
+                        onAction={() => onApply(s)}
+                      />
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
+
+              {/* ── Applied Changes ────────────────────────────── */}
+              {applied.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-green-600 uppercase tracking-widest mb-3">
+                    ✅ Applied Changes ({applied.length})
+                  </p>
+                  <div className="space-y-3">
+                    {applied.map((s, i) => (
+                      <SuggestionCard
+                        key={`a-${i}`}
+                        suggestion={s}
+                        variant="applied"
+                        onAction={() => onRedo(s)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-stone-400 gap-3">
@@ -154,6 +155,74 @@ const CurriculumDrawer: React.FC<CurriculumDrawerProps> = ({
         </div>
       </div>
     </>
+  );
+};
+
+
+/* ── SuggestionCard ──────────────────────────────────────────────────────── */
+
+interface SuggestionCardProps {
+  suggestion: Suggestion;
+  variant: 'pending' | 'applied';
+  onAction: () => void;
+}
+
+const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, variant, onAction }) => {
+  const isPending = variant === 'pending';
+
+  return (
+    <div
+      className={`rounded-xl p-4 hover:shadow-sm transition-shadow ${
+        isPending
+          ? 'bg-amber-50/70 border border-amber-200/60'
+          : 'bg-green-50/60 border border-green-200/60'
+      }`}
+    >
+      {/* Module name + Action button */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${isPending ? 'bg-amber-400' : 'bg-green-500'}`} />
+          <p className="text-sm font-semibold text-stone-800">
+            {suggestion.module_name || suggestion.module_id}
+          </p>
+        </div>
+        {suggestion.source === 'curriculum_agent' && (
+          <button
+            onClick={onAction}
+            className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors shadow-sm ${
+              isPending
+                ? 'bg-amber-500 text-white hover:bg-amber-600'
+                : 'bg-amber-500 text-white hover:bg-amber-600'
+            }`}
+          >
+            {isPending ? 'Apply' : 'Redo'}
+          </button>
+        )}
+      </div>
+
+      {/* Recommendation text */}
+      <p className="text-sm text-stone-600 leading-relaxed mb-2.5">
+        {suggestion.recommendation}
+      </p>
+
+      {/* Reason tags */}
+      {suggestion.reasons && suggestion.reasons.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {suggestion.reasons.map((r, j) => (
+            <span
+              key={j}
+              className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                isPending
+                  ? 'bg-white border border-amber-200 text-amber-700'
+                  : 'bg-white border border-green-200 text-green-700'
+              }`}
+            >
+              {r.replace(/_/g, ' ')}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 

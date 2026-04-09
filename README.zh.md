@@ -147,14 +147,17 @@
 <details>
 <summary><strong>🎯 课程 Agent — 主动式课程优化</strong></summary>
 
-- **通知栏** — CoursePage 顶部持久显示的琥珀色通知栏，当 AI 生成的课程建议可用时提醒教授，并附带“Review”按钮
-- **滑出抽屉** — 点击“Review”从右侧滑出 400px 宽的建议面板，每条建议包含详细卡片、原因标签、及 Apply 按钮；点击遮罩层或 ✕ 关闭
-- **人在回路的 Apply** — 点击 Apply 后弹出确认弹窗，展示修改前后对比预览；教授明确批准每一项变更
-- **模块标记** — `module_flags` 表存储被标记的模块，包含信号来源（content_optimizer、risk_detector、behavior_analyst）、标记级别（yellow / orange）及详细指标
-- **变更日志** — `change_log` 表记录所有课程 Agent 建议，并追踪状态（pending → applied → dismissed）
-- **学生更新横幅** — 学生视角显示蓝色“✨ Modules Updated”横幅，列出最近应用的课程变更，让学生知道课程已更新
-- **全课程覆盖** — 种子脚本自动从数据库发现所有课程，并为每门课生成标记和建议
-- **分析跳转** — 抽屉中的“View Full Analytics →”按钮直接导航到 Student Data 分析页面
+- **教授通知栏** — CoursePage 顶部琰琥色持久通知栏，当 AI 生成的课程建议可用时提醒教授，附带“Dismiss”和“Review →”按钮
+- **教授滑出抽屉** — 点击“Review”从右侧滑出 400px 建议抽屉，分为“待处理建议”（Apply）和“已应用变更”（Redo）两个区域
+- **学生通知栏** — 蓝色横幅显示“N 个模块已更新 — 基于教师优化”，附带 Dismiss 和 Review 按钮
+- **学生滑出抽屉** — 点击“Review”打开蓝色主题抽屉，列出更新的模块并带有“Go to Module”导航按钮
+- **可拖拽悬浮球（FAB）** — 关闭通知栏后，右下角出现可拖拽的悬浮球（🤖 琰琥色 / ✨ 蓝色）；点击直接打开抽屉（不恢复 banner）；hover 显示 ✕ 可彻底关闭；支持自由拖拽到屏幕任意位置
+- **人在回路的 Apply** — 点击 Apply 弹出确认弹窗，展示修改前后对比；教授明确批准每一项变更
+- **Redo（撤销 Apply）** — 应用的变更会备份原始模块数据；点击“Redo”恢复模块到应用前状态，并将建议移回待处理
+- **模块标记** — `module_flags` 表存储被标记的模块，包含信号来源、标记级别及详细指标
+- **变更日志** — `change_log` 表记录所有建议，状态追踪（pending → applied → dismissed）并存储 backup_data 用于 Redo
+- **全课程覆盖** — 种子脚本自动发现所有课程，为每门课生成标记和建议（含备份数据）
+- **分析跳转** — 教授抽屉中的“View Full Analytics →”按钮直接导航到 Student Data 分析页面
 
 </details>
 
@@ -197,15 +200,16 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 │  ├── extensions.py (单例：AI、Redis 等)  ├── async_loop.py (后台异步循环)  │
 │  ├─────────────────────────────────────────────────────────────────────┐   │
 │  │  routes/                                                            │   │
-│  │  ├── curriculum.py    生成 / 验架 / 展开 / 保存 / 标记             │   │
-│  │  ├── history.py       CRUD + 收藏 + DOCX 导出                       │   │
-│  │  ├── analytics.py     A2A SSE 分析 + PDF/DOCX/Excel 导出            │   │
-│  │  ├── xapi.py          xAPI 语句 + Mock 数据种子                     │   │
-│  │  ├── feedback.py      学生情绪反馈 + 评论收集                       │   │
-│  │  ├── graph.py         知识图谱 + RAG 查询                           │   │
-│  │  ├── sources.py       Tavily 源预览                                 │   │
-│  │  ├── syllabus.py      PDF/DOCX 解析 + 导入                          │   │
-│  │  └── materials.py     LightRAG 材料摄入                             │   │
+│  │  ├── curriculum.py           生成 / 验架 / 展开 / 保存                 │   │
+│  │  ├── curriculum_agent_routes 标记 / 建议 / 应用 / 撤销 / 变更      │   │
+│  │  ├── history.py              CRUD + 收藏 + DOCX 导出                 │   │
+│  │  ├── analytics.py            A2A SSE 分析 + PDF/DOCX/Excel 导出     │   │
+│  │  ├── xapi.py                 xAPI 语句 + Mock 数据种子              │   │
+│  │  ├── feedback.py             学生情绪反馈 + 评论收集                │   │
+│  │  ├── graph.py                知识图谱 + RAG 查询                     │   │
+│  │  ├── sources.py              Tavily 源预览                           │   │
+│  │  ├── syllabus.py             PDF/DOCX 解析 + 导入                    │   │
+│  │  └── materials.py            LightRAG 材料摄入                      │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │  ┌─────────────────────────────┐  ┌────────────────────────────────────┐   │
 │  │  agents/ (Hive 风格 A2A)    │  │  services/                         │   │
@@ -364,7 +368,8 @@ plot-ark/
 │   ├── db.py                            ← PostgreSQL 操作
 │   ├── constants.py                     ← Bloom's 分类、会话约束、评估格式
 │   ├── routes/
-│   │   ├── curriculum.py                ← /api/curriculum/*（生成、验架、展开、保存、标记、建议、应用、变更）
+│   │   ├── curriculum.py                ← /api/curriculum/*（生成、验架、展开、保存）
+│   │   ├── curriculum_agent_routes.py   ← /api/curriculum/ 标记、建议、应用、撤销、变更
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
 │   │   ├── sources.py                   ← Tavily 源预览
 │   │   ├── graph.py                     ← 知识图谱 + RAG 查询
@@ -416,7 +421,8 @@ plot-ark/
 │   │   ├── analytics/
 │   │   │   ├── ReportSections.tsx       ← A2A 分析报告的展示组件
 │   │   │   ├── CurriculumApplyModal.tsx ← AI 建议应用确认弹窗
-│   │   │   ├── CurriculumDrawer.tsx     ← 课程建议滑出抽屉面板
+│   │   │   ├── CurriculumDrawer.tsx     ← 教授端滑出抽屉（Apply / Redo）
+│   │   │   ├── StudentChangesDrawer.tsx ← 学生端滑出抽屉（Go to Module）
 │   │   │   ├── AISuggestionsSection.tsx ← AI 专属建议详情展示区块
 │   │   │   ├── FlagBadge.tsx            ← 模块预警状态红色/琥珀色徽章
 │   │   │   └── FlagModal.tsx            ← 详细预警说明与信号来源模态框
@@ -486,8 +492,9 @@ plot-ark/
 - [x] PII 匿名化 — Agent 处理前匿名化，最终报告中恢复真实身份
 - [x] Token 用量追踪 — NodeResult tokens 字段；token_summary 写入报告 JSON；后端日志打印汇总表
 - [x] LTM 暖层 — course_analysis_snapshots PostgreSQL 表（risk_distribution、verb_distribution、noise_label 等）
-- [x] 课程 Agent — 主动式课程优化：通知栏、滑出抽屉、人在回路的 Apply、模块标记、变更日志
-- [x] 学生更新横幅 — 学生端“Modules Updated”通知，展示最近应用的课程变更
+- [x] 课程 Agent — 主动式课程优化：通知栏、滑出抽屉、人在回路的 Apply/Redo、模块标记、变更日志
+- [x] 学生更新抽屉 — 学生端滑出抽屉，展示更新的模块并带有“Go to Module”导航
+- [x] 可拖拽悬浮球 — 关闭 banner 后出现悬浮球；可拖拽、点击开抽屉、hover ✕ 彻底关闭
 - [x] 学生反馈 — 每模块情绪收集（Got it / Mostly got it / Something’s off / Didn’t read）+ 可选评论
 - [ ] A2A Phase 2 — 为四个专业 Agent 集成 LLM 分析能力
 - [ ] Professor LTM — 从编辑历史学习偏好

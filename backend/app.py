@@ -6,6 +6,7 @@ from db import init_db
 
 # Import and register all route Blueprints
 from routes.curriculum import curriculum_bp
+from routes.curriculum_agent_routes import curriculum_agent_bp
 from routes.history import history_bp
 from routes.sources import sources_bp
 from routes.graph import graph_bp
@@ -17,6 +18,7 @@ from routes.analytics import analytics_bp
 from routes.settings import settings_bp
 
 app.register_blueprint(curriculum_bp)
+app.register_blueprint(curriculum_agent_bp)
 app.register_blueprint(history_bp)
 app.register_blueprint(sources_bp)
 app.register_blueprint(graph_bp)

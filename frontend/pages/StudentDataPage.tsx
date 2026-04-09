@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import ReportSections from '../components/analytics/ReportSections';
 import FlagBadge from '../components/analytics/FlagBadge';
@@ -104,8 +104,21 @@ const StudentDataPage: React.FC = () => {
     window.addEventListener('mouseup', onUp);
   };
 
+  const [searchParams] = useSearchParams();
+
   useEffect(() => {
-    fetch('/api/history').then(r => r.json()).then(d => setCourses(d.history || [])).catch(() => {});
+    fetch('/api/history').then(r => r.json()).then(d => {
+      const history = d.history || [];
+      setCourses(history);
+      // Auto-select course from URL ?course=XX
+      const courseParam = searchParams.get('course');
+      if (courseParam && history.length > 0) {
+        const courseId = parseInt(courseParam, 10);
+        if (history.some((c: any) => c.id === courseId)) {
+          setSelectedCourseId(courseId);
+        }
+      }
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {

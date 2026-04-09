@@ -132,9 +132,22 @@ def seed():
             # Rest → pending (for professor notification)
             status = "applied" if idx == 0 else "pending"
 
+            # For applied entries, store original module as backup so Redo works
+            backup_data = None
+            if status == "applied":
+                mod_idx = int(mod_id.replace("module_", "")) - 1
+                cur.execute("SELECT modules FROM curricula WHERE id = %s", (course_id,))
+                curr_row = cur.fetchone()
+                if curr_row:
+                    curr_modules = curr_row[0]
+                    if isinstance(curr_modules, str):
+                        curr_modules = json.loads(curr_modules)
+                    if curr_modules and 0 <= mod_idx < len(curr_modules):
+                        backup_data = json.dumps(curr_modules[mod_idx])
+
             cur.execute("""
-                INSERT INTO change_log (course_id, module_id, flag_reason, recommendation, agent, status)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO change_log (course_id, module_id, flag_reason, recommendation, agent, status, backup_data)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 str(course_id),
                 mod_id,
@@ -142,9 +155,10 @@ def seed():
                 recommendation,
                 "curriculum_agent",
                 status,
+                backup_data,
             ))
 
-            print(f"  [CHANGE_LOG] {mod_id}  status={status}  reasons={flag_reasons}")
+            print(f"  [CHANGE_LOG] {mod_id}  status={status}  reasons={flag_reasons}{' (with backup)' if backup_data else ''}")
 
         print()
 

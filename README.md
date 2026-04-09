@@ -148,14 +148,17 @@
 <details>
 <summary><strong>🎯 Curriculum Agent — Agentic Curriculum Optimization</strong></summary>
 
-- **Notification Bar** — persistent amber notification bar on the CoursePage alerts professors when AI-generated curriculum suggestions are available, with a "Review" button
-- **Slide-out Drawer** — clicking "Review" opens a 400px slide-out panel from the right with full suggestion cards, reason tags, and per-suggestion Apply buttons; backdrop click or ✕ to close
-- **Human-in-the-loop Apply** — clicking "Apply" on a suggestion opens a confirmation modal with before/after preview; professor explicitly approves each change
-- **Module Flags** — `module_flags` table stores flagged modules with signal sources (content_optimizer, risk_detector, behavior_analyst), flag levels (yellow / orange), and detailed metrics
-- **Change Log** — `change_log` table records all curriculum agent recommendations with status tracking (pending → applied → dismissed)
-- **Student Update Banner** — student view shows a blue "✨ Modules Updated" banner listing recently applied module changes so students know the curriculum has evolved
-- **Cross-course coverage** — demo seed script auto-discovers all courses from the database and generates flags + suggestions for every course
-- **Analytics redirect** — "View Full Analytics →" button in the drawer navigates directly to the Student Data analytics page
+- **Professor Notification Bar** — persistent amber bar on CoursePage alerts professors when suggestions are available, with "Dismiss" and "Review →" buttons
+- **Professor Slide-out Drawer** — clicking "Review" opens a 400px drawer with Pending Suggestions (Apply) and Applied Changes (Redo) sections; Redo restores original module content
+- **Student Notification Bar** — blue bar shows "N modules updated — based on instructor optimization" with Dismiss and Review buttons
+- **Student Slide-out Drawer** — clicking "Review" opens a blue-themed drawer listing updated modules with "Go to Module" navigation buttons
+- **Draggable Floating Action Button (FAB)** — after dismissing either banner, a draggable floating ball (🤖 amber / ✨ blue) appears at bottom-right; click opens the drawer directly without restoring the banner; hover reveals ✕ to permanently dismiss; supports free-drag to any screen position
+- **Human-in-the-loop Apply** — clicking "Apply" opens a confirmation modal with before/after preview; professor explicitly approves each change
+- **Redo (Undo Apply)** — applied changes store original module data as backup; clicking "Redo" restores the module to its pre-apply state and moves the suggestion back to Pending
+- **Module Flags** — `module_flags` table stores flagged modules with signal sources, flag levels (yellow / orange), and detailed metrics
+- **Change Log** — `change_log` table records all recommendations with status tracking (pending → applied → dismissed) and backup_data for redo
+- **Cross-course coverage** — seed script auto-discovers all courses and generates flags + suggestions with backup data for every course
+- **Analytics redirect** — "View Full Analytics →" in the professor drawer navigates to the Student Data analytics page
 
 </details>
 
@@ -198,15 +201,16 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 │  ├── extensions.py (Global instances)    ├── async_loop.py (Event loop)    │
 │  ├─────────────────────────────────────────────────────────────────────┐   │
 │  │  routes/                                                            │   │
-│  │  ├── curriculum.py    generate / skeleton / expand / save / flags    │   │
-│  │  ├── history.py       CRUD + favorite + DOCX export                 │   │
-│  │  ├── analytics.py     A2A SSE analysis + PDF/DOCX/Excel export      │   │
-│  │  ├── xapi.py          xAPI statements + mock data seed              │   │
-│  │  ├── feedback.py      Student sentiment + comment collection        │   │
-│  │  ├── graph.py         KG data + RAG query                           │   │
-│  │  ├── sources.py       Tavily source preview                         │   │
-│  │  ├── syllabus.py      PDF/DOCX parse + import                       │   │
-│  │  └── materials.py     LightRAG ingest                               │   │
+│  │  ├── curriculum.py           generate / skeleton / expand / save     │   │
+│  │  ├── curriculum_agent_routes flags / suggestions / apply / redo      │   │
+│  │  ├── history.py              CRUD + favorite + DOCX export          │   │
+│  │  ├── analytics.py            A2A SSE analysis + PDF/DOCX/Excel      │   │
+│  │  ├── xapi.py                 xAPI statements + mock data seed       │   │
+│  │  ├── feedback.py             Student sentiment + comments           │   │
+│  │  ├── graph.py                KG data + RAG query                    │   │
+│  │  ├── sources.py              Tavily source preview                  │   │
+│  │  ├── syllabus.py             PDF/DOCX parse + import                │   │
+│  │  └── materials.py            LightRAG ingest                        │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │  ┌─────────────────────────────┐  ┌────────────────────────────────────┐   │
 │  │  agents/ (Hive-style A2A)   │  │  services/                         │   │
@@ -365,7 +369,8 @@ plot-ark/
 │   ├── db.py                            ← PostgreSQL operations
 │   ├── constants.py                     ← Bloom's taxonomy, session constraints, formats
 │   ├── routes/
-│   │   ├── curriculum.py                ← /api/curriculum/* (generate, skeleton, expand, save, flags, suggestions, apply, changes)
+│   │   ├── curriculum.py                ← /api/curriculum/* (generate, skeleton, expand, save)
+│   │   ├── curriculum_agent_routes.py   ← /api/curriculum/ flags, suggestions, apply, redo, changes
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
 │   │   ├── sources.py                   ← Tavily source preview
 │   │   ├── graph.py                     ← KG data + RAG query
@@ -417,7 +422,8 @@ plot-ark/
 │   │   ├── analytics/
 │   │   │   ├── ReportSections.tsx       ← A2A analytics report viewer component
 │   │   │   ├── CurriculumApplyModal.tsx ← AI suggestion apply confirmation modal
-│   │   │   ├── CurriculumDrawer.tsx     ← Slide-out drawer for curriculum suggestions
+│   │   │   ├── CurriculumDrawer.tsx     ← Professor slide-out drawer (Apply / Redo)
+│   │   │   ├── StudentChangesDrawer.tsx ← Student slide-out drawer (Go to Module)
 │   │   │   ├── AISuggestionsSection.tsx ← AI exclusive suggestions detail section
 │   │   │   ├── FlagBadge.tsx            ← Red/amber module issue flags
 │   │   │   └── FlagModal.tsx            ← Detailed flag description & signal source
@@ -487,8 +493,9 @@ plot-ark/
 - [x] PII anonymisation — student data anonymised before agent processing, de-anonymised in final report
 - [x] Token usage tracking — NodeResult tokens_in/out/cache fields; token_summary in report JSON; backend log table
 - [x] LTM warm layer — course_analysis_snapshots PostgreSQL table (risk_distribution, verb_distribution, noise_label, etc.)
-- [x] Curriculum Agent — agentic curriculum optimization with notification bar, slide-out drawer, human-in-the-loop Apply, module flags, and change log
-- [x] Student Update Banner — student-facing "Modules Updated" notification showing recently applied curriculum changes
+- [x] Curriculum Agent — agentic curriculum optimization with notification bar, slide-out drawer, human-in-the-loop Apply/Redo, module flags, and change log
+- [x] Student Update Drawer — student-facing slide-out drawer showing updated modules with "Go to Module" navigation
+- [x] Draggable FAB — floating action button after banner dismiss; draggable, click opens drawer, hover ✕ to permanently close
 - [x] Student Feedback — per-module sentiment collection (Got it / Mostly got it / Something's off / Didn't read) with optional comments
 - [ ] A2A Phase 2 — LLM integration for BehaviorAnalyst, RiskDetector, ContentOptimizer, CohortComparator
 - [ ] Professor LTM — preference learning from edit history

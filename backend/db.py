@@ -102,6 +102,13 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS idx_changelog_course
                     ON change_log(course_id, timestamp DESC)
                 """)
+                # Add backup_data column for redo/undo support (idempotent)
+                cur.execute("""
+                    DO $$ BEGIN
+                        ALTER TABLE change_log ADD COLUMN backup_data TEXT;
+                    EXCEPTION WHEN duplicate_column THEN NULL;
+                    END $$;
+                """)
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS module_flags (
                         id SERIAL PRIMARY KEY,
