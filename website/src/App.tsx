@@ -22,7 +22,7 @@ function App() {
       <nav className="fixed w-full top-0 z-50 bg-nobel-cream/80 backdrop-blur-md border-b border-nobel-gold/20">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/Logo_Agentic.png" alt="Plot Ark Logo" className="h-10 w-10 object-contain" />
+            <img src={`${import.meta.env.BASE_URL}Logo_Agentic.png`} alt="Plot Ark Logo" className="h-10 w-10 object-contain" />
             <span className="font-serif font-bold text-2xl tracking-tight">Plot Ark</span>
           </div>
           <div className="flex items-center gap-6">
@@ -135,7 +135,7 @@ function App() {
               </div>
               <div className="lg:w-1/2">
                 <div className="rounded-2xl overflow-hidden shadow-2xl border border-nobel-gold/20">
-                  <img src="/research%20agent%26human%20in%20the%20loop.gif" alt="Research Agent Demo" className="w-full h-auto" />
+                  <img src={`${import.meta.env.BASE_URL}research%20agent%26human%20in%20the%20loop.gif`} alt="Research Agent Demo" className="w-full h-auto" />
                 </div>
               </div>
             </motion.div>
@@ -155,7 +155,7 @@ function App() {
               </div>
               <div className="lg:w-1/2">
                 <div className="rounded-2xl overflow-hidden shadow-2xl border border-nobel-gold/20 bg-nobel-dark p-2">
-                  <img src="/Knowledge%20graph%20.gif" alt="Knowledge Graph Demo" className="w-full h-auto rounded-xl" />
+                  <img src={`${import.meta.env.BASE_URL}Knowledge%20graph%20.gif`} alt="Knowledge Graph Demo" className="w-full h-auto rounded-xl" />
                 </div>
               </div>
             </motion.div>
@@ -167,7 +167,7 @@ function App() {
       <footer className="bg-nobel-dark text-white/60 py-12 border-t border-white/10">
         <div className="max-w-7xl mx-auto px-6 text-center flex flex-col items-center gap-6">
           <div className="flex items-center gap-3 opacity-80 hover:opacity-100 transition-opacity">
-            <img src="/Logo_Agentic.png" alt="Plot Ark Logo" className="h-8 w-8 object-contain" />
+            <img src={`${import.meta.env.BASE_URL}Logo_Agentic.png`} alt="Plot Ark Logo" className="h-8 w-8 object-contain" />
             <span className="font-serif font-bold text-xl text-white tracking-tight">Plot Ark</span>
           </div>
           <p>
