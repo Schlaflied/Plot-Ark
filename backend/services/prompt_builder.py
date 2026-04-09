@@ -174,6 +174,14 @@ Return ONLY valid JSON (no markdown, no explanation):
             "Criterion 4 — description of what good work looks like"
           ]
         }}
+      ],
+      "teaching_suggestions": [
+        "A practical suggestion for professors on how to teach this module effectively — e.g. 'Use an AI-assisted workshop where students compare ChatGPT outputs with textbook definitions'",
+        "Another suggestion — e.g. 'Start with a 10-min think-pair-share exercise on the module's key question before the lecture'"
+      ],
+      "learning_suggestions": [
+        "A practical study tip for students on how to learn this module — e.g. 'After reading the assigned article, try to explain the core concept to a friend in under 60 seconds'",
+        "Another tip — e.g. 'Use an AI tool like ChatGPT to generate practice questions on this module's key terms, then test yourself'"
       ]
     }}
   ],
@@ -365,5 +373,13 @@ Return ONLY valid JSON for this single module (no markdown, no explanation):
         "Criterion 3 — description of excellent work"
       ]
     }}
+  ],
+  "teaching_suggestions": [
+    "A practical suggestion for professors — e.g. 'Run an AI-assisted brainstorming session using ChatGPT to explore alternative perspectives on this topic'",
+    "Another suggestion — e.g. 'Have students work in pairs to create concept maps of the key relationships in this module before the lecture'"
+  ],
+  "learning_suggestions": [
+    "A practical study tip for students — e.g. 'Before starting the readings, skim the learning objectives and write down what you already know about each'",
+    "Another tip — e.g. 'Use an AI summarization tool to condense the assigned article, then compare the summary with the original to identify what was lost'"
   ]
 }}"""

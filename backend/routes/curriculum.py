@@ -399,3 +399,296 @@ def expand_module():
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Curriculum Agent endpoints
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@curriculum_bp.route("/api/curriculum/flags/<int:course_id>", methods=["GET"])
+def get_curriculum_flags(course_id):
+    """Return active (non-dismissed) module flags for a course.
+    
+    Used by the frontend badge component to poll for flagged modules.
+    """
+    from db import get_db
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, module_id, flag_level, signals, created_at
+            FROM module_flags
+            WHERE course_id = %s AND dismissed = FALSE
+            ORDER BY created_at DESC
+        """, (course_id,))
+        cols = ["id", "module_id", "flag_level", "signals", "created_at"]
+        flags = []
+        for row in cur.fetchall():
+            flag = dict(zip(cols, row))
+            if flag.get("created_at"):
+                flag["created_at"] = flag["created_at"].isoformat()
+            flags.append(flag)
+        cur.close()
+        conn.close()
+        return jsonify({"course_id": course_id, "flags": flags, "count": len(flags)})
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+
+
+@curriculum_bp.route("/api/curriculum/analyze", methods=["POST"])
+def run_curriculum_analysis():
+    """Run the Curriculum Agent on flagged modules.
+    
+    Body JSON:
+      {
+        "course_id": int,
+        "flagged_modules": [{"module_id": str, "module_name": str, "signals": [...]}]
+      }
+
+    Returns the agent's recommendations and historical trend analysis.
+    """
+    from agents.curriculum_agent import CurriculumAgentNode
+    from agents.base import SharedMemory
+    from extensions import redis_client
+
+    data = request.get_json()
+    course_id = data.get("course_id")
+    flagged_modules = data.get("flagged_modules", [])
+
+    if not course_id:
+        return jsonify({"error": "course_id is required"}), 400
+
+    sm = SharedMemory(f"curriculum-{course_id}", redis_client)
+    sm.set("course_id", course_id)
+    sm.set("flagged_modules", flagged_modules)
+
+    agent = CurriculumAgentNode()
+    result = agent.execute(sm)
+
+    return jsonify({
+        "status": result.status,
+        "data": result.data,
+        "duration_ms": result.duration_ms,
+    })
+
+
+@curriculum_bp.route("/api/curriculum/flags/<int:flag_id>/dismiss", methods=["POST"])
+def dismiss_flag(flag_id):
+    """Mark a module flag as dismissed (user chose to ignore it)."""
+    from db import get_db
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE module_flags SET dismissed = TRUE WHERE id = %s",
+            (flag_id,),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "dismissed", "flag_id": flag_id})
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+
+
+@curriculum_bp.route("/api/curriculum/suggestions/<int:course_id>", methods=["GET"])
+def get_curriculum_suggestions(course_id):
+    """Return human-readable curriculum suggestions for the CoursePage sidebar.
+
+    Reads from change_log (Curriculum Agent recommendations) first.
+    Falls back to translating raw module_flags into natural language.
+    """
+    from db import get_db
+    conn = get_db()
+    if not conn:
+        return jsonify({"suggestions": []}), 200
+
+    suggestions = []
+    try:
+        cur = conn.cursor()
+
+        # 1. Try change_log first (Curriculum Agent has already run)
+        cur.execute("""
+            SELECT module_id, recommendation, flag_reason, timestamp
+            FROM change_log
+            WHERE course_id = %s AND status != 'dismissed'
+            ORDER BY timestamp DESC
+            LIMIT 10
+        """, (str(course_id),))
+        for row in cur.fetchall():
+            suggestions.append({
+                "module_id": row[0],
+                "module_name": row[0],
+                "recommendation": row[1],
+                "reasons": row[2] if row[2] else [],
+                "source": "curriculum_agent",
+            })
+
+        # 2. If no change_log entries, fall back to raw flags
+        if not suggestions:
+            cur.execute("""
+                SELECT module_id, flag_level, signals
+                FROM module_flags
+                WHERE course_id = %s AND dismissed = FALSE
+                ORDER BY created_at DESC
+                LIMIT 10
+            """, (course_id,))
+            for row in cur.fetchall():
+                module_id, flag_level, signals = row
+                # Translate raw signals into a readable recommendation
+                rec = _translate_flag_to_suggestion(module_id, flag_level, signals)
+                suggestions.append(rec)
+
+        cur.close()
+        conn.close()
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        print(f"[Curriculum Suggestions] Error: {e}")
+
+    return jsonify({"course_id": course_id, "suggestions": suggestions})
+
+
+def _translate_flag_to_suggestion(module_id: str, flag_level: str, signals) -> dict:
+    """Convert raw flag data into a human-readable recommendation."""
+    parts = []
+
+    if isinstance(signals, list):
+        for sig in signals:
+            source = sig.get("source", "") if isinstance(sig, dict) else ""
+            detail = sig.get("detail", str(sig)) if isinstance(sig, dict) else str(sig)
+            parts.append(detail)
+    elif isinstance(signals, dict):
+        parts.append(str(signals))
+
+    if not parts:
+        parts = ["This module has been flagged for review based on student performance data."]
+
+    recommendation = " ".join(parts)
+
+    return {
+        "module_id": module_id,
+        "module_name": module_id,
+        "recommendation": recommendation,
+        "flag_level": flag_level,
+        "source": "threshold_checker",
+    }
+
+
+@curriculum_bp.route("/api/curriculum/suggestions/apply", methods=["POST"])
+def apply_curriculum_suggestion():
+    """Apply a curriculum suggestion — marks it as 'applied' in change_log.
+
+    Phase 1: Only updates the status in change_log. Does not auto-mutate module content.
+    Phase 3: Will call LLM to generate actual module changes and apply them.
+
+    Request body:
+        { "course_id": 24, "module_id": "module_1" }
+    """
+    from db import get_db
+    data = request.get_json() or {}
+    course_id = data.get("course_id")
+    module_id = data.get("module_id")
+
+    if not course_id or not module_id:
+        return jsonify({"error": "course_id and module_id are required"}), 400
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
+
+    try:
+        cur = conn.cursor()
+
+        # Mark change_log entries as applied
+        cur.execute("""
+            UPDATE change_log
+            SET status = 'applied'
+            WHERE course_id = %s AND module_id = %s AND status = 'pending'
+            RETURNING id, recommendation, flag_reason
+        """, (str(course_id), module_id))
+        updated = cur.fetchall()
+
+        # Also dismiss related module_flags
+        cur.execute("""
+            UPDATE module_flags
+            SET dismissed = TRUE
+            WHERE course_id = %s AND module_id = %s AND dismissed = FALSE
+        """, (course_id, module_id))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        changes_applied = []
+        for row in updated:
+            changes_applied.append({
+                "id": row[0],
+                "recommendation": row[1],
+                "reasons": row[2] if row[2] else [],
+            })
+
+        return jsonify({
+            "status": "applied",
+            "course_id": course_id,
+            "module_id": module_id,
+            "changes_applied": changes_applied,
+            "message": f"Suggestion for {module_id} has been applied. {len(changes_applied)} change(s) recorded.",
+        })
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({"error": str(e)}), 500
+
+
+@curriculum_bp.route("/api/curriculum/changes/<int:course_id>", methods=["GET"])
+def get_curriculum_changes(course_id):
+    """Return recently applied module changes for student-facing notifications.
+
+    Shows what modules were updated so students know the curriculum has evolved.
+    """
+    from db import get_db
+    conn = get_db()
+    if not conn:
+        return jsonify({"changes": []}), 200
+
+    changes = []
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT module_id, recommendation, flag_reason, timestamp
+            FROM change_log
+            WHERE course_id = %s AND status = 'applied'
+            ORDER BY timestamp DESC
+            LIMIT 5
+        """, (str(course_id),))
+        for row in cur.fetchall():
+            changes.append({
+                "module_id": row[0],
+                "recommendation": row[1],
+                "reasons": row[2] if row[2] else [],
+                "timestamp": str(row[3]) if row[3] else None,
+            })
+        cur.close()
+        conn.close()
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        print(f"[Curriculum Changes] Error: {e}")
+
+    return jsonify({"course_id": course_id, "changes": changes})
+

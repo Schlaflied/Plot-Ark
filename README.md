@@ -141,6 +141,20 @@
 
 </details>
 
+<details>
+<summary><strong>🎯 Curriculum Agent — Agentic Curriculum Optimization</strong></summary>
+
+- **Notification Bar** — persistent amber notification bar on the CoursePage alerts professors when AI-generated curriculum suggestions are available, with a "Review" button
+- **Slide-out Drawer** — clicking "Review" opens a 400px slide-out panel from the right with full suggestion cards, reason tags, and per-suggestion Apply buttons; backdrop click or ✕ to close
+- **Human-in-the-loop Apply** — clicking "Apply" on a suggestion opens a confirmation modal with before/after preview; professor explicitly approves each change
+- **Module Flags** — `module_flags` table stores flagged modules with signal sources (content_optimizer, risk_detector, behavior_analyst), flag levels (yellow / orange), and detailed metrics
+- **Change Log** — `change_log` table records all curriculum agent recommendations with status tracking (pending → applied → dismissed)
+- **Student Update Banner** — student view shows a blue "✨ Modules Updated" banner listing recently applied module changes so students know the curriculum has evolved
+- **Cross-course coverage** — demo seed script auto-discovers all courses from the database and generates flags + suggestions for every course
+- **Analytics redirect** — "View Full Analytics →" button in the drawer navigates directly to the Student Data analytics page
+
+</details>
+
 ## 🧭 Design Philosophy
 
 Most EdTech AI tools treat artificial intelligence as a threat to be monitored — detecting whether students used AI, flagging "inauthentic" work, enforcing originality.
@@ -180,10 +194,11 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 │  ├── extensions.py (Global instances)    ├── async_loop.py (Event loop)    │
 │  ├─────────────────────────────────────────────────────────────────────┐   │
 │  │  routes/                                                            │   │
-│  │  ├── curriculum.py    generate / skeleton / expand / save           │   │
+│  │  ├── curriculum.py    generate / skeleton / expand / save / flags    │   │
 │  │  ├── history.py       CRUD + favorite + DOCX export                 │   │
 │  │  ├── analytics.py     A2A SSE analysis + PDF/DOCX/Excel export      │   │
 │  │  ├── xapi.py          xAPI statements + mock data seed              │   │
+│  │  ├── feedback.py      Student sentiment + comment collection        │   │
 │  │  ├── graph.py         KG data + RAG query                           │   │
 │  │  ├── sources.py       Tavily source preview                         │   │
 │  │  ├── syllabus.py      PDF/DOCX parse + import                       │   │
@@ -196,8 +211,9 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 │  │  ├── behavior_analyst.py    │  │  ├── prompt_builder.py             │   │
 │  │  ├── risk_detector.py       │  │  ├── xapi_generator.py             │   │
 │  │  ├── content_optimizer.py   │  │  ├── report_exporter.py (facade)   │   │
-│  │  └── cohort_comparator.py   │  │  ├── chart_generator.py            │   │
-│  └──────────┬──────────────────┘  │  └── export_{pdf,docx,excel}.py    │   │
+│  │  ├── cohort_comparator.py   │  │  ├── chart_generator.py            │   │
+│  │  └── curriculum_agent.py    │  │  └── export_{pdf,docx,excel}.py    │   │
+│  └──────────┬──────────────────┘  │                                    │   │
 │             │  SharedMemory       └─────────────┬──────────────────────┘   │
 └─────────────┼───────────────────────────────────┼──────────────────────────┘
               │                                   │
@@ -337,12 +353,13 @@ plot-ark/
 │   ├── db.py                            ← PostgreSQL operations
 │   ├── constants.py                     ← Bloom's taxonomy, session constraints, formats
 │   ├── routes/
-│   │   ├── curriculum.py                ← /api/curriculum/* (generate, skeleton, expand, save)
+│   │   ├── curriculum.py                ← /api/curriculum/* (generate, skeleton, expand, save, flags, suggestions, apply, changes)
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
 │   │   ├── sources.py                   ← Tavily source preview
 │   │   ├── graph.py                     ← KG data + RAG query
 │   │   ├── xapi.py                      ← xAPI statements + seed generator
 │   │   ├── analytics.py                 ← A2A SSE analysis + export endpoints
+│   │   ├── feedback.py                  ← Student sentiment collection
 │   │   ├── syllabus.py                  ← PDF/DOCX parse + import
 │   │   └── materials.py                 ← LightRAG ingest
 │   ├── agents/
@@ -351,7 +368,8 @@ plot-ark/
 │   │   ├── behavior_analyst.py          ← xAPI verb/module engagement analysis
 │   │   ├── risk_detector.py             ← Multi-signal at-risk scoring
 │   │   ├── content_optimizer.py         ← Module performance cross-analysis
-│   │   └── cohort_comparator.py         ← Student cohort grouping
+│   │   ├── cohort_comparator.py         ← Student cohort grouping
+│   │   └── curriculum_agent.py          ← AI-driven curriculum optimization agent
 │   ├── services/
 │   │   ├── research.py                  ← Tavily search + credibility scoring
 │   │   ├── file_parser.py               ← PDF/PPTX/DOCX text extraction
@@ -383,7 +401,9 @@ plot-ark/
 │   │   │   ├── SourceReview.tsx         ← Review Tavily research sources
 │   │   │   └── SkeletonReview.tsx       ← Review course module skeleton
 │   │   ├── analytics/
-│   │   │   └── ReportSections.tsx       ← A2A analytics report viewer component
+│   │   │   ├── ReportSections.tsx       ← A2A analytics report viewer component
+│   │   │   ├── CurriculumApplyModal.tsx ← AI suggestion apply confirmation modal
+│   │   │   └── CurriculumDrawer.tsx     ← Slide-out drawer for curriculum suggestions
 │   │   ├── ModuleCard.tsx               ← Individual curriculum module card
 │   │   ├── ModuleSidebar.tsx            ← Navigation sidebar for modules
 │   │   ├── GraphViewer.tsx              ← Core force-directed graph rendering
@@ -450,6 +470,9 @@ plot-ark/
 - [x] PII anonymisation — student data anonymised before agent processing, de-anonymised in final report
 - [x] Token usage tracking — NodeResult tokens_in/out/cache fields; token_summary in report JSON; backend log table
 - [x] LTM warm layer — course_analysis_snapshots PostgreSQL table (risk_distribution, verb_distribution, noise_label, etc.)
+- [x] Curriculum Agent — agentic curriculum optimization with notification bar, slide-out drawer, human-in-the-loop Apply, module flags, and change log
+- [x] Student Update Banner — student-facing "Modules Updated" notification showing recently applied curriculum changes
+- [x] Student Feedback — per-module sentiment collection (Got it / Mostly got it / Something's off / Didn't read) with optional comments
 - [ ] A2A Phase 2 — LLM integration for BehaviorAnalyst, RiskDetector, ContentOptimizer, CohortComparator
 - [ ] Professor LTM — preference learning from edit history
 - [ ] LTI 1.3 — push into Canvas / Moodle

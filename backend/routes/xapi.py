@@ -14,12 +14,41 @@ xapi_bp = Blueprint("xapi", __name__)
 
 @xapi_bp.route("/api/xapi/statement", methods=["POST"])
 def receive_xapi():
+    """Receive a single xAPI statement (e.g. student self-assessment) and store it."""
     statement = request.get_json()
-    actor = statement.get("actor", {}).get("name", "unknown")
-    verb = statement.get("verb", {}).get("display", {}).get("en-US", "unknown")
-    obj = statement.get("object", {}).get("definition", {}).get("name", {}).get("en-US", "unknown")
-    print(f"xAPI: {actor} {verb} {obj}")
-    return {"status": "received"}, 200
+    actor = statement.get("actor", {})
+    verb = statement.get("verb", {})
+    obj = statement.get("object", {})
+
+    email = actor.get("mbox", "").replace("mailto:", "") or actor.get("email", "")
+    name = actor.get("name", email)
+    verb_id = verb.get("id", "").split("/")[-1] if verb.get("id") else verb.get("display", {}).get("en-US", "unknown")
+    obj_id = obj.get("id", "")
+    obj_name = obj.get("definition", {}).get("name", {}).get("en-US", obj_id)
+    curriculum_topic = statement.get("context", {}).get("extensions", {}).get("curriculum_topic", "")
+
+    # Persist to DB
+    conn = get_db()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO xapi_statements (actor_email, actor_name, verb, object_id, object_name, curriculum_topic) VALUES (%s, %s, %s, %s, %s, %s)",
+                (email, name, verb_id, obj_id, obj_name, curriculum_topic)
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            print(f"xAPI statement save error: {e}")
+            try:
+                conn.close()
+            except Exception:
+                pass
+            return {"error": "Failed to save statement"}, 500
+
+    print(f"xAPI: {name} {verb_id} {obj_name}")
+    return {"status": "stored"}, 200
 
 
 @xapi_bp.route("/xapi/statements", methods=["POST"])

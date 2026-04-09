@@ -12,6 +12,8 @@ import type { DragEndEvent } from '@dnd-kit/core';
 // ─── Extracted modules ────────────────────────────────────────────────────────
 
 import type { Module, CourseDetail, Source } from '../utils/courseExport';
+import CurriculumApplyModal from '../components/analytics/CurriculumApplyModal';
+import CurriculumDrawer from '../components/analytics/CurriculumDrawer';
 import {
   formatCitation,
   exportPDF,
@@ -32,7 +34,7 @@ const CoursePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentModuleIndex, setCurrentModuleIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState<'objectives' | 'resources' | 'assessment'>('objectives');
+  const [activeTab, setActiveTab] = useState<'objectives' | 'resources' | 'assessment' | 'ai-suggestion'>('objectives');
   const [search, setSearch] = useState('');
   const [citationFormat, setCitationFormat] = useState<'apa' | 'mla' | 'chicago'>('apa');
   const [copiedCitation, setCopiedCitation] = useState<number | null>(null);
@@ -43,6 +45,12 @@ const CoursePage: React.FC = () => {
   const [editedModules, setEditedModules] = useState<Record<number, Partial<Module>>>({});
   const [showEditHint, setShowEditHint] = useState(true);
   const [moduleFeedback, setModuleFeedback] = useState<Record<string, string>>({});
+  const [currSuggestions, setCurrSuggestions] = useState<any[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [applyingSuggestion, setApplyingSuggestion] = useState<any | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [moduleChanges, setModuleChanges] = useState<any[]>([]);
+  const [changesExpanded, setChangesExpanded] = useState(true);
   const isResizing = React.useRef(false);
   const navigate = useNavigate();
 
@@ -95,6 +103,26 @@ const CoursePage: React.FC = () => {
     const timer = setTimeout(() => setShowEditHint(false), 4000);
     return () => clearTimeout(timer);
   }, [showEditHint]);
+
+  // Fetch curriculum suggestions from cached analysis (professor only)
+  useEffect(() => {
+    if (isStudent || !id) return;
+    setSuggestionsLoading(true);
+    fetch(`/api/curriculum/suggestions/${id}`)
+      .then(r => r.ok ? r.json() : { suggestions: [] })
+      .then(data => setCurrSuggestions(data.suggestions || []))
+      .catch(() => setCurrSuggestions([]))
+      .finally(() => setSuggestionsLoading(false));
+  }, [id, isStudent]);
+
+  // Fetch recent module changes (for student view)
+  useEffect(() => {
+    if (!isStudent || !id) return;
+    fetch(`/api/curriculum/changes/${id}`)
+      .then(r => r.ok ? r.json() : { changes: [] })
+      .then(data => setModuleChanges(data.changes || []))
+      .catch(() => setModuleChanges([]));
+  }, [id, isStudent]);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
@@ -215,6 +243,75 @@ const CoursePage: React.FC = () => {
             Back to Professor View
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
           </button>
+        </div>
+      )}
+
+      {/* Professor Banner + AI Notification Bar */}
+      {!isStudent && (
+        <>
+          <div className="w-full bg-orange-50 border-b border-orange-200 flex items-center justify-between px-6 py-2 text-sm shrink-0">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
+              <span className="font-semibold text-orange-900 tracking-wide">Professor View</span>
+            </div>
+            <button
+              onClick={() => navigate(`/course/${id}?view=student`)}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-orange-300 bg-white hover:bg-orange-100 transition-colors text-orange-800 font-medium text-xs"
+            >
+              Student Preview
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+            </button>
+          </div>
+
+          {/* AI Suggestions Notification Bar */}
+          {currSuggestions.length > 0 && (
+            <div className="w-full bg-amber-50 border-b border-amber-200 flex items-center justify-between px-6 py-2.5 text-sm shrink-0 animate-[fadeIn_0.3s_ease-out]">
+              <div className="flex items-center gap-2.5">
+                <span className="text-base">🤖</span>
+                <span className="text-amber-900 font-medium">
+                  {currSuggestions.length} curriculum suggestion{currSuggestions.length > 1 ? 's' : ''} available
+                </span>
+                <span className="text-xs text-amber-600">based on student performance data</span>
+              </div>
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium text-xs transition-colors shadow-sm"
+              >
+                Review
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Student — Module Update Banner */}
+      {isStudent && moduleChanges.length > 0 && changesExpanded && (
+        <div className="w-full bg-blue-50 border-b border-blue-200 px-6 py-3 shrink-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-base">✨</span>
+              <span className="font-semibold text-blue-900 text-sm">Modules Updated</span>
+              <span className="text-xs text-blue-500 bg-blue-100 px-1.5 py-0.5 rounded-full font-medium">{moduleChanges.length}</span>
+            </div>
+            <button
+              onClick={() => setChangesExpanded(false)}
+              className="text-blue-400 hover:text-blue-600 transition-colors text-xs"
+            >
+              Dismiss
+            </button>
+          </div>
+          <div className="space-y-1">
+            {moduleChanges.slice(0, 3).map((c: any, i: number) => (
+              <div key={i} className="flex items-start gap-2 text-xs text-blue-800">
+                <span className="text-blue-400 mt-0.5">→</span>
+                <span><strong>{c.module_id}</strong>: {c.recommendation}</span>
+              </div>
+            ))}
+            {moduleChanges.length > 3 && (
+              <p className="text-xs text-blue-400 ml-4">+{moduleChanges.length - 3} more changes</p>
+            )}
+          </div>
         </div>
       )}
 
@@ -422,6 +519,8 @@ const CoursePage: React.FC = () => {
               <div><dt className="text-xs text-stone-400 uppercase tracking-wide font-bold">Modules</dt><dd className="text-sm text-stone-700">{modules.length}</dd></div>
             </dl>
           </div>
+
+
           <div className="px-5 py-5 flex-1">
             <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3">
               Sources <span className="text-stone-300 font-normal">({sources.length})</span>
@@ -472,6 +571,47 @@ const CoursePage: React.FC = () => {
           </div>
         </aside>
       </div>
+
+      {/* Curriculum Apply Modal */}
+      {applyingSuggestion && (
+        <CurriculumApplyModal
+          suggestion={applyingSuggestion}
+          onClose={() => setApplyingSuggestion(null)}
+          onApply={async (suggestion) => {
+            const res = await fetch('/api/curriculum/suggestions/apply', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                course_id: suggestion.course_id,
+                module_id: suggestion.module_id,
+              }),
+            });
+            if (!res.ok) throw new Error('Failed to apply suggestion');
+            const refreshRes = await fetch(`/api/curriculum/suggestions/${id}`);
+            if (refreshRes.ok) {
+              const data = await refreshRes.json();
+              setCurrSuggestions(data.suggestions || []);
+            }
+          }}
+        />
+      )}
+
+      {/* Curriculum Suggestions Drawer */}
+      <CurriculumDrawer
+        open={drawerOpen}
+        suggestions={currSuggestions}
+        loading={suggestionsLoading}
+        courseId={id}
+        onClose={() => setDrawerOpen(false)}
+        onApply={(s) => {
+          setDrawerOpen(false);
+          setApplyingSuggestion({ ...s, course_id: id });
+        }}
+        onNavigateAnalytics={() => {
+          setDrawerOpen(false);
+          navigate('/student-data');
+        }}
+      />
     </div>
   );
 };

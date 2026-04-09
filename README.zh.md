@@ -140,6 +140,20 @@
 
 </details>
 
+<details>
+<summary><strong>🎯 课程 Agent — 主动式课程优化</strong></summary>
+
+- **通知栏** — CoursePage 顶部持久显示的琥珀色通知栏，当 AI 生成的课程建议可用时提醒教授，并附带“Review”按钮
+- **滑出抽屉** — 点击“Review”从右侧滑出 400px 宽的建议面板，每条建议包含详细卡片、原因标签、及 Apply 按钮；点击遮罩层或 ✕ 关闭
+- **人在回路的 Apply** — 点击 Apply 后弹出确认弹窗，展示修改前后对比预览；教授明确批准每一项变更
+- **模块标记** — `module_flags` 表存储被标记的模块，包含信号来源（content_optimizer、risk_detector、behavior_analyst）、标记级别（yellow / orange）及详细指标
+- **变更日志** — `change_log` 表记录所有课程 Agent 建议，并追踪状态（pending → applied → dismissed）
+- **学生更新横幅** — 学生视角显示蓝色“✨ Modules Updated”横幅，列出最近应用的课程变更，让学生知道课程已更新
+- **全课程覆盖** — 种子脚本自动从数据库发现所有课程，并为每门课生成标记和建议
+- **分析跳转** — 抽屉中的“View Full Analytics →”按钮直接导航到 Student Data 分析页面
+
+</details>
+
 ## 🧭 设计理念
 
 大多数 EdTech AI 工具将人工智能视为需要监控的威胁——检测学生是否使用了 AI，标记"非原创"作品，强制要求原创性。
@@ -179,10 +193,11 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 │  ├── extensions.py (单例：AI、Redis 等)  ├── async_loop.py (后台异步循环)  │
 │  ├─────────────────────────────────────────────────────────────────────┐   │
 │  │  routes/                                                            │   │
-│  │  ├── curriculum.py    生成 / 验架 / 展开 / 保存                     │   │
+│  │  ├── curriculum.py    生成 / 验架 / 展开 / 保存 / 标记             │   │
 │  │  ├── history.py       CRUD + 收藏 + DOCX 导出                       │   │
 │  │  ├── analytics.py     A2A SSE 分析 + PDF/DOCX/Excel 导出            │   │
 │  │  ├── xapi.py          xAPI 语句 + Mock 数据种子                     │   │
+│  │  ├── feedback.py      学生情绪反馈 + 评论收集                       │   │
 │  │  ├── graph.py         知识图谱 + RAG 查询                           │   │
 │  │  ├── sources.py       Tavily 源预览                                 │   │
 │  │  ├── syllabus.py      PDF/DOCX 解析 + 导入                          │   │
@@ -195,8 +210,9 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 │  │  ├── behavior_analyst.py    │  │  ├── prompt_builder.py             │   │
 │  │  ├── risk_detector.py       │  │  ├── xapi_generator.py             │   │
 │  │  ├── content_optimizer.py   │  │  ├── report_exporter.py (facade)   │   │
-│  │  └── cohort_comparator.py   │  │  ├── chart_generator.py            │   │
-│  └──────────┬──────────────────┘  │  └── export_{pdf,docx,excel}.py    │   │
+│  │  ├── cohort_comparator.py   │  │  ├── chart_generator.py            │   │
+│  │  └── curriculum_agent.py    │  │  └── export_{pdf,docx,excel}.py    │   │
+│  └──────────┬──────────────────┘  │                                    │   │
 │             │  SharedMemory       └─────────────┬──────────────────────┘   │
 └─────────────┼───────────────────────────────────┼──────────────────────────┘
               │                                   │
@@ -336,12 +352,13 @@ plot-ark/
 │   ├── db.py                            ← PostgreSQL 操作
 │   ├── constants.py                     ← Bloom's 分类、会话约束、评估格式
 │   ├── routes/
-│   │   ├── curriculum.py                ← /api/curriculum/*（生成、验架、展开、保存）
+│   │   ├── curriculum.py                ← /api/curriculum/*（生成、验架、展开、保存、标记、建议、应用、变更）
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
 │   │   ├── sources.py                   ← Tavily 源预览
 │   │   ├── graph.py                     ← 知识图谱 + RAG 查询
 │   │   ├── xapi.py                      ← xAPI 语句 + 种子生成器
 │   │   ├── analytics.py                 ← A2A SSE 分析 + 导出接口
+│   │   ├── feedback.py                  ← 学生情绪反馈收集
 │   │   ├── syllabus.py                  ← PDF/DOCX 解析 + 导入
 │   │   └── materials.py                 ← LightRAG 材料摄入
 │   ├── agents/
@@ -350,7 +367,8 @@ plot-ark/
 │   │   ├── behavior_analyst.py          ← xAPI 动词/模块参与度分析
 │   │   ├── risk_detector.py             ← 多信号风险评分
 │   │   ├── content_optimizer.py         ← 模块表现交叉分析
-│   │   └── cohort_comparator.py         ← 学生群组对比
+│   │   ├── cohort_comparator.py         ← 学生群组对比
+│   │   └── curriculum_agent.py          ← AI 驱动的课程优化 Agent
 │   ├── services/
 │   │   ├── research.py                  ← Tavily 搜索 + 可信度评分
 │   │   ├── file_parser.py               ← PDF/PPTX/DOCX 文本提取
@@ -382,7 +400,9 @@ plot-ark/
 │   │   │   ├── SourceReview.tsx         ← 审核 Tavily 检索的学术信源
 │   │   │   └── SkeletonReview.tsx       ← 审核课程模块骨架
 │   │   ├── analytics/
-│   │   │   └── ReportSections.tsx       ← A2A 分析报告的展示组件
+│   │   │   ├── ReportSections.tsx       ← A2A 分析报告的展示组件
+│   │   │   ├── CurriculumApplyModal.tsx ← AI 建议应用确认弹窗
+│   │   │   └── CurriculumDrawer.tsx     ← 课程建议滑出抽屉面板
 │   │   ├── ModuleCard.tsx               ← 拆分的单个课程模块卡片
 │   │   ├── ModuleSidebar.tsx            ← 课程模块侧边导航栏
 │   │   ├── GraphViewer.tsx              ← 核心力导向图渲染
@@ -449,6 +469,9 @@ plot-ark/
 - [x] PII 匿名化 — Agent 处理前匿名化，最终报告中恢复真实身份
 - [x] Token 用量追踪 — NodeResult tokens 字段；token_summary 写入报告 JSON；后端日志打印汇总表
 - [x] LTM 暖层 — course_analysis_snapshots PostgreSQL 表（risk_distribution、verb_distribution、noise_label 等）
+- [x] 课程 Agent — 主动式课程优化：通知栏、滑出抽屉、人在回路的 Apply、模块标记、变更日志
+- [x] 学生更新横幅 — 学生端“Modules Updated”通知，展示最近应用的课程变更
+- [x] 学生反馈 — 每模块情绪收集（Got it / Mostly got it / Something’s off / Didn’t read）+ 可选评论
 - [ ] A2A Phase 2 — 为四个专业 Agent 集成 LLM 分析能力
 - [ ] Professor LTM — 从编辑历史学习偏好
 - [ ] LTI 1.3 — 推送至 Canvas / Moodle

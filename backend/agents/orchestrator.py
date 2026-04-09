@@ -3,6 +3,7 @@ Orchestrator Agent — coordinates all analysis agents with SSE streaming.
 
 Hive-style flow:
   Orchestrator → anonymise → dispatch (parallel) → [BA, RA, CO, CC] → aggregate → de-anonymise → report
+  → LTM Cold write → threshold check → flags
 """
 
 import json
@@ -16,6 +17,8 @@ from agents.risk_detector import RiskDetectorNode
 from agents.content_optimizer import ContentOptimizerNode
 from agents.cohort_comparator import CohortComparatorNode
 from extensions import redis_client
+from services.ltm_writer import write_cold_snapshot
+from services.threshold_checker import check_thresholds
 
 
 def _build_anon_map(course_id: int) -> dict:
@@ -249,6 +252,23 @@ class OrchestratorNode(BaseNode):
 
         yield _sse_event("report", "done", f"Analysis complete in {total_ms}ms", report)
 
+        # ── LTM Cold write + Threshold check ──────────────────────────────
+        try:
+            write_cold_snapshot(report)
+        except Exception as e:
+            print(f"[Orchestrator] LTM Cold write error (non-fatal): {e}")
+
+        try:
+            flags = check_thresholds(report)
+            if flags:
+                orange_flags = [f for f in flags if f["flag_level"] == "orange"]
+                yellow_flags = [f for f in flags if f["flag_level"] == "yellow"]
+                yield _sse_event("orchestrator", "flags_detected", 
+                    f"{len(flags)} module(s) flagged ({len(orange_flags)} require review)",
+                    {"flags": flags, "orange_count": len(orange_flags), "yellow_count": len(yellow_flags)})
+        except Exception as e:
+            print(f"[Orchestrator] Threshold check error (non-fatal): {e}")
+
     def run_analysis_sync(self, course_id: int) -> dict:
         """Non-streaming version — returns complete report dict."""
         session_id = str(uuid.uuid4())[:8]
@@ -286,7 +306,20 @@ class OrchestratorNode(BaseNode):
                 "tokens_cache_read": result.tokens_cache_read,
             }
 
-        return self._aggregate_report(course_id, agent_results, anon_map)
+        report = self._aggregate_report(course_id, agent_results, anon_map)
+
+        # LTM Cold write + Threshold check (sync path)
+        try:
+            write_cold_snapshot(report)
+        except Exception as e:
+            print(f"[Orchestrator] LTM Cold write error (non-fatal): {e}")
+
+        try:
+            check_thresholds(report)
+        except Exception as e:
+            print(f"[Orchestrator] Threshold check error (non-fatal): {e}")
+
+        return report
 
     def _aggregate_report(self, course_id: int, agent_results: dict, anon_map: dict = None) -> dict:
         """Synthesize all agent outputs into a unified report."""

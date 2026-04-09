@@ -7,7 +7,7 @@ import type { Module, Reading, Assignment } from '../utils/courseExport';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type TabKey = 'objectives' | 'resources' | 'assessment';
+type TabKey = 'objectives' | 'resources' | 'assessment' | 'ai-suggestion';
 
 interface ModuleCardProps {
   module: Module;
@@ -103,7 +103,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
 
         {/* Tabs */}
         <div className="flex border-b border-stone-200 mb-6">
-          {(['objectives', 'resources', 'assessment'] as const).map(tab => (
+          {(['objectives', 'resources', 'assessment', 'ai-suggestion'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => onTabChange(tab)}
@@ -113,7 +113,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
                   : 'text-stone-400 hover:text-stone-700'
               }`}
             >
-              {tab}
+              {tab === 'ai-suggestion' ? 'AI Suggestion' : tab}
             </button>
           ))}
         </div>
@@ -131,6 +131,11 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
         {/* Tab: Assessment */}
         {activeTab === 'assessment' && (
           <AssessmentTab module={currentModule} isStudent={isStudent} onEditField={onEditField} />
+        )}
+
+        {/* Tab: AI Suggestion */}
+        {activeTab === 'ai-suggestion' && (
+          <AISuggestionTab module={currentModule} isStudent={isStudent} />
         )}
       </div>
     </>
@@ -499,6 +504,50 @@ const AssessmentTab: React.FC<{
         onClick={() => onEditField('assignments', [...assignments, { title: '', type: 'Assignment', task_description: '', rubric_highlights: [] }])}
         className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1"
       >+ Add assignment</button>
+    </div>
+  );
+};
+
+// ─── AI Suggestion Tab ────────────────────────────────────────────────────────
+
+const AISuggestionTab: React.FC<{
+  module: Module;
+  isStudent: boolean;
+}> = ({ module: m, isStudent }) => {
+  const suggestions = isStudent
+    ? (m.learning_suggestions || [])
+    : (m.teaching_suggestions || []);
+
+  const heading = isStudent ? 'Learning Suggestions' : 'Teaching Suggestions';
+  const emptyMsg = isStudent
+    ? 'No learning suggestions available for this module yet.'
+    : 'No teaching suggestions available for this module yet. Try regenerating this module to get AI suggestions.';
+  const description = isStudent
+    ? 'AI-generated tips to help you get the most out of this module.'
+    : 'AI-generated ideas for teaching this module more effectively.';
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-lg">{isStudent ? '💡' : '🧑‍🏫'}</span>
+        <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest">{heading}</h4>
+      </div>
+      <p className="text-xs text-stone-400 mb-4">{description}</p>
+      {suggestions.length > 0 ? (
+        <ul className="space-y-3">
+          {suggestions.map((s, i) => (
+            <li key={i} className="flex items-start gap-3 text-stone-700 bg-amber-50/50 border border-amber-100 rounded-xl p-4">
+              <span className="text-amber-500 mt-0.5 text-sm font-bold">→</span>
+              <span className="leading-relaxed text-sm">{s}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="text-center py-8 text-stone-400">
+          <span className="text-2xl block mb-2">🤖</span>
+          <p className="text-sm">{emptyMsg}</p>
+        </div>
+      )}
     </div>
   );
 };

@@ -87,6 +87,37 @@ def init_db():
                     ON course_analysis_snapshots(course_id, run_at DESC)
                 """)
                 cur.execute("""
+                    CREATE TABLE IF NOT EXISTS change_log (
+                        id SERIAL PRIMARY KEY,
+                        course_id INTEGER NOT NULL,
+                        module_id VARCHAR NOT NULL,
+                        timestamp TIMESTAMPTZ DEFAULT NOW(),
+                        flag_reason TEXT[],
+                        recommendation TEXT,
+                        agent VARCHAR DEFAULT 'curriculum_agent',
+                        status VARCHAR DEFAULT 'pending'
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_changelog_course
+                    ON change_log(course_id, timestamp DESC)
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS module_flags (
+                        id SERIAL PRIMARY KEY,
+                        course_id INTEGER NOT NULL,
+                        module_id VARCHAR NOT NULL,
+                        flag_level VARCHAR NOT NULL,
+                        signals JSONB,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        dismissed BOOLEAN DEFAULT FALSE
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_module_flags_course
+                    ON module_flags(course_id, dismissed)
+                """)
+                cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_xapi_actor
                     ON xapi_statements(actor_email)
                 """)

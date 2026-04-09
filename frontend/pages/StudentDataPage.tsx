@@ -3,10 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import ReportSections from '../components/analytics/ReportSections';
+import FlagBadge from '../components/analytics/FlagBadge';
+import type { ModuleFlag } from '../components/analytics/FlagBadge';
+import FlagModal from '../components/analytics/FlagModal';
+import AISuggestionsSection from '../components/analytics/AISuggestionsSection';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,10 +79,13 @@ const StudentDataPage: React.FC = () => {
   const [seeding, setSeeding] = useState(false);
   const [seedDone, setSeedDone] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(224);
+  const [flags, setFlags] = useState<ModuleFlag[]>([]);
+  const [showFlagModal, setShowFlagModal] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   const courseDropdownRef = useRef<HTMLDivElement>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
+  const navigate = useNavigate();
 
   const startResize = (e: React.MouseEvent) => {
     isResizing.current = true;
@@ -140,6 +147,22 @@ const StudentDataPage: React.FC = () => {
     };
   };
 
+  const handleFlagsLoaded = useCallback((loadedFlags: ModuleFlag[]) => {
+    setFlags(loadedFlags);
+  }, []);
+
+  const handleDismissFlag = (flagId: number) => {
+    setFlags(prev => prev.filter(f => f.id !== flagId));
+  };
+
+  const handleRunAnalysis = () => {
+    // Redirect to course page for detailed suggestions
+    setShowFlagModal(false);
+    if (selectedCourseId) {
+      navigate(`/course/${selectedCourseId}`);
+    }
+  };
+
   const reseedData = async (ratio: number) => {
     setSeeding(true);
     setSeedDone(false);
@@ -158,6 +181,7 @@ const StudentDataPage: React.FC = () => {
     { id: 'content', label: 'Content Optimization', icon: '🔧' },
     { id: 'cohort', label: 'Cohort Comparison', icon: '👥' },
     { id: 'overview', label: 'Overview & Actions', icon: '📊' },
+    { id: 'ai-suggestions', label: 'AI Suggestions', icon: '🤖' },
   ];
 
   return (
@@ -171,6 +195,11 @@ const StudentDataPage: React.FC = () => {
         <div className="flex-1 min-w-0 px-2">
           <span className="font-serif text-stone-900 text-sm truncate block">Student Data Analytics</span>
         </div>
+        <FlagBadge
+          courseId={selectedCourseId}
+          onFlagsLoaded={handleFlagsLoaded}
+          onClick={() => setShowFlagModal(true)}
+        />
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -396,7 +425,14 @@ const StudentDataPage: React.FC = () => {
               {/* Report sections */}
               {report && (
                 <>
-                  <ReportSections report={report} activeSection={activeSection} selectedCourse={selectedCourse} />
+                  {activeSection === 'ai-suggestions' ? (
+                    <AISuggestionsSection
+                      report={report}
+                      courseId={selectedCourseId}
+                    />
+                  ) : (
+                    <ReportSections report={report} activeSection={activeSection} selectedCourse={selectedCourse} />
+                  )}
                   <p className="text-xs text-stone-400 italic mt-2">
                     AI-generated insights. For reference only — use alongside your professional judgment.
                   </p>
@@ -406,6 +442,17 @@ const StudentDataPage: React.FC = () => {
           )}
         </main>
       </div>
+
+      {/* Flag Modal */}
+      {showFlagModal && flags.length > 0 && selectedCourseId && (
+        <FlagModal
+          flags={flags}
+          courseId={selectedCourseId}
+          onClose={() => setShowFlagModal(false)}
+          onDismiss={handleDismissFlag}
+          onAnalyze={handleRunAnalysis}
+        />
+      )}
     </div>
   );
 };

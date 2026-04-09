@@ -35,6 +35,8 @@ export interface Module {
   narrative_preview: string;
   recommended_readings: Reading[];
   assignments: Assignment[];
+  teaching_suggestions?: string[];
+  learning_suggestions?: string[];
 }
 
 export interface Source {
