@@ -145,3 +145,58 @@ def export_excel(course_id):
             "Content-Disposition": f"attachment; filename={_export_filename(report, 'xlsx')}",
         },
     )
+
+
+@analytics_bp.route("/api/analytics/history/<int:course_id>", methods=["GET"])
+def get_analysis_history(course_id):
+    """Return historical analysis snapshots from the Warm layer.
+    Used by the frontend to draw a trend chart showing at-risk % and
+    completion rate over time."""
+    from db import get_db
+
+    limit = request.args.get("limit", 20, type=int)
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"history": [], "error": "Database unavailable"}), 500
+
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT run_at, total_students, at_risk_count, high_risk_count,
+                   module_engagement_summary, noise_label
+            FROM course_analysis_snapshots
+            WHERE course_id = %s
+            ORDER BY run_at ASC
+            LIMIT %s
+        """, (course_id, limit))
+
+        history = []
+        for row in cur.fetchall():
+            run_at, total, at_risk, high_risk, mod_summary_json, noise = row
+            # Calculate average completion rate from module engagement
+            avg_completion = 0
+            if mod_summary_json:
+                mods = mod_summary_json if isinstance(mod_summary_json, list) else json.loads(mod_summary_json)
+                rates = [m.get("completion_rate", 0) for m in mods if isinstance(m, dict)]
+                avg_completion = round(sum(rates) / max(len(rates), 1), 3)
+
+            at_risk_pct = round(at_risk / max(total, 1), 3)
+
+            history.append({
+                "run_at": run_at.isoformat() if run_at else None,
+                "total_students": total,
+                "at_risk_count": at_risk,
+                "at_risk_pct": at_risk_pct,
+                "high_risk_count": high_risk,
+                "avg_completion_rate": avg_completion,
+                "noise_label": noise,
+            })
+
+        cur.close()
+        conn.close()
+        return jsonify({"history": history, "course_id": course_id})
+    except Exception as e:
+        conn.close()
+        return jsonify({"history": [], "error": str(e)}), 500
+

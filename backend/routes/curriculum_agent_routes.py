@@ -376,6 +376,7 @@ def apply_curriculum_suggestion():
         })
     except Exception as e:
         try:
+            conn.rollback()
             conn.close()
         except Exception:
             pass
@@ -479,6 +480,7 @@ def redo_curriculum_suggestion():
         })
     except Exception as e:
         try:
+            conn.rollback()
             conn.close()
         except Exception:
             pass

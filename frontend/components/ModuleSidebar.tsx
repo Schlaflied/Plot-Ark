@@ -203,8 +203,8 @@ const ModuleSidebar: React.FC<ModuleSidebarProps> = ({
         />
       </div>
 
-      {/* Knowledge Graph shortcut */}
-      <div className="px-3 py-2 border-b border-stone-800">
+      {/* Knowledge Graph + Student Data shortcuts */}
+      <div className="px-3 py-2 border-b border-stone-800 space-y-1.5">
         <button
           onClick={() =>
             navigate('/graph', {
@@ -220,6 +220,17 @@ const ModuleSidebar: React.FC<ModuleSidebarProps> = ({
           <Network size={14} />
           Knowledge Graph
         </button>
+        {!isStudent && (
+          <button
+            onClick={() => navigate(`/student-data?course=${courseId}`)}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-colors text-xs font-semibold border border-blue-500/20"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 20V10" /><path d="M12 20V4" /><path d="M6 20v-6" />
+            </svg>
+            Student Data
+          </button>
+        )}
       </div>
 
       {/* Module list */}

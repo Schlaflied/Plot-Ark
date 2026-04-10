@@ -205,3 +205,72 @@ def generate_charts(report: dict) -> dict:
         charts["cohort_comparison_bar"] = fig_to_bytes(fig)
 
     return charts
+
+
+def generate_history_chart(course_id: int) -> bytes | None:
+    """Generate a trend line chart from Warm layer analysis snapshots.
+    Returns PNG bytes or None if insufficient data."""
+    from db import get_db
+    import json as _json
+
+    conn = get_db()
+    if not conn:
+        return None
+
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT run_at, total_students, at_risk_count,
+                   module_engagement_summary
+            FROM course_analysis_snapshots
+            WHERE course_id = %s
+            ORDER BY run_at ASC
+            LIMIT 20
+        """, (course_id,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception:
+        return None
+
+    if len(rows) < 2:
+        return None
+
+    dates = []
+    risk_pcts = []
+    comp_rates = []
+
+    for run_at, total, at_risk, mod_json in rows:
+        dates.append(run_at.strftime("%m/%d\n%H:%M") if run_at else "")
+        risk_pcts.append(round(at_risk / max(total, 1) * 100, 1))
+        avg_comp = 0
+        if mod_json:
+            mods = mod_json if isinstance(mod_json, list) else _json.loads(mod_json)
+            rates = [m.get("completion_rate", 0) for m in mods if isinstance(m, dict)]
+            avg_comp = round(sum(rates) / max(len(rates), 1) * 100, 1)
+        comp_rates.append(avg_comp)
+
+    _setup_chart_style()
+    fig, ax = plt.subplots(figsize=(8, 3.2))
+
+    x = range(len(dates))
+    ax.plot(x, risk_pcts, color="#ef4444", marker="o", markersize=5,
+            linewidth=2, label="At-Risk %", zorder=3)
+    ax.plot(x, comp_rates, color="#3b82f6", marker="s", markersize=4,
+            linewidth=1.8, label="Completion %", alpha=0.8, zorder=2)
+
+    # Fill areas for visual clarity
+    ax.fill_between(x, risk_pcts, alpha=0.08, color="#ef4444")
+    ax.fill_between(x, comp_rates, alpha=0.06, color="#3b82f6")
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(dates, fontsize=7, rotation=0)
+    ax.set_ylabel("Percentage (%)")
+    ax.set_title("Analysis Trend — At-Risk vs Completion", fontweight="bold",
+                 color=COLORS["stone_900"])
+    ax.legend(loc="upper right", fontsize=9, framealpha=0.9)
+    ax.set_ylim(0, 105)
+
+    plt.tight_layout()
+    return fig_to_bytes(fig)
+

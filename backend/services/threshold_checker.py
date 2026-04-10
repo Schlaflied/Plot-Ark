@@ -118,12 +118,22 @@ def check_thresholds(report: dict) -> list[dict]:
 
 
 def _save_flags(course_id: int, flags: list[dict]) -> None:
-    """Write flags to module_flags table."""
+    """Write flags to module_flags table.
+
+    Uses replace strategy: DELETE old non-dismissed flags for this course,
+    then INSERT the fresh set. Each A2A run produces a complete snapshot
+    of flags — old undismissed flags are stale.
+    """
     conn = get_db()
     if not conn:
         return
     try:
         cur = conn.cursor()
+        # Clear stale flags (user-dismissed flags are preserved)
+        cur.execute("""
+            DELETE FROM module_flags
+            WHERE course_id = %s AND dismissed = FALSE
+        """, (course_id,))
         for flag in flags:
             cur.execute("""
                 INSERT INTO module_flags (course_id, module_id, flag_level, signals)
@@ -140,6 +150,7 @@ def _save_flags(course_id: int, flags: list[dict]) -> None:
     except Exception as e:
         print(f"[ThresholdChecker] DB save error: {e}")
         try:
+            conn.rollback()
             conn.close()
         except Exception:
             pass

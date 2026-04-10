@@ -71,6 +71,33 @@ VERB_DIST = {
     },
 }
 
+# Improved verb distributions for modules that have been curriculum-optimized.
+# Key change: struggling students do better (less struggle/fail, more complete/pass).
+# High performers and average students see marginal improvement.
+# Disengaged students are slightly more engaged.
+IMPROVED_VERB_DIST = {
+    "high_performer": {
+        "experienced": 0.15, "attempted": 0.03, "completed": 0.40,
+        "passed": 0.30, "failed": 0.01, "struggled": 0.01,
+        "interacted": 0.06, "asked": 0.04,
+    },
+    "average": {
+        "experienced": 0.18, "attempted": 0.08, "completed": 0.30,
+        "passed": 0.22, "failed": 0.02, "struggled": 0.04,
+        "interacted": 0.10, "asked": 0.06,
+    },
+    "struggling": {
+        "experienced": 0.20, "attempted": 0.12, "completed": 0.22,
+        "passed": 0.15, "failed": 0.05, "struggled": 0.08,
+        "interacted": 0.10, "asked": 0.08,
+    },
+    "disengaged": {
+        "experienced": 0.35, "attempted": 0.15, "completed": 0.15,
+        "passed": 0.08, "failed": 0.02, "struggled": 0.03,
+        "interacted": 0.17, "asked": 0.05,
+    },
+}
+
 # ── Level → student count mapping ────────────────────────────────────────────
 LEVEL_STUDENT_COUNTS = {
     # Large intro courses
@@ -129,9 +156,37 @@ def _generate_students(count: int, course_id: int) -> list[dict]:
     return students
 
 
-def _pick_verb(profile: str) -> str:
-    """Choose a verb based on profile distribution."""
-    dist = VERB_DIST[profile]
+def _get_applied_module_ids(course_id: int) -> set[str]:
+    """Query change_log for modules that have been curriculum-optimized.
+    Returns a set of module_id strings like {'module_1', 'module_6'}."""
+    try:
+        conn = get_db()
+        if not conn:
+            print(f"  [xAPI] No DB connection for applied modules check")
+            return set()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT DISTINCT module_id FROM change_log
+            WHERE course_id = %s AND status = 'applied'
+        """, (str(course_id),))
+        ids = {row[0] for row in cur.fetchall()}
+        cur.close()
+        conn.close()
+        if ids:
+            print(f"  [xAPI] Course {course_id}: found applied modules: {ids}")
+        else:
+            print(f"  [xAPI] Course {course_id}: no applied changes in change_log")
+        return ids
+    except Exception as e:
+        print(f"  [xAPI] Error checking applied modules: {e}")
+        return set()
+
+
+def _pick_verb(profile: str, improved: bool = False) -> str:
+    """Choose a verb based on profile distribution.
+    If improved=True, use the post-curriculum-change distributions."""
+    dist_table = IMPROVED_VERB_DIST if improved else VERB_DIST
+    dist = dist_table[profile]
     return random.choices(list(dist.keys()), weights=list(dist.values()), k=1)[0]
 
 
@@ -212,6 +267,7 @@ def _generate_statements_for_student(
     num_modules: int,
     base_time: datetime,
     days_span: int = 42,
+    improved_module_indices: set[int] | None = None,
 ) -> list[tuple]:
     """Generate a sequence of xAPI statements for one student."""
     profile = student["profile"]
@@ -274,22 +330,41 @@ def _generate_statements_for_student(
         else:
             num_interactions = random.randint(1, 2)
 
+        # Check if this module has been curriculum-optimized
+        is_improved = improved_module_indices and mod_idx in improved_module_indices
+
         for _ in range(num_interactions):
             obj = random.choice(mod_objects)
-            verb = _pick_verb(profile)
+            verb = _pick_verb(profile, improved=is_improved)
 
             # Apply logical constraints
             if obj["object_type"] == "assessment":
-                verb = random.choice(["attempted", "passed", "failed"])
-                if profile == "high_performer":
-                    verb = random.choices(["passed", "attempted", "failed"], weights=[0.7, 0.2, 0.1])[0]
-                elif profile == "struggling":
-                    verb = random.choices(["failed", "attempted", "passed"], weights=[0.5, 0.3, 0.2])[0]
+                if is_improved:
+                    # Post-optimization: struggling students pass more often
+                    if profile == "high_performer":
+                        verb = random.choices(["passed", "attempted", "failed"], weights=[0.75, 0.18, 0.07])[0]
+                    elif profile == "struggling":
+                        verb = random.choices(["failed", "attempted", "passed"], weights=[0.30, 0.35, 0.35])[0]
+                    else:
+                        verb = random.choices(["passed", "attempted", "failed"], weights=[0.5, 0.3, 0.2])[0]
+                else:
+                    verb = random.choice(["attempted", "passed", "failed"])
+                    if profile == "high_performer":
+                        verb = random.choices(["passed", "attempted", "failed"], weights=[0.7, 0.2, 0.1])[0]
+                    elif profile == "struggling":
+                        verb = random.choices(["failed", "attempted", "passed"], weights=[0.5, 0.3, 0.2])[0]
             elif obj["object_type"] == "concept":
-                verb = random.choices(
-                    ["struggled", "experienced", "interacted"],
-                    weights=[0.5, 0.3, 0.2]
-                )[0]
+                if is_improved:
+                    # Post-optimization: less struggle with concepts
+                    verb = random.choices(
+                        ["struggled", "experienced", "interacted"],
+                        weights=[0.25, 0.45, 0.30]
+                    )[0]
+                else:
+                    verb = random.choices(
+                        ["struggled", "experienced", "interacted"],
+                        weights=[0.5, 0.3, 0.2]
+                    )[0]
 
             ts = time_cursor + timedelta(
                 minutes=random.randint(5, 90),
@@ -386,6 +461,10 @@ def generate_for_course(course_id: int, course_data: dict, noise_ratio: float = 
     """
     Generate xAPI mock statements for a single course.
 
+    If modules have been curriculum-optimized (via Apply in curriculum agent),
+    the generator produces improved verb distributions for those modules,
+    simulating the real-world effect of better course design.
+
     Args:
         course_id: DB id of the course
         course_data: dict with keys: topic, level, modules (list)
@@ -410,6 +489,23 @@ def generate_for_course(course_id: int, course_data: dict, noise_ratio: float = 
     if not objects:
         return []
 
+    # ── Check which modules have been curriculum-optimized ────────────────
+    applied_ids = _get_applied_module_ids(course_id)
+    improved_indices: set[int] = set()
+    if applied_ids:
+        # Convert module_id ("module_3") → module_index (2)
+        for mid in applied_ids:
+            match = mid.replace("module_", "")
+            try:
+                idx = int(match) - 1  # module_1 → index 0
+                if 0 <= idx < num_modules:
+                    improved_indices.add(idx)
+            except ValueError:
+                pass
+        if improved_indices:
+            names = [modules[i].get('title', f'Module {i+1}') for i in improved_indices]
+            print(f"  📈 Course {course_id}: {len(improved_indices)} module(s) optimized → improved data for: {', '.join(names)}")
+
     # Base time: 42 days ago
     base_time = datetime.now() - timedelta(days=42)
 
@@ -417,7 +513,8 @@ def generate_for_course(course_id: int, course_data: dict, noise_ratio: float = 
     all_statements = []
     for student in students:
         stmts = _generate_statements_for_student(
-            student, objects, course_id, topic, num_modules, base_time
+            student, objects, course_id, topic, num_modules, base_time,
+            improved_module_indices=improved_indices if improved_indices else None,
         )
         all_statements.extend(stmts)
 

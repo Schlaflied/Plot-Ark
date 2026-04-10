@@ -229,7 +229,8 @@ def export_pdf(report: dict) -> bytes:
         ("sec_risk", "2. Risk Assessment"),
         ("sec_content", "3. Content Optimization"),
         ("sec_cohort", "4. Cohort Comparison"),
-        ("sec_overview", "5. Overview & Recommended Actions")
+        ("sec_history", "5. Analysis History"),
+        ("sec_overview", "6. Overview & Recommended Actions")
     ]
     for anchor, label in toc_items:
         elements.append(Paragraph(f'<font color="{COLORS["blue_500"]}"><a href="#{anchor}">{label}</a></font>', link_style))
@@ -437,9 +438,105 @@ def export_pdf(report: dict) -> bytes:
     for insight in cc.get("insights", []):
         elements.append(Paragraph(f"• {insight}", body_style))
 
-    # Section 5: Overview & Recommended Actions
+    # Section 5: Analysis History (from Warm layer)
     elements.append(PageBreak())
-    elements.append(Paragraph('<a name="sec_overview"/>5. Overview & Recommended Actions', h2_style))
+    elements.append(Paragraph('<a name="sec_history"/>5. Analysis History', h2_style))
+    elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=8))
+    elements.append(Paragraph(
+        'Historical analysis snapshots showing how key metrics evolve over time. '
+        'Improvements after curriculum changes indicate design effectiveness.',
+        insight_style))
+
+    try:
+        from db import get_db as _get_db
+        _conn = _get_db()
+        if _conn:
+            _cur = _conn.cursor()
+            _cur.execute("""
+                SELECT run_at, total_students, at_risk_count,
+                       module_engagement_summary, noise_label
+                FROM course_analysis_snapshots
+                WHERE course_id = %s
+                ORDER BY run_at DESC
+                LIMIT 10
+            """, (report.get("course_id"),))
+            _rows = _cur.fetchall()
+            _cur.close()
+            _conn.close()
+
+            if _rows:
+                hist_data = [["Run Date", "Students", "At-Risk %", "Completion", "Noise", "Trend"]]
+                prev_risk = None
+                # Reverse to show oldest first for trend calc
+                _rows.reverse()
+                for row in _rows:
+                    run_at, total, at_risk, mod_json, noise = row
+                    ar_pct = round(at_risk / max(total, 1) * 100, 1)
+                    # Avg completion from module engagement summary
+                    avg_comp = 0
+                    if mod_json:
+                        import json as _json
+                        mods_data = mod_json if isinstance(mod_json, list) else _json.loads(mod_json)
+                        rates = [m.get("completion_rate", 0) for m in mods_data if isinstance(m, dict)]
+                        avg_comp = round(sum(rates) / max(len(rates), 1) * 100, 1)
+
+                    trend = "—"
+                    if prev_risk is not None:
+                        delta = ar_pct - prev_risk
+                        if delta < -2:
+                            trend = "↓ Improving"
+                        elif delta > 2:
+                            trend = "↑ Worsening"
+                        else:
+                            trend = "→ Stable"
+                    prev_risk = ar_pct
+
+                    date_str = run_at.strftime("%Y-%m-%d %H:%M") if run_at else "—"
+                    hist_data.append([
+                        date_str,
+                        str(total),
+                        f"{ar_pct}%",
+                        f"{avg_comp}%",
+                        noise or "—",
+                        trend,
+                    ])
+
+                ht = Table(hist_data, colWidths=[1.3*inch, 0.7*inch, 0.8*inch, 0.9*inch, 0.7*inch, 1.0*inch], repeatRows=1)
+                ht.setStyle(TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(COLORS["oat_dark"])),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor(COLORS["stone_800"])),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor(COLORS["stone_700"])),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.HexColor(COLORS["stone_300"])),
+                    ("LINEBELOW", (0, 1), (-1, -2), 0.3, colors.HexColor(COLORS["stone_200"])),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+                     [colors.HexColor(COLORS["oat_white"]), colors.HexColor(COLORS["oat_mid"])]),
+                ]))
+                elements.append(ht)
+            else:
+                elements.append(Paragraph("No prior analysis runs found for this course.", body_style))
+    except Exception as hist_err:
+        elements.append(Paragraph(f"Could not load history: {hist_err}", body_style))
+
+    # Trend chart image (matplotlib)
+    try:
+        from services.chart_generator import generate_history_chart
+        hist_chart_bytes = generate_history_chart(report.get("course_id"))
+        if hist_chart_bytes:
+            elements.append(Spacer(1, 0.3*inch))
+            elements.append(Image(io.BytesIO(hist_chart_bytes),
+                                  width=6.5*inch, height=2.6*inch))
+            elements.append(Paragraph(
+                'Trend visualization of at-risk student percentage (red) and average module completion rate (blue) '
+                'across consecutive analysis runs. Declining at-risk rates after curriculum changes indicate effective optimization.',
+                insight_style))
+    except Exception as chart_err:
+        elements.append(Paragraph(f"Could not generate trend chart: {chart_err}", body_style))
+
+    # Section 6: Overview & Recommended Actions
+    elements.append(PageBreak())
+    elements.append(Paragraph('<a name="sec_overview"/>6. Overview & Recommended Actions', h2_style))
     elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=8))
     elements.append(Spacer(1, 0.1*inch))
 

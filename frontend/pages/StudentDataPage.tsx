@@ -11,6 +11,7 @@ import FlagBadge from '../components/analytics/FlagBadge';
 import type { ModuleFlag } from '../components/analytics/FlagBadge';
 import FlagModal from '../components/analytics/FlagModal';
 import AISuggestionsSection from '../components/analytics/AISuggestionsSection';
+import TrendChart from '../components/analytics/TrendChart';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,11 +59,24 @@ const STATUS_COLORS: Record<string, string> = {
   done: 'bg-green-400',
   success: 'bg-green-400',
   error: 'bg-red-400',
+  fallback: 'bg-yellow-400',
   retry: 'bg-yellow-400',
   running: 'bg-amber-400 animate-pulse',
   dispatching: 'bg-blue-400 animate-pulse',
   aggregating: 'bg-purple-400 animate-pulse',
+  anonymising: 'bg-blue-400 animate-pulse',
+  ltm_written: 'bg-blue-400',
+  ltm_error: 'bg-red-400',
+  ltm_warning: 'bg-yellow-400',
+  flags_detected: 'bg-orange-400',
+  flags_clear: 'bg-green-400',
+  threshold_error: 'bg-red-400',
 };
+
+// Events that should visually stand out in the console
+const WARNING_STATUSES = new Set(['fallback', 'ltm_warning', 'threshold_error']);
+const ERROR_STATUSES = new Set(['error', 'ltm_error']);
+const INFO_STATUSES = new Set(['ltm_written', 'flags_clear', 'flags_detected']);
 
 // ─── Page Component ───────────────────────────────────────────────────────────
 
@@ -229,7 +243,9 @@ const StudentDataPage: React.FC = () => {
                 className="w-full flex items-center justify-between text-xs bg-stone-800 text-stone-200 border border-stone-600 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-amber-500 hover:border-stone-500 transition-colors"
               >
                 <span className="truncate">
-                  {selectedCourse ? selectedCourse.topic : 'Choose…'}
+                  {selectedCourse
+                    ? `${selectedCourse.course_code ? selectedCourse.course_code + ' — ' : ''}${selectedCourse.topic}`
+                    : 'Choose…'}
                 </span>
                 <svg className={`ml-1 shrink-0 transition-transform ${courseDropdownOpen ? 'rotate-180' : ''}`} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
@@ -251,9 +267,10 @@ const StudentDataPage: React.FC = () => {
                             ? 'border-l-2 border-amber-500 bg-amber-500/10 text-amber-400 pl-2.5'
                             : 'text-stone-300 hover:bg-stone-700 border-l-2 border-transparent'
                         }`}
-                        title={`${c.topic} (${c.level})`}
+                        title={`${c.course_code ? c.course_code + ' — ' : ''}${c.topic} (${c.level})`}
                       >
-                        {c.topic} ({c.level})
+                        {c.course_code ? <><span className="text-stone-500">{c.course_code}</span> — </> : null}
+                        {c.topic}
                       </button>
                     ))}
                   </div>
@@ -424,16 +441,32 @@ const StudentDataPage: React.FC = () => {
               {/* Console output */}
               {events.length > 0 && (
                 <div ref={consoleRef} className="bg-stone-900 rounded-xl p-4 max-h-48 overflow-y-auto font-mono text-xs space-y-1 shadow-lg">
-                  {events.map((ev, i) => (
-                    <div key={i} className="flex items-start gap-2">
+                {events.map((ev, i) => {
+                    const isWarn = WARNING_STATUSES.has(ev.status);
+                    const isErr = ERROR_STATUSES.has(ev.status);
+                    const isInfo = INFO_STATUSES.has(ev.status);
+                    const rowClass = isErr
+                      ? 'bg-red-900/30 border-l-2 border-red-500 pl-2 rounded'
+                      : isWarn
+                      ? 'bg-yellow-900/30 border-l-2 border-yellow-500 pl-2 rounded'
+                      : isInfo
+                      ? 'bg-blue-900/20 border-l-2 border-blue-500 pl-2 rounded'
+                      : '';
+                    return (
+                    <div key={i} className={`flex items-start gap-2 py-0.5 ${rowClass}`}>
                       <span className={`shrink-0 w-2 h-2 rounded-full mt-1 ${STATUS_COLORS[ev.status] || 'bg-stone-500'}`} />
                       <span className="text-stone-400">
                         <span className="text-amber-400">[{AGENT_LABELS[ev.agent] || ev.agent}]</span>{' '}
                         {ev.message}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
+              )}
+              {/* Trend chart — shows analysis history */}
+              {selectedCourseId && report && (
+                <TrendChart courseId={selectedCourseId} />
               )}
               {/* Report sections */}
               {report && (

@@ -131,17 +131,17 @@
 
 - **5-node pipeline** — `Orchestrator → [BehaviorAnalyst ‖ RiskDetector ‖ ContentOptimizer ‖ CohortComparator] → aggregate → LTM snapshot`. All agents are currently sql-only (Phase 2 = LLM integration pending).
 - **PII anonymisation** — student names/emails are anonymised before agent processing; real identities are restored only in the final aggregated report for the professor.
-- **xAPI mock data engine** — 4 noise levels (5%/10%/15%/20%) seeded from frontend UI; realistic 6-week timestamp distribution with `HOUR_WEIGHTS` and profile-based student spread (high_performer / average / struggling / disengaged). Designed for undergraduate-year-1 cohort sizes (300–400 students).
+- **xAPI mock data engine** — 4 noise levels (5%/10%/15%/20%) seeded from frontend UI; realistic 6-week timestamp distribution with `HOUR_WEIGHTS` and profile-based student spread (high_performer / average / struggling / disengaged). **Curriculum-aware**: queries `change_log` for applied modules and uses `IMPROVED_VERB_DIST` to simulate realistic post-optimization improvement.
 - **Hive-style node architecture** — each agent inherits `BaseNode` with reflexion/retry (max 3), L3 JSON Schema validation, and SQL fallback
 - **SharedMemory (Redis)** — agents communicate through Redis-backed shared memory (`a2a:{session_id}:{key}`) with local dict fallback
 - **Token usage tracking** — `NodeResult` carries `tokens_in / tokens_out / tokens_cache_read / tokens_cache_write`. Orchestrator prints a token summary table to backend log after each run; report JSON includes a `token_summary` block. Frontend sidebar shows a Token Usage panel (currently all zero — sql-only Phase 1).
-- **LTM warm layer** — every run persists a `course_analysis_snapshots` row to PostgreSQL: `risk_distribution`, `module_engagement_summary`, `verb_distribution`, `cohort_groups`, `noise_label`, counts.
+- **LTM 3-layer architecture** — Hot (Redis, pipeline runtime), Warm (PostgreSQL `course_analysis_snapshots`, persisted per-run), Cold (`data/ltm/*.md` YAML+Markdown, versioned with course codes)
+- **Historical trend visualization** — `TrendChart.tsx` (pure SVG) shows at-risk % and completion rate over time; mini mode + full-screen modal with date labels, larger data points, and summary stat cards
 - **SSE real-time streaming** — analysis progress streams via Server-Sent Events; frontend shows live agent status
 - **Student Data dashboard** — dedicated full-page analytics view with resizable sidebar, section navigation, noise-level selector, and Token Usage panel
 - **Risk detection** — 6 signals; thresholds: medium ≥ 4, high ≥ 7; inactivity windows: 14 / 21 days
 - **Cohort comparison** — students grouped into high_performers / average / at_risk / disengaged with avg completion and struggle rates
-- **Report export** — PDF (Anthropic-style cover: left-aligned brand line, large title, `HRFlowable`, 4-col metadata table), DOCX (matching layout), Excel. Filenames include course slug + noise label.
-- **Section 5 Overview** — data-driven recommended actions with priority levels (🔴 HIGH / 🟡 MEDIUM / ⚪ LOW)
+- **6-section report export** — PDF (Anthropic-style cover), DOCX, Excel. Sections: Behavior Analysis, Risk Assessment, Content Optimization, Cohort Comparison, **Analysis History** (table + matplotlib trend chart), Overview & Recommended Actions. Filenames include course slug + noise label.
 
 </details>
 
@@ -190,8 +190,9 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 │  │   Page    │ │   Page   │ │   Page   │ │   Graph   │ │    Page       │  │
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └──────┬────────┘  │
 │       │            │            │              │              │           │
-│  components/ui/  components/generate/    hooks/ (useIngest, useQuery)    │
-│  (Select, Input)   (SyllabusUpload)             SSE streaming            │
+│  components/ui/  components/generate/    components/analytics/           │
+│  (Select, Input)   (SyllabusUpload)   (TrendChart, ReportSections, ...)  │
+│                                              SSE streaming               │
 └───────┼────────────┼────────────┼──────────────┼──────────────┼──────────┘
         │            │            │              │              │
         ▼            ▼            ▼              ▼              ▼
@@ -204,7 +205,7 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 │  │  ├── curriculum.py           generate / skeleton / expand / save     │   │
 │  │  ├── curriculum_agent_routes flags / suggestions / apply / redo      │   │
 │  │  ├── history.py              CRUD + favorite + DOCX export          │   │
-│  │  ├── analytics.py            A2A SSE analysis + PDF/DOCX/Excel      │   │
+│  │  ├── analytics.py            A2A SSE + history API + export         │   │
 │  │  ├── xapi.py                 xAPI statements + mock data seed       │   │
 │  │  ├── feedback.py             Student sentiment + comments           │   │
 │  │  ├── graph.py                KG data + RAG query                    │   │
@@ -217,21 +218,43 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 │  │  ├── base.py (BaseNode)     │  │  ├── research.py (Tavily)          │   │
 │  │  ├── orchestrator.py        │  │  ├── file_parser.py                │   │
 │  │  ├── behavior_analyst.py    │  │  ├── prompt_builder.py             │   │
-│  │  ├── risk_detector.py       │  │  ├── xapi_generator.py             │   │
+│  │  ├── risk_detector.py       │  │  ├── xapi_generator.py (⚡ aware)  │   │
 │  │  ├── content_optimizer.py   │  │  ├── report_exporter.py (facade)   │   │
-│  │  ├── cohort_comparator.py   │  │  ├── chart_generator.py            │   │
-│  │  └── curriculum_agent.py    │  │  └── export_{pdf,docx,excel}.py    │   │
-│  └──────────┬──────────────────┘  │                                    │   │
-│             │  SharedMemory       └─────────────┬──────────────────────┘   │
+│  │  ├── cohort_comparator.py   │  │  ├── chart_generator.py (+history) │   │
+│  │  └── curriculum_agent.py    │  │  ├── ltm_writer.py (Cold layer)    │   │
+│  │       SharedMemory          │  │  ├── threshold_checker.py           │   │
+│  └──────────┬──────────────────┘  │  └── export_{pdf,docx,excel}.py    │   │
+│             │                     └─────────────┬──────────────────────┘   │
 └─────────────┼───────────────────────────────────┼──────────────────────────┘
               │                                   │
               ▼                                   ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  PostgreSQL  │  │    Redis     │  │   LightRAG   │
-│  (curricula  │  │  (cache +    │  │   (KG data)  │
-│  + xapi +    │  │   shared     │  │              │
-│  feedback)   │  │   memory)    │  │              │
-└──────────────┘  └──────────────┘  └──────────────┘
+┌───────────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  PostgreSQL       │  │    Redis     │  │   LightRAG   │  │  data/ltm/   │
+│  (curricula       │  │  (🔴 Hot:    │  │   (KG data)  │  │  (🔵 Cold:   │
+│  + xapi           │  │   pipeline   │  │              │  │   .md YAML   │
+│  + 🟡 Warm:       │  │   runtime)   │  │              │  │   snapshots) │
+│  snapshots)       │  │              │  │              │  │              │
+└───────────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
+```
+
+**LTM (Long-Term Memory) Architecture**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     LTM 3-Layer Architecture                            │
+├──────────────────┬───────────────────┬──────────────────────────────────┤
+│  🔴 Hot Layer     │  🟡 Warm Layer      │  🔵 Cold Layer                   │
+│  Redis            │  PostgreSQL         │  data/ltm/*.md                   │
+│                  │                     │                                  │
+│  • Pipeline       │  • course_analysis_ │  • YAML frontmatter              │
+│    runtime state  │    snapshots table  │    (course_code, topic,          │
+│  • SSE streaming  │  • Per-run metrics  │     curriculum_version)          │
+│  • Token usage    │  • at_risk_count    │  • Module performance table      │
+│  • TTL auto-      │  • completion rates │  • Applied changes log           │
+│    expire         │  • verb_distribution│  • 🤖 Agent vs 👤 Prof tracking   │
+│                  │  • Historical trend │  • Versioned: _v{N} per day      │
+│                  │    chart source     │  • Never deleted                 │
+└──────────────────┴───────────────────┴──────────────────────────────────┘
 ```
 
 **Course Generation Pipeline**
@@ -257,7 +280,7 @@ Frontend (noise selector + seed button)
   xapi_generator.py            OrchestratorNode
   (4 noise levels,                      │
    HOUR_WEIGHTS,              ┌─────────┼──────────────┐
-   profile spread)            │         │              │
+   ⚡ curriculum-aware)        │         │              │
                               ▼         ▼              ▼
                        BehaviorAnalyst  RiskDetector   ContentOptimizer
                        (verb/module     (6 signals,    (underperforming
@@ -272,23 +295,32 @@ Frontend (noise selector + seed button)
                               aggregate
                          (token_summary, exec summary)
                                    │
-                          ┌────────┴────────┐
-                          ▼                 ▼
-               course_analysis_snapshots  final report JSON
-               (PostgreSQL LTM)           → PDF / DOCX / Excel
-                          │
-                          ▼
-                   CurriculumAgent (AI Agent)
-             (Reads long-term trends, flags critical issues)
-                          │
-                          ▼
+                   ┌───────────────┼───────────────┐
+                   ▼               ▼               ▼
+           🔴 Hot Layer    🟡 Warm Layer      🔵 Cold Layer
+           (Redis)         (PG snapshots)     (data/ltm/*.md)
+                                   │
+                                   ▼
+                          final report JSON
+                          → PDF / DOCX / Excel
+                          (Section 5: Analysis History
+                           table + trend chart)
+                                   │
+                                   ▼
+               ThresholdChecker → CurriculumAgent (AI Agent)
+             (Reads Cold LTM, classifies structural/occasional)
+                                   │
+                                   ▼
                  change_log & module_flags
               (Human-in-the-loop Dashboard Review)
+                                   │
+                                   ▼
+              ⚡ xAPI re-seed (IMPROVED_VERB_DIST for applied modules)
 ```
 
 **Active agentic loop:**
 ```
-xAPI behavior events → A2A Assessment → PostgreSQL LTM → Curriculum Agent Suggestions → Professor Review (HITL) → DB Changes → Module UI Banner
+xAPI events → A2A Assessment → LTM (Hot+Warm+Cold) → Curriculum Agent → Professor HITL → Apply → ⚡ Curriculum-aware re-seed → A2A re-assessment (improved data) → updated LTM
 ```
 
 ---
@@ -392,13 +424,13 @@ plot-ark/
 │   │   ├── file_parser.py               ← PDF/PPTX/DOCX text extraction
 │   │   ├── prompt_builder.py            ← Centralized AI prompt templates
 │   │   ├── lightrag_service.py          ← LightRAG instance management
-│   │   ├── xapi_generator.py            ← Mock xAPI data with noise injection
-│   │   ├── ltm_writer.py                ← LTM (course_analysis_snapshots) read/write
-│   │   ├── threshold_checker.py         ← Parses agent thresholds and flags
+│   │   ├── xapi_generator.py            ← Mock xAPI data (⚡ curriculum-aware, queries change_log)
+│   │   ├── ltm_writer.py                ← LTM Cold layer (.md YAML snapshots)
+│   │   ├── threshold_checker.py         ← Multi-signal module flag detection
 │   │   ├── report_exporter.py           ← Thin facade for report generation
-│   │   ├── chart_generator.py           ← Matplotlib visualizations & brand colors
-│   │   ├── export_pdf.py                ← ReportLab PDF layout & structure
-│   │   ├── export_docx.py               ← python-docx Word document builder
+│   │   ├── chart_generator.py           ← Matplotlib charts + history trend chart
+│   │   ├── export_pdf.py                ← ReportLab PDF (6 sections incl. Analysis History)
+│   │   ├── export_docx.py               ← python-docx DOCX (6 sections incl. Analysis History)
 │   │   └── export_excel.py              ← openpyxl Excel spreadsheet builder
 │   ├── Dockerfile
 │   └── requirements.txt
@@ -426,6 +458,7 @@ plot-ark/
 │   │   │   └── SkeletonReview.tsx       ← Review course module skeleton
 │   │   ├── analytics/
 │   │   │   ├── ReportSections.tsx       ← A2A analytics report viewer component
+│   │   │   ├── TrendChart.tsx           ← SVG trend chart (mini + full-view modal)
 │   │   │   ├── CurriculumApplyModal.tsx ← AI suggestion apply confirmation modal
 │   │   │   ├── CurriculumDrawer.tsx     ← Professor slide-out drawer (Apply / Redo)
 │   │   │   ├── StudentChangesDrawer.tsx ← Student slide-out drawer (Go to Module)
@@ -454,6 +487,7 @@ plot-ark/
 │
 └── data/
     ├── materials/                       ← Course PDFs/PPTXs (gitignored)
+    ├── ltm/                             ← LTM Cold layer .md snapshots (versioned YAML)
     └── lightrag_storage*/               ← Knowledge graph data (gitignored, regenerate)
 ```
 
@@ -497,12 +531,15 @@ plot-ark/
 - [x] xAPI mock data engine — 4 noise levels (5/10/15/20%), HOUR_WEIGHTS, profile-based student spread
 - [x] PII anonymisation — student data anonymised before agent processing, de-anonymised in final report
 - [x] Token usage tracking — NodeResult tokens_in/out/cache fields; token_summary in report JSON; backend log table
-- [x] LTM warm layer — course_analysis_snapshots PostgreSQL table (risk_distribution, verb_distribution, noise_label, etc.)
+- [x] LTM 3-layer architecture — Hot (Redis runtime), Warm (PostgreSQL snapshots), Cold (versioned .md YAML files)
 - [x] Curriculum Agent — agentic curriculum optimization with notification bar, slide-out drawer, human-in-the-loop Apply/Redo, module flags, and change log
 - [x] Student Update Drawer — student-facing slide-out drawer showing updated modules with "Go to Module" navigation
 - [x] Draggable FAB — floating action button after banner dismiss; draggable, click opens drawer, hover ✕ to permanently close
 - [x] Student Feedback — per-module sentiment collection (Got it / Mostly got it / Something's off / Didn't read) with optional comments
+- [x] Curriculum-aware xAPI generator — queries change_log for applied modules, uses IMPROVED_VERB_DIST to simulate post-optimization improvement
+- [x] Historical trend visualization — TrendChart (mini + full-screen modal), matplotlib chart in PDF/DOCX, Analysis History section in reports
 - [ ] A2A Phase 2 — LLM integration for BehaviorAnalyst, RiskDetector, ContentOptimizer, CohortComparator
+- [ ] Progressive summarization — semester-level LTM summaries for LLM context management
 - [ ] Professor LTM — preference learning from edit history
 - [ ] LTI 1.3 — push into Canvas / Moodle
 

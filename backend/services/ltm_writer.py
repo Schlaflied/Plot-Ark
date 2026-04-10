@@ -28,7 +28,15 @@ def write_cold_snapshot(report: dict) -> str | None:
     """
     course_id = report.get("course_id")
     if not course_id:
+        print("[LTM Cold] Skipped — no course_id in report")
         return None
+
+    # Ensure course_id is always int for consistent glob matching
+    course_id = int(course_id)
+
+    print(f"[LTM Cold] Target dir: {_LTM_DIR}")
+    print(f"[LTM Cold] Dir exists: {_LTM_DIR.exists()}, writable: {os.access(str(_LTM_DIR.parent), os.W_OK)}")
+    print(f"[LTM Cold] course_id={course_id} (type={type(course_id).__name__})")
 
     today = datetime.date.today().isoformat()
     ra = report.get("risk_assessment", {})
@@ -47,16 +55,109 @@ def write_cold_snapshot(report: dict) -> str | None:
     completion_rates = [m.get("completion_rate", 0) for m in modules_engagement]
     overall_completion = round(sum(completion_rates) / max(len(completion_rates), 1), 2)
 
+    # Underperforming content lookup (keyed by module_id for fast merge)
+    underperforming = co.get("underperforming_content", [])
+    underperf_map = {u.get("module_id", ""): u for u in underperforming}
+
+    # ── Collect course metadata + applied changes (for context) ───────────
+    course_code = str(course_id)  # fallback: use numeric ID
+    course_topic = ""
+    course_level = ""
+    applied_changes = []  # list of dicts with full change details
+
+    try:
+        from db import get_db
+        conn = get_db()
+        if conn:
+            cur = conn.cursor()
+
+            # Course metadata
+            cur.execute("""
+                SELECT topic, course_code, level, course_type
+                FROM curricula WHERE id = %s
+            """, (course_id,))
+            row = cur.fetchone()
+            if row:
+                course_topic = row[0] or ""
+                raw_code = (row[1] or "").strip()
+                course_level = row[2] or ""
+
+                # Use DB course_code if it's a real code (not just the numeric ID)
+                if raw_code and not raw_code.isdigit():
+                    course_code = raw_code.replace(" ", "_")
+                elif course_topic:
+                    # Generate a readable slug from the topic
+                    # "Introduction to Machine Learning" → "Intro_Machine_Learning"
+                    SKIP_WORDS = {"to", "the", "of", "and", "in", "for", "a", "an", "on", "with"}
+                    words = course_topic.split()
+                    slug_parts = []
+                    for i, w in enumerate(words):
+                        if w.lower() in SKIP_WORDS and i > 0:
+                            continue
+                        # Abbreviate "Introduction" → "Intro"
+                        if w.lower() == "introduction":
+                            slug_parts.append("Intro")
+                        else:
+                            slug_parts.append(w.capitalize())
+                        if len(slug_parts) >= 4:  # cap at 4 words for filename length
+                            break
+                    course_code = "_".join(slug_parts) if slug_parts else str(course_id)
+
+            # Applied changes with full details
+            cur.execute("""
+                SELECT id, module_id, recommendation, agent, timestamp, flag_reason
+                FROM change_log
+                WHERE course_id = %s AND status = 'applied'
+                ORDER BY timestamp
+            """, (course_id,))
+            for r in cur.fetchall():
+                applied_changes.append({
+                    "id": r[0],
+                    "module_id": r[1],
+                    "recommendation": r[2] or "",
+                    "source": r[3] or "curriculum_agent",
+                    "applied_at": str(r[4]) if r[4] else "",
+                    "flag_reason": r[5] or [],
+                })
+
+            cur.close()
+            conn.close()
+    except Exception:
+        pass  # DB may not be available; proceed without
+
+    applied_change_ids = [c["id"] for c in applied_changes]
+
     # ── Count existing snapshots to set version ───────────────────────────
     _LTM_DIR.mkdir(parents=True, exist_ok=True)
-    existing = sorted(_LTM_DIR.glob(f"{course_id}_*.md"))
+    # Match both old format (course_id_*) and new format (course_code_*)
+    existing = sorted(
+        list(_LTM_DIR.glob(f"{course_id}_*.md")) +
+        list(_LTM_DIR.glob(f"{course_code}_*.md"))
+    )
     version = len(existing) + 1
 
     # ── Build YAML frontmatter ────────────────────────────────────────────
     lines = ["---"]
     lines.append(f"course_id: {course_id}")
+    lines.append(f"course_code: \"{course_code}\"")
+    if course_topic:
+        lines.append(f"course_topic: \"{course_topic}\"")
+    if course_level:
+        lines.append(f"course_level: \"{course_level}\"")
     lines.append(f"analysis_date: {today}")
     lines.append(f"version: {version}")
+    lines.append(f"cohort_at_risk_pct: {at_risk_pct}")
+    lines.append(f"overall_completion_rate: {overall_completion}")
+    lines.append(f"total_students: {total_students}")
+
+    # Curriculum version — tracks which changes were applied before this run
+    if applied_change_ids:
+        lines.append(f"curriculum_version: post_change_{applied_change_ids[-1]}")
+        ids_str = "[" + ", ".join(str(i) for i in applied_change_ids) + "]"
+        lines.append(f"applied_changes: {ids_str}")
+    else:
+        lines.append("curriculum_version: baseline")
+        lines.append("applied_changes: []")
 
     if flagged_modules:
         lines.append("modules_flagged:")
@@ -67,14 +168,22 @@ def write_cold_snapshot(report: dict) -> str | None:
             for k, v in fm.get("metrics", {}).items():
                 lines.append(f"    {k}: {v}")
 
-    lines.append(f"cohort_at_risk_pct: {at_risk_pct}")
-    lines.append(f"overall_completion_rate: {overall_completion}")
     lines.append("---")
     lines.append("")
 
     # ── Build markdown summary ────────────────────────────────────────────
+    lines.append(f"# {course_code} — {course_topic}" if course_topic else f"# Course {course_id}")
+    lines.append("")
+    lines.append(f"**Level**: {course_level} | **Students**: {total_students} | **Date**: {today}")
+    lines.append("")
+
     lines.append("## Analysis Summary")
     lines.append("")
+
+    if applied_change_ids:
+        lines.append(f"*Curriculum version: post-change #{applied_change_ids[-1]} "
+                      f"({len(applied_change_ids)} change(s) applied)*")
+        lines.append("")
 
     if flagged_modules:
         for fm in flagged_modules:
@@ -91,8 +200,57 @@ def write_cold_snapshot(report: dict) -> str | None:
     lines.append(f"Overall course completion rate: {overall_completion:.0%}.")
     lines.append("")
 
+    # ── Per-module performance table ──────────────────────────────────────
+    lines.append("## Module Performance")
+    lines.append("")
+    lines.append("| Module | Completion | Struggle Rate | Neg. Feedback | Flagged |")
+    lines.append("|--------|-----------|---------------|---------------|---------|")
+
+    flagged_ids = {fm["module_id"] for fm in flagged_modules}
+
+    for mod in modules_engagement:
+        mod_id = mod.get("module_id", "unknown")
+        mod_name = mod.get("module_name", mod_id)
+        comp = mod.get("completion_rate", 0)
+        # Merge with underperforming data
+        up = underperf_map.get(mod_id, {})
+        struggle = up.get("struggle_rate", 0)
+        neg_fb = up.get("negative_feedback", 0)
+        is_flagged = "⚠️" if mod_id in flagged_ids else "—"
+        lines.append(
+            f"| {mod_name} | {comp:.0%} | {struggle:.0%} | {neg_fb} | {is_flagged} |"
+        )
+
+    lines.append("")
+
+    # ── Changes applied to this course ────────────────────────────────────
+    if applied_changes:
+        lines.append("## Curriculum Changes Applied")
+        lines.append("")
+        lines.append("The following changes were applied to this course before this analysis run:")
+        lines.append("")
+        for ch in applied_changes:
+            source_label = "🤖 Agent" if ch["source"] == "curriculum_agent" else "👤 Professor"
+            lines.append(f"- **{ch['module_id']}** ({source_label}, #{ch['id']})")
+            if ch["recommendation"]:
+                # Truncate long recommendations
+                rec_text = ch["recommendation"][:150]
+                if len(ch["recommendation"]) > 150:
+                    rec_text += "..."
+                lines.append(f"  > {rec_text}")
+            if ch["flag_reason"]:
+                lines.append(f"  Triggered by: {', '.join(ch['flag_reason'])}")
+            lines.append("")
+    else:
+        lines.append("## Curriculum Changes Applied")
+        lines.append("")
+        lines.append("No curriculum changes have been applied to this course yet (baseline).")
+        lines.append("")
+
     # ── Write file ────────────────────────────────────────────────────────
-    filename = f"{course_id}_{today}.md"
+    # Use course_code in filename for readability (LLM + human)
+    safe_code = course_code.replace("/", "-").replace("\\", "-").replace(" ", "_")
+    filename = f"{safe_code}_{today}_v{version}.md"
     filepath = _LTM_DIR / filename
 
     try:
@@ -109,10 +267,43 @@ def read_cold_history(course_id: int, max_files: int = 10) -> list[dict]:
 
     Returns a list of parsed dicts with keys: analysis_date, version,
     modules_flagged (list of module_id strings), cohort_at_risk_pct,
-    overall_completion_rate.
+    overall_completion_rate, curriculum_version, applied_changes.
     """
+    # Ensure course_id is int for consistent glob matching
+    course_id = int(course_id)
     _LTM_DIR.mkdir(parents=True, exist_ok=True)
-    files = sorted(_LTM_DIR.glob(f"{course_id}_*.md"), reverse=True)[:max_files]
+
+    # Look up course_code for new filename format
+    course_code = None
+    try:
+        from db import get_db
+        conn = get_db()
+        if conn:
+            cur = conn.cursor()
+            cur.execute("SELECT course_code FROM curricula WHERE id = %s", (course_id,))
+            row = cur.fetchone()
+            if row and row[0]:
+                course_code = row[0].replace(" ", "_")
+            cur.close()
+            conn.close()
+    except Exception:
+        pass
+
+    # Match both old format (24_*) and new format (ISD501_*)
+    files = list(_LTM_DIR.glob(f"{course_id}_*.md"))
+    if course_code and course_code != str(course_id):
+        files += list(_LTM_DIR.glob(f"{course_code}_*.md"))
+
+    # Dedupe and sort by modification time (newest first)
+    seen = set()
+    unique_files = []
+    for f in files:
+        if f.name not in seen:
+            seen.add(f.name)
+            unique_files.append(f)
+    files = sorted(unique_files, key=lambda f: f.stat().st_mtime, reverse=True)[:max_files]
+
+    print(f"[LTM Cold] Reading history for course {course_id} (code={course_code}): found {len(files)} file(s)")
 
     history = []
     for f in files:

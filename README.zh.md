@@ -130,17 +130,19 @@
 
 - **5 节点流水线** — `Orchestrator → [BehaviorAnalyst ‖ RiskDetector ‖ ContentOptimizer ‖ CohortComparator] → aggregate → LTM snapshot`。当前所有 Agent 均为 sql-only（Phase 2 = LLM 集成待开发）。
 - **PII 匿名化** — 学生姓名/邮箱在进入 Agent 前全部匿名化；真实身份仅在最终报告聚合后恢复，供教授查看。
-- **xAPI Mock 数据引擎** — 支持 4 种噪声级别（5%/10%/15%/20%），通过前端 UI 选择；基于 `HOUR_WEIGHTS` 的真实 6 周时间戳分布；按学生画像分布（高绩效/普通/挣扎/脱离）。适配本科一年级群体规模（300–400 人）。
+- **xAPI Mock 数据引擎** — 支持 4 种噪声级别（5%/10%/15%/20%），通过前端 UI 选择；基于 `HOUR_WEIGHTS` 的真实 6 周时间戳分布；按学生画像分布（高绩效/普通/挣扎/脱离）。**课程感知模式**：查询 `change_log` 表中已批准的模块，使用 `IMPROVED_VERB_DIST` 模拟优化后改善效果。
 - **Hive 风格节点架构** — 每个 Agent 继承 `BaseNode`，支持 reflexion/重试（最多 3 次）、L3 JSON Schema 校验、SQL Fallback
 - **SharedMemory (Redis)** — Agent 间通过 `a2a:{session_id}:{key}` 键名在 Redis 共享内存通信，支持本地 dict 降级
-- **Token 用量追踪** — `NodeResult` 携带 `tokens_in / tokens_out / tokens_cache_read / tokens_cache_write` 字段；Orchestrator 在每次运行后向后端日志打印 Token 汇总表；报告 JSON 包含 `token_summary` 块；前端侧边栏显示 Token Usage 面板（Phase 1 sql-only 阶段均为零）。
-- **LTM 暖层** — 每次运行后向 PostgreSQL 写入一条 `course_analysis_snapshots` 快照：包含 `risk_distribution`、`module_engagement_summary`、`verb_distribution`、`cohort_groups`、`noise_label` 等字段。
+- **Token 用量追踪** — `NodeResult` 携带 `tokens_in / tokens_out / tokens_cache_read / tokens_cache_write` 字段；Orchestrator 在每次运行后向后端日志打印 Token 汇总表。
+- **LTM 三层架构** — Hot（Redis，流水线运行时）、Warm（PostgreSQL `course_analysis_snapshots`，每次分析快照）、Cold（`data/ltm/*.md` YAML+Markdown，版本化归档）
+- **历史趋势可视化** — `TrendChart.tsx`（纯 SVG）显示 at-risk % 与 completion rate 随时间变化；迷你模式 + 全屏 Modal（日期标签、更大数据点、概览数据卡片）
 - **SSE 实时流式反馈** — 分析进度通过 Server-Sent Events 流式传输；前端实时显示 Agent 状态
 - **Student Data 仪表板** — 独立全页分析视图，可拖拽侧边栏、分区导航、噪声级别选择器、Token Usage 面板
 - **风险检测** — 6 个信号；阈值：中风险 ≥ 4，高风险 ≥ 7；不活跃窗口：14 / 21 天
 - **群组对比** — 学生分为 high_performers / average / at_risk / disengaged 四个群组，含平均完成率与困难率
-- **报告导出** — PDF（Anthropic 风格封面：左对齐品牌行、大标题、`HRFlowable`、4 列元数据表）、DOCX（相同布局）、Excel；文件名含课程 slug + 噪声标签
-- **Section 5 总览** — 数据驱动的改进建议，按优先级标注（🔴 HIGH / 🟡 MEDIUM / ⚪ LOW）
+- **6 分区报告导出** — PDF（Anthropic 风格封面）、DOCX、Excel。包含：行为分析、风险评估、内容优化、群组对比、**分析历史**（表格 + matplotlib 趋势图）、总览与建议。文件名含课程 slug + 噪声标签。
+
+
 
 </details>
 

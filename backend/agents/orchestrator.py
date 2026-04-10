@@ -237,7 +237,8 @@ class OrchestratorNode(BaseNode):
             if result.status == "success":
                 yield _sse_event(agent.name, "done", f"Completed in {duration}ms", safe_data)
             elif result.status == "fallback":
-                yield _sse_event(agent.name, "done", f"Completed via fallback in {duration}ms", safe_data)
+                yield _sse_event(agent.name, "fallback",
+                    f"⚠️ Primary failed after {result.retries_used} retries — using fallback ({duration}ms)", safe_data)
             else:
                 yield _sse_event(agent.name, "error", safe_error or "Agent encountered an error processing course data")
 
@@ -252,22 +253,36 @@ class OrchestratorNode(BaseNode):
 
         yield _sse_event("report", "done", f"Analysis complete in {total_ms}ms", report)
 
-        # ── LTM Cold write + Threshold check ──────────────────────────────
+        # ── LTM Cold write ─────────────────────────────────────────────────
         try:
-            write_cold_snapshot(report)
+            ltm_path = write_cold_snapshot(report)
+            if ltm_path:
+                yield _sse_event("orchestrator", "ltm_written",
+                    "📝 Analysis snapshot saved to long-term memory")
+            else:
+                yield _sse_event("orchestrator", "ltm_warning",
+                    "⚠️ LTM snapshot skipped — missing course_id")
         except Exception as e:
-            print(f"[Orchestrator] LTM Cold write error (non-fatal): {e}")
+            print(f"[Orchestrator] LTM Cold write error: {e}")
+            yield _sse_event("orchestrator", "ltm_error",
+                "⚠️ Failed to save analysis snapshot to long-term memory")
 
+        # ── Threshold check ────────────────────────────────────────────────
         try:
             flags = check_thresholds(report)
             if flags:
                 orange_flags = [f for f in flags if f["flag_level"] == "orange"]
                 yellow_flags = [f for f in flags if f["flag_level"] == "yellow"]
-                yield _sse_event("orchestrator", "flags_detected", 
-                    f"{len(flags)} module(s) flagged ({len(orange_flags)} require review)",
+                yield _sse_event("orchestrator", "flags_detected",
+                    f"⚠️ {len(flags)} module(s) flagged ({len(orange_flags)} require review)",
                     {"flags": flags, "orange_count": len(orange_flags), "yellow_count": len(yellow_flags)})
+            else:
+                yield _sse_event("orchestrator", "flags_clear",
+                    "✅ No modules flagged — all within normal parameters")
         except Exception as e:
-            print(f"[Orchestrator] Threshold check error (non-fatal): {e}")
+            print(f"[Orchestrator] Threshold check error: {e}")
+            yield _sse_event("orchestrator", "threshold_error",
+                "⚠️ Threshold check failed — flags may be incomplete")
 
     def run_analysis_sync(self, course_id: int) -> dict:
         """Non-streaming version — returns complete report dict."""
@@ -435,6 +450,7 @@ class OrchestratorNode(BaseNode):
             from db import get_db
             conn = get_db()
             if not conn:
+                report["_ltm_warm_status"] = "error: no DB connection"
                 return
             cur = conn.cursor()
             ra = report.get("risk_assessment", {})
@@ -488,8 +504,10 @@ class OrchestratorNode(BaseNode):
             conn.commit()
             cur.close()
             conn.close()
+            report["_ltm_warm_status"] = "saved"
         except Exception as e:
             print(f"[Orchestrator] Snapshot save error (non-fatal): {e}")
+            report["_ltm_warm_status"] = f"error: {type(e).__name__}"
 
 
 def _sse_event(agent: str, status: str, message: str, result: dict = None) -> str:

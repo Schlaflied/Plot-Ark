@@ -158,7 +158,8 @@ def export_docx(report: dict) -> bytes:
     _color_heading(toc_heading)
     for item in ["1. Behavior Analysis", "2. Risk Assessment",
                  "3. Content Optimization", "4. Cohort Comparison",
-                 "5. Overview & Recommended Actions"]:
+                 "5. Analysis History",
+                 "6. Overview & Recommended Actions"]:
         p_toc = doc.add_paragraph(item)
         p_toc.runs[0].font.color.rgb = COFFEE
         p_toc.runs[0].font.size = Pt(11)
@@ -307,8 +308,90 @@ def export_docx(report: dict) -> bytes:
     for insight in report.get("cohort_comparison", {}).get("insights", []):
         doc.add_paragraph(f"• {insight}")
 
-    # Section 5: Overview
-    _color_heading(doc.add_heading("5. Overview & Recommended Actions", level=1))
+    # Section 5: Analysis History
+    _color_heading(doc.add_heading("5. Analysis History", level=1))
+    p_hist_desc = doc.add_paragraph()
+    r_hist = p_hist_desc.add_run(
+        "Historical analysis snapshots showing how key metrics evolve over time. "
+        "Improvements after curriculum changes indicate design effectiveness."
+    )
+    r_hist.font.size = Pt(9)
+    r_hist.font.color.rgb = STONE_500
+
+    try:
+        from db import get_db as _get_db_docx
+        _conn = _get_db_docx()
+        if _conn:
+            _cur = _conn.cursor()
+            _cur.execute("""
+                SELECT run_at, total_students, at_risk_count,
+                       module_engagement_summary, noise_label
+                FROM course_analysis_snapshots
+                WHERE course_id = %s
+                ORDER BY run_at ASC
+                LIMIT 10
+            """, (report.get("course_id"),))
+            _rows = _cur.fetchall()
+            _cur.close()
+            _conn.close()
+
+            if _rows:
+                table = doc.add_table(rows=1, cols=6)
+                table.style = "Table Grid"
+                hdr = table.rows[0].cells
+                hdr[0].text, hdr[1].text, hdr[2].text = "Run Date", "Students", "At-Risk %"
+                hdr[3].text, hdr[4].text, hdr[5].text = "Completion", "Noise", "Trend"
+                prev_risk = None
+                for row_data in _rows:
+                    run_at, total, at_risk, mod_json, noise = row_data
+                    ar_pct = round(at_risk / max(total, 1) * 100, 1)
+                    avg_comp = 0
+                    if mod_json:
+                        import json as _hjson
+                        mods_data = mod_json if isinstance(mod_json, list) else _hjson.loads(mod_json)
+                        rates = [m.get("completion_rate", 0) for m in mods_data if isinstance(m, dict)]
+                        avg_comp = round(sum(rates) / max(len(rates), 1) * 100, 1)
+                    trend = ""
+                    if prev_risk is not None:
+                        delta = ar_pct - prev_risk
+                        if delta < -2:
+                            trend = "Improving"
+                        elif delta > 2:
+                            trend = "Worsening"
+                        else:
+                            trend = "Stable"
+                    prev_risk = ar_pct
+                    date_str = run_at.strftime("%Y-%m-%d %H:%M") if run_at else ""
+                    row = table.add_row().cells
+                    row[0].text = date_str
+                    row[1].text = str(total)
+                    row[2].text = f"{ar_pct}%"
+                    row[3].text = f"{avg_comp}%"
+                    row[4].text = noise or ""
+                    row[5].text = trend
+            else:
+                doc.add_paragraph("No prior analysis runs found for this course.")
+    except Exception as _hist_err:
+        doc.add_paragraph(f"Could not load history: {_hist_err}")
+
+    # Trend chart image (matplotlib)
+    try:
+        from services.chart_generator import generate_history_chart
+        hist_chart_bytes = generate_history_chart(report.get("course_id"))
+        if hist_chart_bytes:
+            doc.add_picture(io.BytesIO(hist_chart_bytes), width=Inches(5.5))
+            p_chart_note = doc.add_paragraph()
+            r_note = p_chart_note.add_run(
+                "Trend: at-risk % (red) vs completion rate (blue) across analysis runs. "
+                "Declining at-risk after curriculum changes indicates effective optimization."
+            )
+            r_note.font.size = Pt(8)
+            r_note.font.color.rgb = STONE_500
+    except Exception:
+        pass
+
+    # Section 6: Overview
+    _color_heading(doc.add_heading("6. Overview & Recommended Actions", level=1))
     from services.export_pdf import _generate_overview
     for line in _generate_overview(report):
         # Strip HTML tags for plain-text DOCX

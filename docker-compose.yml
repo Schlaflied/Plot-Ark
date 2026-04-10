@@ -19,6 +19,8 @@ services:
     volumes:
       - ./backend:/app
       - ./data:/data
+    environment:
+      - LTM_DIR=/data/ltm
     env_file: .env
     depends_on:
       - redis
