@@ -235,7 +235,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ courseId }) => {
 
         <div style={{ maxHeight: '130px' }}>
           <ChartSVG
-            history={history} W={600} H={120} PAD_X={30} PAD_Y={16}
+            history={history} W={600} H={120} PAD_X={42} PAD_Y={16}
             hoveredIdx={hoveredIdx} setHoveredIdx={setHoveredIdx}
           />
         </div>
@@ -286,7 +286,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ courseId }) => {
             {/* Large chart */}
             <div style={{ height: '340px' }}>
               <ChartSVG
-                history={history} W={1000} H={300} PAD_X={45} PAD_Y={24}
+                history={history} W={1000} H={300} PAD_X={55} PAD_Y={24}
                 hoveredIdx={fullHoveredIdx} setHoveredIdx={setFullHoveredIdx}
                 showDateLabels fontSize={10}
               />
