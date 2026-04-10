@@ -122,6 +122,33 @@ function App() {
             </motion.div>
           </motion.div>
 
+          {/* Design Philosophy */}
+          <motion.div 
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="mt-40 mb-20 max-w-4xl mx-auto"
+          >
+            <h2 className="text-4xl font-serif font-bold mb-8 text-center">Design Philosophy</h2>
+            <div className="space-y-8 text-lg text-gray-600 leading-relaxed bg-white p-10 rounded-3xl shadow-sm border border-nobel-gold/20">
+              <div>
+                <h4 className="text-xl font-bold text-nobel-dark mb-2">Pedagogically Grounded</h4>
+                <p>Unlike static AI course generators, Plot Ark applies evidence-based instructional design principles—<strong>Bloom's Taxonomy</strong>, <strong>Krashen's i+1</strong> difficulty scaffolding, and <strong>Cognitive Load Theory</strong>—so the curriculum it generates is structured the way learning actually works.</p>
+              </div>
+              <div className="h-px bg-gray-100 w-full"></div>
+              <div>
+                <h4 className="text-xl font-bold text-nobel-dark mb-2">Agentic Pipeline</h4>
+                <p>A Tavily research agent searches real academic sources first, then injects verified URLs into the generation prompt. No hallucinated citations.</p>
+              </div>
+              <div className="h-px bg-gray-100 w-full"></div>
+              <div>
+                <h4 className="text-xl font-bold text-nobel-dark mb-2">Multi-provider AI</h4>
+                <p>Switch between OpenAI (GPT-4o-mini) and Google Gemini via a single environment variable. Bring your own key.</p>
+              </div>
+            </div>
+          </motion.div>
+
           {/* Demos Section */}
           <div className="mt-40 mb-20 space-y-32">
             <motion.div 
