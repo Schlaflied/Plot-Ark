@@ -206,6 +206,8 @@ const StudentDataPage: React.FC = () => {
     { id: 'behavior', label: 'Behavior Analysis', icon: '📈' },
     { id: 'risk', label: 'Risk Assessment', icon: '⚠️' },
     { id: 'content', label: 'Content Optimization', icon: '🔧' },
+    { id: 'feedback', label: 'Feedback Signals', icon: '🎯' },
+    { id: 'comments', label: 'Student Comments', icon: '💬' },
     { id: 'cohort', label: 'Cohort Comparison', icon: '👥' },
     { id: 'overview', label: 'Overview & Actions', icon: '📊' },
     { id: 'ai-suggestions', label: 'AI Suggestions', icon: '🤖' },

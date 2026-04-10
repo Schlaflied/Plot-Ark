@@ -23,6 +23,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { Module } from '../utils/courseExport';
 
+/** Strip "Module N:" or "Module N —" prefix from titles (added during generation) */
+const stripModulePrefix = (title: string): string =>
+  title.replace(/^Module\s+\d+\s*[:—–\-]\s*/i, '');
+
 // ─── SortableModuleItem ───────────────────────────────────────────────────────
 
 interface SortableModuleItemProps {
@@ -80,9 +84,9 @@ const SortableModuleItem: React.FC<SortableModuleItemProps> = ({
         </span>
         <span
           className="flex-1 leading-snug text-xs break-words min-w-0"
-          title={module.title}
+          title={stripModulePrefix(module.title)}
         >
-          {module.title}
+          {stripModulePrefix(module.title)}
         </span>
         <span className="flex gap-0.5 shrink-0">
           {[1, 2, 3, 4, 5].map((n) => (

@@ -5,6 +5,10 @@
 import React from 'react';
 import type { Module, Reading, Assignment } from '../utils/courseExport';
 
+/** Strip "Module N:" or "Module N —" prefix from titles (added during generation) */
+const stripModulePrefix = (title: string): string =>
+  title.replace(/^Module\s+\d+\s*[:—–\-]\s*/i, '');
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TabKey = 'objectives' | 'resources' | 'assessment' | 'ai-suggestion';
@@ -84,12 +88,12 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
         </div>
         <div className="flex items-start gap-3 mb-6">
           {isStudent ? (
-            <h2 className="font-serif text-[32px] text-stone-900 flex-1 px-1 py-0.5">{currentModule.title}</h2>
+            <h2 className="font-serif text-[32px] text-stone-900 flex-1 px-1 py-0.5">{stripModulePrefix(currentModule.title)}</h2>
           ) : (
             <>
               <input
                 className="font-serif text-[32px] text-stone-900 flex-1 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 focus:bg-amber-50/50 rounded-t px-1 py-0.5 outline-none transition-all"
-                value={currentModule.title}
+                value={stripModulePrefix(currentModule.title)}
                 onChange={e => onEditField('title', e.target.value)}
               />
               {autoSaveStatus !== 'idle' && (

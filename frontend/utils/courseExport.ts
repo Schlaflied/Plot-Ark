@@ -201,6 +201,23 @@ export function generateCurriculumHTML(curriculum: CourseDetail): string {
 
 // ─── PDF Export ────────────────────────────────────────────────────────────────
 
+/**
+ * Sanitize text for jsPDF: replace Unicode characters that the built-in
+ * Helvetica/Times/Courier fonts cannot render (they cause silent failures).
+ */
+function sanitizeForPDF(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/[\u2018\u2019]/g, "'")       // smart single quotes
+    .replace(/[\u201C\u201D]/g, '"')        // smart double quotes
+    .replace(/\u2014/g, '--')               // em dash
+    .replace(/\u2013/g, '-')               // en dash
+    .replace(/\u2026/g, '...')             // ellipsis
+    .replace(/\u00A0/g, ' ')              // non-breaking space
+    .replace(/\u2022/g, '*')             // bullet
+    .replace(/[^\x00-\xFF]/g, '?');       // any remaining non-Latin-1
+}
+
 export function exportPDF(
   curriculum: CourseDetail,
   citationFormat: 'apa' | 'mla' | 'chicago',
@@ -223,7 +240,7 @@ export function exportPDF(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(20);
   doc.setTextColor(28, 25, 23);
-  doc.text(curriculum.topic, margin, y);
+  doc.text(sanitizeForPDF(curriculum.topic || 'Untitled Course'), margin, y);
   y += 28;
 
   // Meta
@@ -231,7 +248,7 @@ export function exportPDF(
   doc.setFontSize(10);
   doc.setTextColor(120, 113, 108);
   doc.text(
-    `${curriculum.level} · ${curriculum.course_type} · ${(curriculum.modules || []).length} modules`,
+    sanitizeForPDF(`${curriculum.level} - ${curriculum.course_type} - ${(curriculum.modules || []).length} modules`),
     margin,
     y,
   );
@@ -243,19 +260,20 @@ export function exportPDF(
   y += 20;
 
   (curriculum.modules || []).forEach((mod, i) => {
+    if (!mod) return;
     checkPage(60);
 
     // Module heading
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     doc.setTextColor(146, 64, 14);
-    const heading = `Module ${i + 1}: ${mod.title}`;
+    const heading = sanitizeForPDF(`Module ${i + 1}: ${mod.title || 'Untitled'}`);
     const headingLines = doc.splitTextToSize(heading, contentW);
     doc.text(headingLines, margin, y);
     y += headingLines.length * 18 + 10;
 
     // Learning Objectives
-    if (mod.learning_objectives?.length) {
+    if (Array.isArray(mod.learning_objectives) && mod.learning_objectives.length) {
       checkPage(30);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
@@ -266,8 +284,9 @@ export function exportPDF(
       doc.setFontSize(10);
       doc.setTextColor(40, 36, 33);
       mod.learning_objectives.forEach((obj) => {
+        if (!obj) return;
         checkPage(20);
-        const lines = doc.splitTextToSize(`• ${obj}`, contentW - 10);
+        const lines = doc.splitTextToSize(`* ${sanitizeForPDF(obj)}`, contentW - 10);
         doc.text(lines, margin + 6, y);
         y += lines.length * 14 + 2;
       });
@@ -275,7 +294,7 @@ export function exportPDF(
     }
 
     // Readings
-    if (mod.recommended_readings?.length) {
+    if (Array.isArray(mod.recommended_readings) && mod.recommended_readings.length) {
       checkPage(30);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
@@ -286,8 +305,9 @@ export function exportPDF(
       doc.setFontSize(10);
       doc.setTextColor(40, 36, 33);
       mod.recommended_readings.forEach((r) => {
+        if (!r) return;
         checkPage(20);
-        const lines = doc.splitTextToSize(`• ${r.title}`, contentW - 10);
+        const lines = doc.splitTextToSize(`* ${sanitizeForPDF(r.title || '')}`, contentW - 10);
         doc.text(lines, margin + 6, y);
         y += lines.length * 14 + 2;
       });
@@ -295,7 +315,7 @@ export function exportPDF(
     }
 
     // Assessment
-    if (mod.assignments?.length) {
+    if (Array.isArray(mod.assignments) && mod.assignments.length) {
       checkPage(40);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
@@ -303,18 +323,19 @@ export function exportPDF(
       doc.text('ASSESSMENT', margin, y);
       y += 14;
       mod.assignments.forEach((a) => {
+        if (!a) return;
         checkPage(30);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
         doc.setTextColor(40, 36, 33);
-        doc.text(a.title, margin + 6, y);
+        doc.text(sanitizeForPDF(a.title || ''), margin + 6, y);
         y += 14;
         const desc = a.task_description || a.coverage || '';
         if (desc) {
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(9);
           doc.setTextColor(90, 82, 76);
-          const lines = doc.splitTextToSize(desc, contentW - 10);
+          const lines = doc.splitTextToSize(sanitizeForPDF(desc), contentW - 10);
           checkPage(lines.length * 13);
           doc.text(lines, margin + 6, y);
           y += lines.length * 13 + 4;
@@ -339,7 +360,7 @@ export function exportPDF(
     doc.text('References', margin, y);
     y += 20;
     allSources.forEach((src) => {
-      const citation = formatCitation(src, citationFormat);
+      const citation = sanitizeForPDF(formatCitation(src, citationFormat));
       checkPage(24);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);

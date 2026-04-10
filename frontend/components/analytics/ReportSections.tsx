@@ -288,6 +288,137 @@ const ReportSections: React.FC<ReportSectionsProps> = ({ report, activeSection, 
         </Section>
       )}
 
+      {/* Feedback Signals — four-color distribution + cross-validation */}
+      {activeSection === 'feedback' && (
+        <Section title="Feedback Signals & Cross-Validation" icon="🎯">
+          <div className="space-y-5">
+            {/* Per-module four-color distribution */}
+            <div>
+              <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">Module Feedback Distribution</h4>
+              {(report.content_optimization?.feedback_signals || []).length > 0 ? (
+                <div className="space-y-3">
+                  {report.content_optimization.feedback_signals.map((fb: any, i: number) => {
+                    const total = fb.got_it + fb.mostly + fb.confused + fb.unread;
+                    const pct = (v: number) => total > 0 ? ((v / total) * 100).toFixed(0) + '%' : '0%';
+                    return (
+                      <div key={i} className="bg-stone-50 border border-stone-200 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-stone-700" title={fb.module_name}>{fb.module_name}</span>
+                          <span className="text-xs text-stone-400">{total} responses · {fb.skip_count} skipped</span>
+                        </div>
+                        {/* Four-color bar */}
+                        {total > 0 && (
+                          <div className="flex h-5 rounded-full overflow-hidden mb-2">
+                            {fb.got_it > 0 && <div style={{ width: pct(fb.got_it) }} className="bg-green-400" title={`Got it: ${fb.got_it}`} />}
+                            {fb.mostly > 0 && <div style={{ width: pct(fb.mostly) }} className="bg-yellow-400" title={`Mostly: ${fb.mostly}`} />}
+                            {fb.confused > 0 && <div style={{ width: pct(fb.confused) }} className="bg-red-400" title={`Confused: ${fb.confused}`} />}
+                            {fb.unread > 0 && <div style={{ width: pct(fb.unread) }} className="bg-stone-700" title={`Didn't read: ${fb.unread}`} />}
+                          </div>
+                        )}
+                        {/* Legend */}
+                        <div className="flex flex-wrap gap-3 text-xs">
+                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-400" /> Got it: {fb.got_it}</span>
+                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400" /> Mostly: {fb.mostly}</span>
+                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-400" /> Confused: {fb.confused}</span>
+                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-stone-700" /> Didn&apos;t read: {fb.unread}</span>
+                          {fb.skip_count > 0 && <span className="flex items-center gap-1 text-stone-400"><span className="w-2.5 h-2.5 rounded-full bg-stone-300 border border-dashed border-stone-400" /> Skip: {fb.skip_count}</span>}
+                        </div>
+                        {/* Cross-validation flags */}
+                        {(fb.cross_flags || []).length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {fb.cross_flags.map((flag: string, j: number) => (
+                              <div key={j} className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                                {flag}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-stone-400 italic">No feedback data collected yet.</p>
+              )}
+            </div>
+
+            {/* Time-on-Task Distribution */}
+            {(report.behavior_analysis?.time_on_task || []).length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">Time-on-Task Analysis</h4>
+                <div className="space-y-3">
+                  {report.behavior_analysis.time_on_task.map((t: any, i: number) => (
+                    <div key={i} className="bg-stone-50 border border-stone-200 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-stone-700">Module {t.module_index + 1}</span>
+                        <span className="text-xs text-stone-400">{t.student_count} students</span>
+                      </div>
+                      {/* Duration stats */}
+                      <div className="grid grid-cols-3 gap-2 mb-2">
+                        <div className="bg-white rounded-lg border border-stone-200 px-3 py-2 text-center">
+                          <p className="text-lg font-bold text-stone-700">{t.mean_minutes}</p>
+                          <p className="text-[10px] text-stone-400 uppercase tracking-wider">Mean (min)</p>
+                        </div>
+                        <div className="bg-white rounded-lg border border-stone-200 px-3 py-2 text-center">
+                          <p className="text-lg font-bold text-amber-600">{t.median_minutes}</p>
+                          <p className="text-[10px] text-stone-400 uppercase tracking-wider">Median (min)</p>
+                        </div>
+                        <div className="bg-white rounded-lg border border-stone-200 px-3 py-2 text-center">
+                          <p className="text-lg font-bold text-stone-500">{t.p90_minutes}</p>
+                          <p className="text-[10px] text-stone-400 uppercase tracking-wider">P90 (min)</p>
+                        </div>
+                      </div>
+                      {/* Outlier labels */}
+                      {t.outlier_count > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {Object.entries(t.outlier_labels || {}).map(([label, count]: [string, any]) => {
+                            const colors: Record<string, string> = {
+                              struggling_engaged: 'bg-red-100 text-red-700 border-red-200',
+                              likely_idle: 'bg-stone-200 text-stone-600 border-stone-300',
+                              slow_but_thorough: 'bg-blue-100 text-blue-700 border-blue-200',
+                              fast_learner: 'bg-green-100 text-green-700 border-green-200',
+                              skimmed: 'bg-orange-100 text-orange-700 border-orange-200',
+                              fast_but_unsure: 'bg-purple-100 text-purple-700 border-purple-200',
+                            };
+                            return (
+                              <span key={label} className={`px-2 py-1 rounded-lg text-xs font-medium border ${colors[label] || 'bg-stone-100 text-stone-600 border-stone-200'}`}>
+                                {label.replace(/_/g, ' ')}: {count}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+        </Section>
+      )}
+
+      {/* Student Comments */}
+      {activeSection === 'comments' && (
+        <Section title="Student Comments" icon="💬">
+          {(report.content_optimization?.text_comments || []).length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs text-stone-400 mb-3">
+                {report.content_optimization.text_comments.length} open-text responses collected across modules.
+              </p>
+              {report.content_optimization.text_comments.map((c: any, i: number) => (
+                <div key={i} className="flex gap-3 text-sm bg-stone-50 border border-stone-200 rounded-xl p-4">
+                  <span className="text-xs text-stone-400 shrink-0 w-20 pt-0.5">Module {c.module_index + 1}</span>
+                  <span className="text-stone-700 italic leading-relaxed">&ldquo;{c.comment}&rdquo;</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-stone-400 italic">No student comments collected yet.</p>
+          )}
+        </Section>
+      )}
+
       {/* Cohort Comparison */}
       {activeSection === 'cohort' && (
         <Section title="Cohort Comparison" icon="👥">

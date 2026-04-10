@@ -295,12 +295,18 @@ def trigger_seed():
         if conn:
             cur = conn.cursor()
             cur.execute("DELETE FROM xapi_statements")
+            cur.execute("DELETE FROM student_feedback WHERE student_id LIKE 'seed_%'")
             conn.commit()
             cur.close()
             conn.close()
-            print("Cleared existing xAPI statements.")
+            print("Cleared existing xAPI statements and seeded feedback.")
 
     result = generate_all_courses(noise_ratio=noise)
+
+    # Seed feedback after xAPI so student counts are available
+    from services.xapi_generator import seed_all_feedback
+    fb_result = seed_all_feedback(noise_ratio=noise)
+    result["feedback_rows"] = fb_result.get("total_rows", 0)
     try:
         from extensions import redis_client
         if redis_client:
@@ -308,6 +314,53 @@ def trigger_seed():
     except Exception:
         pass
     return jsonify(result)
+
+
+@xapi_bp.route("/api/xapi/seed-history", methods=["POST"])
+def seed_history():
+    """
+    Insert before/after analysis snapshots into course_analysis_snapshots for all courses.
+    By default clears and reseeds all snapshots (force=true).
+    Pass ?force=false to only seed courses that have <2 snapshots.
+    """
+    from services.xapi_generator import seed_history_snapshots
+    force = request.args.get("force", "true").lower() != "false"
+    result = seed_history_snapshots(force=force)
+    return jsonify(result)
+
+
+@xapi_bp.route("/api/xapi/reseed-all", methods=["POST"])
+def reseed_all_courses():
+    """
+    Reseed xAPI + feedback for every course individually, respecting each course's
+    current change_log (applied curriculum changes get improved distributions).
+    Runs in a background thread — returns immediately.
+    """
+    import threading
+    from services.xapi_generator import reseed_course
+    from db import get_db as _get_db
+    noise = float(request.args.get("noise", 0.08))
+
+    def _run():
+        conn = _get_db()
+        if not conn:
+            return
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM curricula ORDER BY id")
+            ids = [r[0] for r in cur.fetchall()]
+            cur.close()
+            conn.close()
+        except Exception as e:
+            conn.close()
+            print(f"[reseed-all] Failed to fetch course IDs: {e}")
+            return
+        for cid in ids:
+            reseed_course(cid, noise)
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    return jsonify({"status": "reseeding", "message": "All courses are being reseeded in the background."})
 
 
 @xapi_bp.route("/api/xapi/stats", methods=["GET"])
@@ -353,10 +406,25 @@ def seed_mock_xapi():
     conn.close()
 
     if count > 0:
-        print(f"xAPI table already has {count} statements, skipping seed.")
+        print(f"xAPI table already has {count} statements, skipping xAPI seed.")
+        # Still seed feedback if that table is empty
+        from services.xapi_generator import seed_all_feedback
+        conn2 = get_db()
+        if conn2:
+            cur2 = conn2.cursor()
+            cur2.execute("SELECT COUNT(*) FROM student_feedback WHERE student_id LIKE 'seed_%'")
+            fb_count = cur2.fetchone()[0]
+            cur2.close()
+            conn2.close()
+            if fb_count == 0:
+                print("Feedback table empty — seeding feedback data...")
+                fb_result = seed_all_feedback()
+                print(f"Feedback seed complete: {fb_result.get('total_rows', 0)} rows.")
         return
 
     print("Seeding xAPI mock data for all courses (8% noise)...")
-    from services.xapi_generator import generate_all_courses
+    from services.xapi_generator import generate_all_courses, seed_all_feedback
     result = generate_all_courses(noise_ratio=0.08)
     print(f"xAPI seed complete: {result.get('total_statements', 0)} statements across {result.get('courses_processed', 0)} courses.")
+    fb_result = seed_all_feedback()
+    print(f"Feedback seed complete: {fb_result.get('total_rows', 0)} rows.")

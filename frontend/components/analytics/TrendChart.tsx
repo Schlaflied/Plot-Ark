@@ -132,8 +132,8 @@ function ChartSVG({
       {hoveredIdx !== null && (() => {
         const p = history[hoveredIdx];
         const tx = xScale(hoveredIdx);
-        const tooltipW = showDateLabels ? 140 : 85;
-        const tooltipH = showDateLabels ? 58 : 42;
+        const tooltipW = showDateLabels ? 175 : 118;
+        const tooltipH = showDateLabels ? 72 : 52;
         const tooltipFS = showDateLabels ? 10 : 7;
         const tooltipX = tx > W / 2 ? tx - tooltipW - 8 : tx + 8;
         const date = new Date(p.run_at).toLocaleDateString('en-US', {

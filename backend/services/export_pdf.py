@@ -228,9 +228,11 @@ def export_pdf(report: dict) -> bytes:
         ("sec_behavior", "1. Behavior Analysis"),
         ("sec_risk", "2. Risk Assessment"),
         ("sec_content", "3. Content Optimization"),
-        ("sec_cohort", "4. Cohort Comparison"),
-        ("sec_history", "5. Analysis History"),
-        ("sec_overview", "6. Overview & Recommended Actions")
+        ("sec_feedback", "4. Feedback Signals & Cross-Validation"),
+        ("sec_comments", "5. Student Comments"),
+        ("sec_cohort", "6. Cohort Comparison"),
+        ("sec_history", "7. Analysis History"),
+        ("sec_overview", "8. Overview & Recommended Actions")
     ]
     for anchor, label in toc_items:
         elements.append(Paragraph(f'<font color="{COLORS["blue_500"]}"><a href="#{anchor}">{label}</a></font>', link_style))
@@ -424,9 +426,131 @@ def export_pdf(report: dict) -> bytes:
             for s in m.get("suggestions", []):
                 elements.append(Paragraph(f"  → {s}", body_style))
 
-    # Section 4: Cohort Comparison
+    # ── Time-on-Task ──────────────────────────────────────────────────────────
+    time_on_task = report.get("behavior_analysis", {}).get("time_on_task", [])
+    if time_on_task:
+        elements.append(Spacer(1, 0.2*inch))
+        elements.append(Paragraph("Time-on-Task Analysis", ParagraphStyle("PlotArkH3", parent=h2_style, fontSize=12, spaceBefore=0)))
+        tot_table_data = [["Module", "Mean (min)", "Median (min)", "P90 (min)", "Outliers"]]
+        for t in time_on_task:
+            labels = ", ".join(f"{k}: {v}" for k, v in (t.get("outlier_labels") or {}).items())
+            tot_table_data.append([
+                f"M{t.get('module_index', 0) + 1}",
+                str(t.get("mean_minutes", 0)),
+                str(t.get("median_minutes", 0)),
+                str(t.get("p90_minutes", 0)),
+                Paragraph(labels or "—", body_style),
+            ])
+        tt = Table(tot_table_data, colWidths=[0.6*inch, 1.0*inch, 1.0*inch, 1.0*inch, 2.4*inch])
+        tt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(COLORS["oat_dark"])),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor(COLORS["stone_800"])),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor(COLORS["stone_700"])),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.HexColor(COLORS["stone_300"])),
+            ("LINEBELOW", (0, 1), (-1, -2), 0.3, colors.HexColor(COLORS["stone_200"])),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor(COLORS["oat_white"]), colors.HexColor(COLORS["oat_mid"])]),
+        ]))
+        elements.append(tt)
+        elements.append(Paragraph('Time spent per module estimated from first to last xAPI event. Outliers (>2× or <0.5× median) are cross-referenced with feedback sentiment to classify student behavior.', insight_style))
+
+    # Section 4: Feedback Signals & Cross-Validation
     elements.append(PageBreak())
-    elements.append(Paragraph('<a name="sec_cohort"/>4. Cohort Comparison', h2_style))
+    elements.append(Paragraph('<a name="sec_feedback"/>4. Feedback Signals &amp; Cross-Validation', h2_style))
+    elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=8))
+
+    co_fb = report.get("content_optimization", {})
+    fb_signals = co_fb.get("feedback_signals", [])
+
+    if fb_signals:
+        # Per-module distribution table (matches UI layout)
+        h3_fb = ParagraphStyle("PlotArkH3FB", parent=h2_style, fontSize=12, spaceBefore=0)
+        elements.append(Paragraph("Module Feedback Distribution", h3_fb))
+        elements.append(Spacer(1, 0.1*inch))
+
+        fb_table_data = [["#", "Module", "Got it", "Mostly", "Confused", "Didn't read", "Skip"]]
+        for idx, fb in enumerate(fb_signals, 1):
+            total_fb = fb.get("total_feedback", 0)
+            fb_table_data.append([
+                f"M{idx}",
+                Paragraph(fb.get("module_name", "")[:42], body_style),
+                str(fb.get("got_it", 0)),
+                str(fb.get("mostly", 0)),
+                str(fb.get("confused", 0)),
+                str(fb.get("unread", 0)),
+                str(fb.get("skip_count", 0)),
+            ])
+
+        ft = Table(fb_table_data, colWidths=[0.4*inch, 2.1*inch, 0.72*inch, 0.72*inch, 0.82*inch, 0.82*inch, 0.62*inch])
+        ft.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(COLORS["oat_dark"])),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor(COLORS["stone_800"])),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("TEXTCOLOR", (2, 1), (2, -1), colors.HexColor("#15803D")),   # got-it green
+            ("TEXTCOLOR", (3, 1), (3, -1), colors.HexColor("#92400E")),   # mostly amber
+            ("TEXTCOLOR", (4, 1), (4, -1), colors.HexColor("#B91C1C")),   # confused red
+            ("TEXTCOLOR", (5, 1), (5, -1), colors.HexColor("#374151")),   # unread dark
+            ("TEXTCOLOR", (6, 1), (6, -1), colors.HexColor(COLORS["stone_500"])),
+            ("TEXTCOLOR", (0, 1), (1, -1), colors.HexColor(COLORS["stone_700"])),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("ALIGN", (2, 0), (-1, -1), "CENTER"),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.HexColor(COLORS["stone_300"])),
+            ("LINEBELOW", (0, 1), (-1, -2), 0.3, colors.HexColor(COLORS["stone_200"])),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor(COLORS["oat_white"]), colors.HexColor(COLORS["oat_mid"])]),
+        ]))
+        elements.append(ft)
+        elements.append(Spacer(1, 0.1*inch))
+
+        # Legend
+        legend_style = ParagraphStyle("FbLegend", fontSize=7.5, textColor=colors.HexColor(COLORS["stone_500"]), leading=11)
+        elements.append(Paragraph(
+            '<font color="#15803D">■ Got it</font>  '
+            '<font color="#92400E">■ Mostly</font>  '
+            '<font color="#B91C1C">■ Confused</font>  '
+            '<font color="#374151">■ Didn\'t read</font>  '
+            '<font color="#9CA3AF">■ Skip (no response)</font>',
+            legend_style))
+        elements.append(Spacer(1, 0.2*inch))
+
+        # Cross-validation flags
+        flagged = [fb for fb in fb_signals if fb.get("cross_flags")]
+        if flagged:
+            elements.append(Paragraph("Cross-Validation Flags", ParagraphStyle("PlotArkH3CV", parent=h2_style, fontSize=11, spaceBefore=6)))
+            elements.append(Spacer(1, 0.05*inch))
+            for fb in flagged:
+                for flag in fb.get("cross_flags", []):
+                    elements.append(Paragraph(
+                        f"<b>{fb.get('module_name', '')[:35]}</b> — {flag}", body_style))
+            elements.append(Spacer(1, 0.1*inch))
+    else:
+        elements.append(Paragraph("No feedback data collected yet.", body_style))
+
+    # Section 5: Student Comments
+    elements.append(PageBreak())
+    elements.append(Paragraph('<a name="sec_comments"/>5. Student Comments', h2_style))
+    elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=8))
+
+    text_comments = co_fb.get("text_comments", [])
+    if text_comments:
+        elements.append(Paragraph(
+            f"{len(text_comments)} open-text responses collected across modules.",
+            insight_style))
+        elements.append(Spacer(1, 0.1*inch))
+        for c in text_comments:
+            mod_label = f"Module {c.get('module_index', 0) + 1}"
+            elements.append(Paragraph(
+                f'<font color="{COLORS["stone_500"]}">[{mod_label}]</font> '
+                f'<i>"{c.get("comment", "")}"</i>',
+                body_style))
+            elements.append(Spacer(1, 0.06*inch))
+    else:
+        elements.append(Paragraph("No student comments collected yet.", body_style))
+
+    # Section 6: Cohort Comparison
+    elements.append(PageBreak())
+    elements.append(Paragraph('<a name="sec_cohort"/>6. Cohort Comparison', h2_style))
     elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=8))
 
     if "cohort_comparison_bar" in charts:
@@ -438,9 +562,9 @@ def export_pdf(report: dict) -> bytes:
     for insight in cc.get("insights", []):
         elements.append(Paragraph(f"• {insight}", body_style))
 
-    # Section 5: Analysis History (from Warm layer)
+    # Section 7: Analysis History (from Warm layer)
     elements.append(PageBreak())
-    elements.append(Paragraph('<a name="sec_history"/>5. Analysis History', h2_style))
+    elements.append(Paragraph('<a name="sec_history"/>7. Analysis History', h2_style))
     elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=8))
     elements.append(Paragraph(
         'Historical analysis snapshots showing how key metrics evolve over time. '
@@ -534,9 +658,9 @@ def export_pdf(report: dict) -> bytes:
     except Exception as chart_err:
         elements.append(Paragraph(f"Could not generate trend chart: {chart_err}", body_style))
 
-    # Section 6: Overview & Recommended Actions
+    # Section 8: Overview & Recommended Actions
     elements.append(PageBreak())
-    elements.append(Paragraph('<a name="sec_overview"/>6. Overview & Recommended Actions', h2_style))
+    elements.append(Paragraph('<a name="sec_overview"/>8. Overview &amp; Recommended Actions', h2_style))
     elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=8))
     elements.append(Spacer(1, 0.1*inch))
 

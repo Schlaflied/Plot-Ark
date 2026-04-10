@@ -47,7 +47,7 @@ class ContentOptimizerNode(BaseNode):
         """, (f"course/{course_id}/%",))
         sub_content = cur.fetchall()
 
-        # Feedback sentiment per module
+        # ── Feedback four-color distribution per module ────────────────────────
         cur.execute("""
             SELECT module_index, sentiment, COUNT(*) as cnt
             FROM student_feedback
@@ -61,11 +61,35 @@ class ContentOptimizerNode(BaseNode):
                 fb_map[mi] = {}
             fb_map[mi][r[1]] = r[2]
 
+        # ── Total students who submitted xAPI data (for skip rate) ─────────────
+        cur.execute("""
+            SELECT COUNT(DISTINCT actor_email)
+            FROM xapi_statements
+            WHERE object_id LIKE %s
+        """, (f"course/{course_id}/%",))
+        total_xapi_students = cur.fetchone()[0] or 0
+
+        # ── Text feedback comments (for future LLM analysis) ──────────────────
+        cur.execute("""
+            SELECT module_index, module_title, comment
+            FROM student_feedback
+            WHERE course_id = %s AND comment IS NOT NULL AND comment != ''
+            ORDER BY module_index
+        """, (course_id,))
+        text_comments = []
+        for r in cur.fetchall():
+            text_comments.append({
+                "module_index": r[0],
+                "module_title": r[1] or f"Module {r[0] + 1}",
+                "comment": r[2],
+            })
+
         cur.close()
         conn.close()
 
         underperforming = []
         high_performing = []
+        feedback_signals = []  # ← NEW: per-module feedback breakdown
 
         for r in modules:
             obj_id, obj_name = r[0], r[1]
@@ -80,8 +104,50 @@ class ContentOptimizerNode(BaseNode):
             parts = obj_id.split("/")
             mod_idx = int(parts[-1]) if parts[-1].isdigit() else 0
             fb = fb_map.get(mod_idx, {})
-            neg_feedback = fb.get("off", 0) + fb.get("not-read", 0)
-            pos_feedback = fb.get("got-it", 0) + fb.get("mostly", 0)
+
+            # ── Four-color distribution ────────────────────────────────────────
+            got_it = fb.get("got-it", 0)
+            mostly = fb.get("mostly", 0)
+            confused = fb.get("off", 0)
+            unread = fb.get("not-read", 0)
+            total_feedback = got_it + mostly + confused + unread
+            skip_count = max(total_xapi_students - total_feedback, 0)
+
+            neg_feedback = confused + unread
+            pos_feedback = got_it + mostly
+
+            # ── Cross-validation flags ─────────────────────────────────────────
+            cross_flags = []
+            # 虚假完成: high completion + high ⚫ (didn't read)
+            if completion_rate > 0.6 and unread > max(total_feedback * 0.3, 2):
+                cross_flags.append("⚠️ False Completion — high completion but many students report not reading")
+            # 模块设计问题: high completion + high 🔴 (confused)
+            if completion_rate > 0.5 and confused > max(total_feedback * 0.3, 2):
+                cross_flags.append("🔥 Design Issue — students complete but remain confused")
+            # 完全脱离: low completion + high ⚫
+            if completion_rate < 0.4 and unread > max(total_feedback * 0.3, 2):
+                cross_flags.append("⚫ Complete Disengagement — low completion AND students not reading")
+            # 高 skip 率
+            if total_xapi_students > 0 and skip_count > total_xapi_students * 0.5:
+                cross_flags.append(f"⏭️ High Skip Rate — {skip_count}/{total_xapi_students} students skipped feedback")
+            # 内容好但有障碍: high 🟢 + low completion
+            if got_it > max(total_feedback * 0.4, 2) and completion_rate < 0.4:
+                cross_flags.append("🤔 Friction — positive feedback but low completion, check UX/tech barriers")
+
+            # Build per-module feedback signal
+            fb_signal = {
+                "module_id": obj_id,
+                "module_name": obj_name,
+                "module_index": mod_idx,
+                "got_it": got_it,
+                "mostly": mostly,
+                "confused": confused,
+                "unread": unread,
+                "total_feedback": total_feedback,
+                "skip_count": skip_count,
+                "cross_flags": cross_flags,
+            }
+            feedback_signals.append(fb_signal)
 
             # Find struggling sub-content for this module
             mod_issues = []
@@ -103,8 +169,14 @@ class ContentOptimizerNode(BaseNode):
                     suggestions.append("Review assessment difficulty; consider adding practice problems")
                 if neg_feedback > 2:
                     suggestions.append("Review student feedback comments for specific pain points")
+                if confused > mostly and confused > 1:
+                    suggestions.append("Students report unknown-unknowns — add scaffolding or worked examples")
+                if unread > got_it and unread > 1:
+                    suggestions.append("Low reading engagement — consider restructuring or adding relevance context")
                 if any(i["type"] == "reading" and i["struggles"] > 2 for i in mod_issues):
                     suggestions.append("Consider adding video alternatives for difficult readings")
+                if cross_flags:
+                    suggestions.extend([f"[Cross-signal] {f}" for f in cross_flags])
                 if not suggestions:
                     suggestions.append("Monitor closely and gather more student feedback")
 
@@ -115,6 +187,11 @@ class ContentOptimizerNode(BaseNode):
                     "completion_rate": round(completion_rate, 2),
                     "failure_rate": round(failure_rate, 2),
                     "negative_feedback": neg_feedback,
+                    "feedback_distribution": {
+                        "got_it": got_it, "mostly": mostly,
+                        "confused": confused, "unread": unread,
+                        "skip": skip_count,
+                    },
                     "issues": mod_issues[:5],
                     "suggestions": suggestions,
                 })
@@ -126,6 +203,11 @@ class ContentOptimizerNode(BaseNode):
                     "completion_rate": round(completion_rate, 2),
                     "avg_sentiment": avg_sentiment,
                     "positive_feedback": pos_feedback,
+                    "feedback_distribution": {
+                        "got_it": got_it, "mostly": mostly,
+                        "confused": confused, "unread": unread,
+                        "skip": skip_count,
+                    },
                 })
 
         underperforming.sort(key=lambda x: x["struggle_rate"], reverse=True)
@@ -133,6 +215,8 @@ class ContentOptimizerNode(BaseNode):
         return {
             "underperforming_content": underperforming,
             "high_performing_content": high_performing,
+            "feedback_signals": feedback_signals,
+            "text_comments": text_comments[:50],  # cap at 50 for token efficiency
         }
 
     def _fallback_sql(self, sm: SharedMemory) -> dict:

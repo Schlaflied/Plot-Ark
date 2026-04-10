@@ -104,7 +104,7 @@ def export_excel(report: dict, course_id: int = 0) -> bytes:
 
     # ── Sheet 4: Feedback Summary ─────────────────────────────────────────
     ws4 = wb.create_sheet("Feedback Summary")
-    fb_headers = ["Module", "Got It", "Mostly", "Something Off", "Didn't Read"]
+    fb_headers = ["Module", "Got It", "Mostly", "Something Off", "Didn't Read", "Skip"]
     for c, h in enumerate(fb_headers, 1):
         cell = ws4.cell(row=1, column=c, value=h)
         cell.font = header_font
@@ -139,8 +139,33 @@ def export_excel(report: dict, course_id: int = 0) -> bytes:
             if conn:
                 conn.close()
 
+    # Also populate skip counts from report data (content_optimization.feedback_signals)
+    co = report.get("content_optimization", {})
+    fb_signals = co.get("feedback_signals", [])
+    for r_idx, fb in enumerate(fb_signals, 2):
+        ws4.cell(row=r_idx, column=6, value=fb.get("skip_count", 0))
+
+    # ── Sheet 5: Time-on-Task ────────────────────────────────────────────
+    ws5 = wb.create_sheet("Time-on-Task")
+    tot_headers = ["Module", "Mean (min)", "Median (min)", "P90 (min)", "Students", "Outliers", "Labels"]
+    for c, h in enumerate(tot_headers, 1):
+        cell = ws5.cell(row=1, column=c, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+
+    time_on_task = report.get("behavior_analysis", {}).get("time_on_task", [])
+    for r_idx, t in enumerate(time_on_task, 2):
+        ws5.cell(row=r_idx, column=1, value=f"Module {t.get('module_index', 0) + 1}")
+        ws5.cell(row=r_idx, column=2, value=t.get("mean_minutes", 0))
+        ws5.cell(row=r_idx, column=3, value=t.get("median_minutes", 0))
+        ws5.cell(row=r_idx, column=4, value=t.get("p90_minutes", 0))
+        ws5.cell(row=r_idx, column=5, value=t.get("student_count", 0))
+        ws5.cell(row=r_idx, column=6, value=t.get("outlier_count", 0))
+        labels = ", ".join(f"{k}: {v}" for k, v in (t.get("outlier_labels") or {}).items())
+        ws5.cell(row=r_idx, column=7, value=labels or "—")
+
     # Auto-width columns
-    for ws in [ws1, ws2, ws3, ws4]:
+    for ws in [ws1, ws2, ws3, ws4, ws5]:
         for col in ws.columns:
             max_length = 0
             for cell in col:

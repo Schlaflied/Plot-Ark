@@ -157,9 +157,11 @@ def export_docx(report: dict) -> bytes:
     toc_heading = doc.add_heading("Table of Contents", level=1)
     _color_heading(toc_heading)
     for item in ["1. Behavior Analysis", "2. Risk Assessment",
-                 "3. Content Optimization", "4. Cohort Comparison",
-                 "5. Analysis History",
-                 "6. Overview & Recommended Actions"]:
+                 "3. Content Optimization",
+                 "4. Feedback Signals & Cross-Validation",
+                 "5. Student Comments",
+                 "6. Cohort Comparison", "7. Analysis History",
+                 "8. Overview & Recommended Actions"]:
         p_toc = doc.add_paragraph(item)
         p_toc.runs[0].font.color.rgb = COFFEE
         p_toc.runs[0].font.size = Pt(11)
@@ -301,15 +303,95 @@ def export_docx(report: dict) -> bytes:
             for s in m.get("suggestions", []):
                 doc.add_paragraph(f"  → {s}")
 
-    # Section 4: Cohort
-    _color_heading(doc.add_heading("4. Cohort Comparison", level=1))
+    # ── Time-on-Task ──────────────────────────────────────────────────────────
+    time_on_task = report.get("behavior_analysis", {}).get("time_on_task", [])
+    if time_on_task:
+        p = doc.add_paragraph()
+        run = p.add_run("Time-on-Task Analysis")
+        run.bold = True
+        tt_table = doc.add_table(rows=1, cols=5)
+        tt_table.style = "Table Grid"
+        for i, h in enumerate(["Module", "Mean", "Median", "P90", "Outliers"]):
+            tt_table.rows[0].cells[i].text = h
+        for t in time_on_task:
+            labels = ", ".join(f"{k}: {v}" for k, v in (t.get("outlier_labels") or {}).items())
+            row = tt_table.add_row().cells
+            row[0].text = f"M{t.get('module_index', 0) + 1}"
+            row[1].text = f"{t.get('mean_minutes', 0)} min"
+            row[2].text = f"{t.get('median_minutes', 0)} min"
+            row[3].text = f"{t.get('p90_minutes', 0)} min"
+            row[4].text = labels or "—"
+
+    # Section 4: Feedback Signals & Cross-Validation
+    doc.add_page_break()
+    _color_heading(doc.add_heading("4. Feedback Signals & Cross-Validation", level=1))
+
+    co_fb = report.get("content_optimization", {})
+    fb_signals = co_fb.get("feedback_signals", [])
+
+    if fb_signals:
+        _color_heading(doc.add_heading("Module Feedback Distribution", level=2))
+        fb_table = doc.add_table(rows=1, cols=7)
+        fb_table.style = "Table Grid"
+        for i, h in enumerate(["#", "Module", "Got it", "Mostly", "Confused", "Didn't read", "Skip"]):
+            cell = fb_table.rows[0].cells[i]
+            cell.text = h
+            for run in cell.paragraphs[0].runs:
+                run.bold = True
+        for idx, fb in enumerate(fb_signals, 1):
+            row = fb_table.add_row().cells
+            row[0].text = f"M{idx}"
+            row[1].text = fb.get("module_name", "")[:42]
+            row[2].text = str(fb.get("got_it", 0))
+            row[3].text = str(fb.get("mostly", 0))
+            row[4].text = str(fb.get("confused", 0))
+            row[5].text = str(fb.get("unread", 0))
+            row[6].text = str(fb.get("skip_count", 0))
+
+        p_legend = doc.add_paragraph()
+        r_legend = p_legend.add_run("Got it = green  |  Mostly = amber  |  Confused = red  |  Didn't read = dark  |  Skip = no response")
+        r_legend.font.size = Pt(8)
+        r_legend.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+
+        # Cross-validation flags
+        flagged = [fb for fb in fb_signals if fb.get("cross_flags")]
+        if flagged:
+            _color_heading(doc.add_heading("Cross-Validation Flags", level=2))
+            for fb in flagged:
+                for flag in fb.get("cross_flags", []):
+                    p = doc.add_paragraph()
+                    p.add_run(fb.get("module_name", "")[:35]).bold = True
+                    p.add_run(f" — {flag}")
+    else:
+        doc.add_paragraph("No feedback data collected yet.")
+
+    # Section 5: Student Comments
+    doc.add_page_break()
+    _color_heading(doc.add_heading("5. Student Comments", level=1))
+    text_comments = co_fb.get("text_comments", [])
+    if text_comments:
+        p_cnt = doc.add_paragraph()
+        r_cnt = p_cnt.add_run(f"{len(text_comments)} open-text responses collected across modules.")
+        r_cnt.font.size = Pt(9)
+        r_cnt.font.color.rgb = STONE_500
+        for c in text_comments:
+            mod_label = f"Module {c.get('module_index', 0) + 1}"
+            p = doc.add_paragraph()
+            p.add_run(f"[{mod_label}] ").bold = True
+            p.add_run(f'"{c.get("comment", "")}"').italic = True
+    else:
+        doc.add_paragraph("No student comments collected yet.")
+
+    # Section 6: Cohort
+    doc.add_page_break()
+    _color_heading(doc.add_heading("6. Cohort Comparison", level=1))
     if "cohort_comparison_bar" in charts:
         doc.add_picture(io.BytesIO(charts["cohort_comparison_bar"]), width=Inches(5.5))
     for insight in report.get("cohort_comparison", {}).get("insights", []):
         doc.add_paragraph(f"• {insight}")
 
-    # Section 5: Analysis History
-    _color_heading(doc.add_heading("5. Analysis History", level=1))
+    # Section 7: Analysis History
+    _color_heading(doc.add_heading("7. Analysis History", level=1))
     p_hist_desc = doc.add_paragraph()
     r_hist = p_hist_desc.add_run(
         "Historical analysis snapshots showing how key metrics evolve over time. "
@@ -390,8 +472,8 @@ def export_docx(report: dict) -> bytes:
     except Exception:
         pass
 
-    # Section 6: Overview
-    _color_heading(doc.add_heading("6. Overview & Recommended Actions", level=1))
+    # Section 8: Overview
+    _color_heading(doc.add_heading("8. Overview & Recommended Actions", level=1))
     from services.export_pdf import _generate_overview
     for line in _generate_overview(report):
         # Strip HTML tags for plain-text DOCX

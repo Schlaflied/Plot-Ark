@@ -395,6 +395,29 @@ class OrchestratorNode(BaseNode):
         if hp_count > 0:
             summary_points.append(f"{hp_count} high-performing students identified")
 
+        # ── Feedback signal summary ───────────────────────────────────────────
+        fb_signals = co.get("feedback_signals", [])
+        if fb_signals:
+            total_fb = sum(fb.get("total_feedback", 0) for fb in fb_signals)
+            total_skip = sum(fb.get("skip_count", 0) for fb in fb_signals)
+            total_confused = sum(fb.get("confused", 0) for fb in fb_signals)
+            cross_flag_count = sum(len(fb.get("cross_flags", [])) for fb in fb_signals)
+            if total_fb > 0:
+                summary_points.append(f"{total_fb} feedback responses collected ({total_skip} skips)")
+            if total_confused > 0:
+                summary_points.append(f"{total_confused} 'confused' signals across {len([fb for fb in fb_signals if fb.get('confused', 0) > 0])} modules")
+            if cross_flag_count > 0:
+                summary_points.append(f"⚠ {cross_flag_count} cross-validation flags detected")
+
+        # ── Time-on-task summary ──────────────────────────────────────────────
+        time_on_task = ba.get("time_on_task", [])
+        if time_on_task:
+            total_outliers = sum(t.get("outlier_count", 0) for t in time_on_task)
+            idle_count = sum((t.get("outlier_labels") or {}).get("likely_idle", 0) for t in time_on_task)
+            struggling_count = sum((t.get("outlier_labels") or {}).get("struggling_engaged", 0) for t in time_on_task)
+            if total_outliers > 0:
+                summary_points.append(f"{total_outliers} time-on-task outliers detected ({struggling_count} struggling, {idle_count} likely idle)")
+
         # ── Token usage summary ───────────────────────────────────────────────
         total_in = sum(r.get("tokens_in", 0) for r in agent_results.values())
         total_out = sum(r.get("tokens_out", 0) for r in agent_results.values())
