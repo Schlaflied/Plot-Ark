@@ -144,6 +144,78 @@ def _deanonymise_at_risk(at_risk_students: list, anon_map: dict) -> list:
     return result
 
 
+def _detect_module_diff(course_id: int) -> dict:
+    """
+    Compare current module titles in curricula.modules against the most recent
+    course_analysis_snapshots.module_engagement_summary.
+
+    Returns one of:
+      {"status": "unchanged", "module_count": N}
+      {"status": "changed",   "added": [...], "removed": [...], "current_count": N, "previous_count": N}
+      {"status": "no_previous_snapshot"}
+      {"status": "no_curriculum"}
+      {"status": "error", "message": "..."}
+    """
+    try:
+        from db import get_db
+        conn = get_db()
+        if not conn:
+            return {"status": "error", "message": "no DB connection"}
+        cur = conn.cursor()
+
+        # ── Current module titles ─────────────────────────────────────────
+        cur.execute("SELECT modules FROM curricula WHERE id = %s", (course_id,))
+        row = cur.fetchone()
+        if not row or not row[0]:
+            cur.close()
+            conn.close()
+            return {"status": "no_curriculum"}
+
+        raw = row[0]
+        modules = json.loads(raw) if isinstance(raw, str) else raw
+        current_names = {
+            (m.get("title", f"Module {i + 1}") if isinstance(m, dict) else f"Module {i + 1}")
+            for i, m in enumerate(modules)
+        }
+
+        # ── Last snapshot's module names ──────────────────────────────────
+        cur.execute("""
+            SELECT module_engagement_summary
+            FROM course_analysis_snapshots
+            WHERE course_id = %s
+            ORDER BY run_at DESC
+            LIMIT 1
+        """, (course_id,))
+        snap_row = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if not snap_row or not snap_row[0]:
+            return {"status": "no_previous_snapshot"}
+
+        snap_modules = snap_row[0]
+        if isinstance(snap_modules, str):
+            snap_modules = json.loads(snap_modules)
+        last_names = {m.get("name", "") for m in snap_modules if m.get("name")}
+
+        added   = sorted(current_names - last_names)
+        removed = sorted(last_names - current_names)
+
+        if not added and not removed:
+            return {"status": "unchanged", "module_count": len(current_names)}
+
+        return {
+            "status": "changed",
+            "added":           added,
+            "removed":         removed,
+            "current_count":   len(current_names),
+            "previous_count":  len(last_names),
+        }
+    except Exception as e:
+        print(f"[orchestrator] module diff error: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 class OrchestratorNode(BaseNode):
     name = "orchestrator"
     description = "Coordinates multi-agent analysis pipeline"
@@ -184,7 +256,20 @@ class OrchestratorNode(BaseNode):
         sm = SharedMemory(session_id, redis_client)
         sm.set("course_id", course_id)
 
-        # ── Step 1: Anonymise student data before dispatching ──────────────
+        # ── Step 1: Detect module structure changes before dispatching ────────
+        module_diff = _detect_module_diff(course_id)
+        if module_diff.get("status") == "changed":
+            added_n   = len(module_diff.get("added", []))
+            removed_n = len(module_diff.get("removed", []))
+            yield _sse_event(
+                "orchestrator", "structure_changed",
+                f"⚠️ Module structure changed since last analysis — "
+                f"{added_n} added, {removed_n} removed. "
+                f"Historical comparisons may not be valid.",
+                module_diff,
+            )
+
+        # ── Step 2: Anonymise student data before dispatching ──────────────
         yield f"data: {json.dumps({'status': 'anonymising', 'message': '🔒 Anonymising student data before analysis...'})}\n\n"
 
         anon_map, reverse_map = _build_anon_map(course_id)
@@ -245,7 +330,7 @@ class OrchestratorNode(BaseNode):
         # Aggregate final report
         yield _sse_event("orchestrator", "aggregating", "Synthesizing final report...")
 
-        report = self._aggregate_report(course_id, agent_results, anon_map)
+        report = self._aggregate_report(course_id, agent_results, anon_map, module_diff)
         total_ms = int((time.time() - start_total) * 1000)
 
         # Cache in shared memory
@@ -321,7 +406,8 @@ class OrchestratorNode(BaseNode):
                 "tokens_cache_read": result.tokens_cache_read,
             }
 
-        report = self._aggregate_report(course_id, agent_results, anon_map)
+        module_diff = _detect_module_diff(course_id)
+        report = self._aggregate_report(course_id, agent_results, anon_map, module_diff)
 
         # LTM Cold write + Threshold check (sync path)
         try:
@@ -336,7 +422,7 @@ class OrchestratorNode(BaseNode):
 
         return report
 
-    def _aggregate_report(self, course_id: int, agent_results: dict, anon_map: dict = None) -> dict:
+    def _aggregate_report(self, course_id: int, agent_results: dict, anon_map: dict = None, module_diff: dict = None) -> dict:
         """Synthesize all agent outputs into a unified report."""
         ba = agent_results.get("behavior_analyst", {}).get("data", {})
         ra = agent_results.get("risk_detector", {}).get("data", {})
@@ -383,6 +469,23 @@ class OrchestratorNode(BaseNode):
         struggling_modules = co.get("underperforming_content", [])
 
         summary_points = []
+
+        # ── Module structure change warning (prepended so it's seen first) ──
+        if module_diff and module_diff.get("status") == "changed":
+            added   = module_diff.get("added", [])
+            removed = module_diff.get("removed", [])
+            parts = []
+            if added:
+                sample = ", ".join(added[:2]) + ("…" if len(added) > 2 else "")
+                parts.append(f"{len(added)} added ({sample})")
+            if removed:
+                sample = ", ".join(removed[:2]) + ("…" if len(removed) > 2 else "")
+                parts.append(f"{len(removed)} removed ({sample})")
+            summary_points.append(
+                f"⚠ Module structure changed since last analysis — {'; '.join(parts)}. "
+                f"Historical comparisons may not be valid."
+            )
+
         if total_students > 0:
             summary_points.append(f"{total_students} students analyzed")
         if at_risk_count > 0:
@@ -463,6 +566,7 @@ class OrchestratorNode(BaseNode):
                 "cache_write": total_cache_write,
                 "llm_used": total_in > 0 or total_out > 0,
             },
+            "module_structure_diff": module_diff or {"status": "unknown"},
         }
         self._save_snapshot(report)
         return report
