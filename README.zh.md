@@ -15,6 +15,7 @@
 [![xAPI](https://img.shields.io/badge/xAPI-1.0.3-5C6BC0)](https://xapi.com/)
 [![Tavily](https://img.shields.io/badge/Tavily-Research%20Agent-7C3AED)](https://tavily.com/)
 [![IMS](https://img.shields.io/badge/Export-IMS%20Common%20Cartridge-2E7D32)](https://www.imsglobal.org/)
+[![Awesome](https://awesome.re/badge.svg)](https://github.com/Jenqyang/Awesome-AI-Agents)
 [![Built on Hive](https://img.shields.io/badge/Built%20on-Hive-orange?logo=github)](https://github.com/aden-hive/hive)
 [![Hive Contributor](https://img.shields.io/badge/Hive-Contributor-brightgreen)](https://github.com/aden-hive/hive/pulls?q=author%3ASchlaflied)
 
@@ -191,8 +192,9 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 │  │   Page    │ │   Page   │ │   Page   │ │   Graph   │ │    Page       │  │
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └──────┬────────┘  │
 │       │            │            │              │              │           │
-│  components/ui/  components/generate/    hooks/ (useIngest, useQuery)    │
-│  (Select, Input)   (SyllabusUpload)             SSE 流式传输             │
+│  components/ui/  components/generate/    components/analytics/           │
+│  (Select, Input)   (SyllabusUpload)   (TrendChart, ReportSections, ...)  │
+│                                              SSE 流式传输               │
 └───────┼────────────┼────────────┼──────────────┼──────────────┼──────────┘
         │            │            │              │              │
         ▼            ▼            ▼              ▼              ▼
@@ -218,21 +220,43 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 │  │  ├── base.py (BaseNode)     │  │  ├── research.py (Tavily)          │   │
 │  │  ├── orchestrator.py        │  │  ├── file_parser.py                │   │
 │  │  ├── behavior_analyst.py    │  │  ├── prompt_builder.py             │   │
-│  │  ├── risk_detector.py       │  │  ├── xapi_generator.py             │   │
+│  │  ├── risk_detector.py       │  │  ├── xapi_generator.py (⚡ aware)  │   │
 │  │  ├── content_optimizer.py   │  │  ├── report_exporter.py (facade)   │   │
-│  │  ├── cohort_comparator.py   │  │  ├── chart_generator.py            │   │
-│  │  └── curriculum_agent.py    │  │  └── export_{pdf,docx,excel}.py    │   │
-│  └──────────┬──────────────────┘  │                                    │   │
-│             │  SharedMemory       └─────────────┬──────────────────────┘   │
+│  │  ├── cohort_comparator.py   │  │  ├── chart_generator.py (+history) │   │
+│  │  └── curriculum_agent.py    │  │  ├── ltm_writer.py (Cold layer)    │   │
+│  │       SharedMemory          │  │  ├── threshold_checker.py           │   │
+│  └──────────┬──────────────────┘  │  └── export_{pdf,docx,excel}.py    │   │
+│             │                     └─────────────┬──────────────────────┘   │
 └─────────────┼───────────────────────────────────┼──────────────────────────┘
               │                                   │
               ▼                                   ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  PostgreSQL  │  │    Redis     │  │   LightRAG   │
-│  (课程 +     │  │  (缓存 +     │  │  (知识图谱)  │
-│   xAPI +     │  │   共享       │  │              │
-│   反馈)      │  │   内存)      │  │              │
-└──────────────┘  └──────────────┘  └──────────────┘
+┌───────────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  PostgreSQL       │  │    Redis     │  │   LightRAG   │  │  data/ltm/   │
+│  (curricula       │  │  (🔴 Hot:    │  │   (KG data)  │  │  (🔵 Cold:   │
+│  + xapi           │  │   pipeline   │  │              │  │   .md YAML   │
+│  + 🟡 Warm:       │  │   runtime)   │  │              │  │   snapshots) │
+│  snapshots)       │  │              │  │              │  │              │
+└───────────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
+```
+
+**LTM（长期记忆）三层架构**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     LTM 三层架构                                        │
+├──────────────────┬───────────────────┬──────────────────────────────────┤
+│  🔴 Hot 层       │  🟡 Warm 层        │  🔵 Cold 层                      │
+│  Redis           │  PostgreSQL        │  data/ltm/*.md                   │
+│                  │                   │                                  │
+│  • 流水线         │  • course_analysis_│  • YAML frontmatter              │
+│    运行时状态     │    snapshots 表   │    (course_code, topic,          │
+│  • SSE 流式传输   │  • 每次运行指标   │     curriculum_version)          │
+│  • Token 用量    │  • at_risk_count  │  • 模块表现汇总表                │
+│  • TTL 自动       │  • completion rates│  • 已应用变更日志               │
+│    过期           │  • verb_distribution│  • 🤖 Agent vs 👤 Prof 追踪    │
+│                  │  • 历史趋势        │  • 每日版本化：_v{N}             │
+│                  │    图表数据源      │  • 永不删除                     │
+└──────────────────┴───────────────────┴──────────────────────────────────┘
 ```
 
 **课程生成流水线**
@@ -258,7 +282,7 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
   xapi_generator.py            OrchestratorNode
   （4 种噪声级别，                       │
    HOUR_WEIGHTS，              ┌─────────┼──────────────┐
-   画像化学生分布）             │         │              │
+   ⚡ 课程感知）                │         │              │
                               ▼         ▼              ▼
                        BehaviorAnalyst  RiskDetector   ContentOptimizer
                        （verb/模块       （6 信号，      （低绩效
@@ -273,23 +297,32 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
                               aggregate
                          （token_summary，执行摘要）
                                    │
-                          ┌────────┴────────┐
-                          ▼                 ▼
-               course_analysis_snapshots  最终报告 JSON
-               （PostgreSQL LTM）         → PDF / DOCX / Excel
-                          │
-                          ▼
-                   CurriculumAgent (AI Agent)
-                 (读取长期偏好，评估高频预警模块)
-                          │
-                          ▼
+                   ┌───────────────┼───────────────┐
+                   ▼               ▼               ▼
+           🔴 Hot Layer    🟡 Warm Layer      🔵 Cold Layer
+           (Redis)         (PG snapshots)     (data/ltm/*.md)
+                                   │
+                                   ▼
+                          最终报告 JSON
+                          → PDF / DOCX / Excel
+                          （第 5 节：分析历史
+                           表格 + 趋势图）
+                                   │
+                                   ▼
+               ThresholdChecker → CurriculumAgent (AI Agent)
+             （读取 Cold LTM，区分结构性/偶发性问题）
+                                   │
+                                   ▼
                  change_log & module_flags
-              (人在回路的 Dashboard Review & Apply)
+              （人在回路 Dashboard Review）
+                                   │
+                                   ▼
+              ⚡ xAPI 重新种子（已应用模块使用 IMPROVED_VERB_DIST）
 ```
 
-**执行中的主动式循环：**
+**主动式循环：**
 ```
-xAPI 行为事件 → A2A 多 Agent 评估 → PostgreSQL LTM 暖层 → Curriculum Agent 建议 → 教授 (人在回路 Review) → 数据表变更 → 课程重构与 UI 横幅通知
+xAPI 事件 → A2A 评估 → LTM（Hot+Warm+Cold）→ Curriculum Agent → 教授人在回路 → Apply → ⚡ 课程感知重新种子 → A2A 重新评估（改善后数据）→ 更新 LTM
 ```
 
 ---
@@ -427,6 +460,7 @@ plot-ark/
 │   │   │   └── SkeletonReview.tsx       ← 审核课程模块骨架
 │   │   ├── analytics/
 │   │   │   ├── ReportSections.tsx       ← A2A 分析报告的展示组件
+│   │   │   ├── TrendChart.tsx           ← SVG 趋势图（迷你 + 全屏 Modal）
 │   │   │   ├── CurriculumApplyModal.tsx ← AI 建议应用确认弹窗
 │   │   │   ├── CurriculumDrawer.tsx     ← 教授端滑出抽屉（Apply / Redo）
 │   │   │   ├── StudentChangesDrawer.tsx ← 学生端滑出抽屉（Go to Module）
@@ -455,6 +489,7 @@ plot-ark/
 │
 └── data/
     ├── materials/                       ← 课程 PDF/PPTX（已 gitignore）
+    ├── ltm/                             ← LTM Cold 层 .md 快照（版本化 YAML）
     └── lightrag_storage*/               ← 知识图谱数据（已 gitignore，可重新生成）
 ```
 
@@ -498,12 +533,15 @@ plot-ark/
 - [x] xAPI Mock 数据引擎 — 4 种噪声级别（5/10/15/20%）、HOUR_WEIGHTS、画像化学生分布
 - [x] PII 匿名化 — Agent 处理前匿名化，最终报告中恢复真实身份
 - [x] Token 用量追踪 — NodeResult tokens 字段；token_summary 写入报告 JSON；后端日志打印汇总表
-- [x] LTM 暖层 — course_analysis_snapshots PostgreSQL 表（risk_distribution、verb_distribution、noise_label 等）
+- [x] LTM 三层架构 — Hot（Redis 运行时）、Warm（PostgreSQL 快照）、Cold（版本化 .md YAML 文件）
 - [x] 课程 Agent — 主动式课程优化：通知栏、滑出抽屉、人在回路的 Apply/Redo、模块标记、变更日志
-- [x] 学生更新抽屉 — 学生端滑出抽屉，展示更新的模块并带有“Go to Module”导航
+- [x] 学生更新抽屉 — 学生端滑出抽屉，展示更新的模块并带有”Go to Module”导航
 - [x] 可拖拽悬浮球 — 关闭 banner 后出现悬浮球；可拖拽、点击开抽屉、hover ✕ 彻底关闭
 - [x] 学生反馈 — 每模块情绪收集（Got it / Mostly got it / Something’s off / Didn’t read）+ 可选评论
+- [x] 课程感知 xAPI 生成器 — 查询 change_log 中已应用的模块，使用 IMPROVED_VERB_DIST 模拟优化后改善效果
+- [x] 历史趋势可视化 — TrendChart（迷你 + 全屏 Modal）、PDF/DOCX 中的 matplotlib 图表、报告分析历史节
 - [ ] A2A Phase 2 — 为四个专业 Agent 集成 LLM 分析能力
+- [ ] 渐进式摘要 — 学期级 LTM 摘要用于 LLM 上下文管理
 - [ ] Professor LTM — 从编辑历史学习偏好
 - [ ] LTI 1.3 — 推送至 Canvas / Moodle
 
@@ -528,7 +566,13 @@ GNU Affero 通用公共许可证 v3.0 — 详见 [LICENSE](LICENSE)
 
 ## ⭐ Star 历史
 
-[![Star History Chart](https://api.star-history.com/image?repos=Schlaflied/Plot-Ark&type=date)](https://star-history.com/#Schlaflied/Plot-Ark&Date)
+<a href="https://www.star-history.com/?repos=Schlaflied%2FPlot-Ark&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=Schlaflied/Plot-Ark&type=date&theme=dark&legend=top-left&v=2" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=Schlaflied/Plot-Ark&type=date&legend=top-left&v=2" />
+   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=Schlaflied/Plot-Ark&type=date&legend=top-left&v=2" />
+ </picture>
+</a>
 
 ---
 
