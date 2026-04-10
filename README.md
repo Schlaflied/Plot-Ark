@@ -414,7 +414,12 @@ plot-ark/
 │   ├── components/
 │   │   ├── ui/
 │   │   │   ├── Select.tsx               ← Reusable dropdown
-│   │   │   └── Input.tsx                ← Reusable text input
+│   │   │   ├── Input.tsx                ← Reusable text input
+│   │   │   ├── DraggableFab.tsx         ← Draggable floating action button (professor/student)
+│   │   │   └── ToolbarDropdown.tsx      ← Icon-trigger toolbar dropdown menu
+│   │   ├── dashboard/
+│   │   │   ├── CourseCard.tsx            ← Course card, special card, add card
+│   │   │   └── MiniCalendar.tsx          ← Compact monthly calendar widget
 │   │   ├── generate/
 │   │   │   ├── SyllabusUpload.tsx       ← Drag-and-drop syllabus upload
 │   │   │   ├── SourceReview.tsx         ← Review Tavily research sources

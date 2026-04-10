@@ -413,7 +413,12 @@ plot-ark/
 │   ├── components/
 │   │   ├── ui/
 │   │   │   ├── Select.tsx               ← 可复用下拉选择
-│   │   │   └── Input.tsx                ← 可复用文本输入
+│   │   │   ├── Input.tsx                ← 可复用文本输入框
+│   │   │   ├── DraggableFab.tsx         ← 可拖拽悬浮球（教授/学生通用）
+│   │   │   └── ToolbarDropdown.tsx      ← 工具栏图标下拉菜单
+│   │   ├── dashboard/
+│   │   │   ├── CourseCard.tsx            ← 课程卡片、特殊功能卡片、新建卡片
+│   │   │   └── MiniCalendar.tsx          ← 紧凑月历小组件
 │   │   ├── generate/
 │   │   │   ├── SyllabusUpload.tsx       ← 拖拽上传大纲解析
 │   │   │   ├── SourceReview.tsx         ← 审核 Tavily 检索的学术信源

@@ -3,36 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  X, Star, Globe, Moon, Sun, Settings, Plus, Network,
-  ChevronLeft, ChevronRight,
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Globe, Moon, Sun, Settings, Network } from 'lucide-react';
+
+// ─── Extracted components ─────────────────────────────────────────────────────
+
+import { CourseCard, SpecialCard, AddCourseCard } from '../components/dashboard/CourseCard';
+import type { HistoryEntry } from '../components/dashboard/CourseCard';
+import MiniCalendar from '../components/dashboard/MiniCalendar';
+import ToolbarDropdown from '../components/ui/ToolbarDropdown';
+import type { DropdownItem } from '../components/ui/ToolbarDropdown';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface HistoryEntry {
-  id: number;
-  created_at: string;
-  topic: string;
-  level: string;
-  course_code: string;
-  course_type: string;
-  module_count: number;
-  is_favorite: boolean;
-}
-
 type Language = 'EN' | 'CN' | 'FR';
 type ModelProvider = 'GPT + API' | 'Gemini + API' | 'Claude + API';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric',
-  });
-}
 
 // ─── Mini Bar Chart ───────────────────────────────────────────────────────────
 
@@ -51,67 +37,6 @@ const MiniBarChart: React.FC = () => {
   );
 };
 
-// ─── Toolbar dropdown ─────────────────────────────────────────────────────────
-
-interface DropdownItem { label: string; value: string }
-
-interface ToolbarDropdownProps {
-  icon: React.ReactNode;
-  items: DropdownItem[];
-  selected: string;
-  onSelect: (v: string) => void;
-  title: string;
-  alignRight?: boolean;
-}
-
-const ToolbarDropdown: React.FC<ToolbarDropdownProps> = ({
-  icon, items, selected, onSelect, title, alignRight,
-}) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen(p => !p)}
-        title={title}
-        className="p-1.5 rounded-lg text-stone-500 hover:text-stone-900 hover:bg-stone-100 transition-colors"
-      >
-        {icon}
-      </button>
-      {open && (
-        <div
-          className={`absolute top-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg z-50 min-w-[150px] py-1 ${
-            alignRight ? 'right-0' : 'left-1/2 -translate-x-1/2'
-          }`}
-        >
-          {items.map(item => (
-            <button
-              key={item.value}
-              onClick={() => { onSelect(item.value); setOpen(false); }}
-              className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                selected === item.value
-                  ? 'bg-amber-50 text-amber-800 font-semibold'
-                  : 'text-stone-700 hover:bg-stone-50'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
 // ─── Settings button ──────────────────────────────────────────────────────────
 
 const SettingsButton: React.FC = () => (
@@ -124,204 +49,7 @@ const SettingsButton: React.FC = () => (
   </Link>
 );
 
-// ─── Course card ──────────────────────────────────────────────────────────────
 
-interface CourseCardProps {
-  entry: HistoryEntry;
-  onDelete: (e: React.MouseEvent, id: number) => void;
-  onToggleFavorite: (e: React.MouseEvent, id: number) => void;
-}
-
-const CourseCard: React.FC<CourseCardProps & { viewMode?: 'professor' | 'student' }> = ({ entry, onDelete, onToggleFavorite, viewMode = 'professor' }) => {
-  const navigate = useNavigate();
-  return (
-    <div
-      onClick={() => navigate(`/course/${entry.id}${viewMode === 'student' ? '?view=student' : ''}`)}
-      className="relative bg-white border border-stone-200 rounded-xl shadow-sm group hover:shadow-md transition-all cursor-pointer"
-    >
-      {/* Amber top border */}
-      <div className="h-1 rounded-t-xl" style={{ backgroundColor: '#C5A028' }} />
-
-      {/* Delete button */}
-      <button
-        onClick={e => onDelete(e, entry.id)}
-        className="absolute top-3 right-3 z-10 p-0.5 text-stone-300 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition-all"
-        title="Delete"
-      >
-        <X size={13} />
-      </button>
-
-      {/* Favorite button */}
-      <button
-        onClick={e => onToggleFavorite(e, entry.id)}
-        className={`absolute top-3 right-7 z-10 p-0.5 transition-all opacity-0 group-hover:opacity-100 ${
-          entry.is_favorite ? 'text-amber-500 !opacity-100' : 'text-stone-300 hover:text-amber-500'
-        }`}
-        title={entry.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
-      >
-        <Star size={12} fill={entry.is_favorite ? 'currentColor' : 'none'} />
-      </button>
-
-      <div className="p-4">
-        <h3 className="font-semibold text-stone-900 text-sm leading-snug line-clamp-2 mb-1">
-          {entry.topic}
-        </h3>
-        <p className="text-xs text-stone-400 mb-0.5">
-          {entry.level}{entry.course_type ? ` · ${entry.course_type}` : ''}{entry.module_count ? ` · ${entry.module_count} modules` : ''}
-        </p>
-        <p className="text-xs text-stone-400 mb-3">
-          {formatDate(entry.created_at)}
-        </p>
-        <div className="flex justify-end">
-          <span className="text-xs font-semibold text-amber-700 group-hover:underline">
-            Open →
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ─── Special feature card ─────────────────────────────────────────────────────
-
-interface SpecialCardProps {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  to: string;
-  isExternal?: boolean;
-}
-
-const SpecialCard: React.FC<SpecialCardProps> = ({ title, description, icon, to, isExternal }) => {
-  const inner = (
-    <>
-      <div className="h-1 rounded-t-xl" style={{ backgroundColor: '#C5A028' }} />
-      <div className="p-4 flex items-start gap-3">
-        <div className="mt-0.5" style={{ color: '#C5A028' }}>{icon}</div>
-        <div>
-          <h3 className="font-semibold text-sm leading-snug mb-1 group-hover:underline" style={{ color: '#C5A028' }}>
-            {title}
-          </h3>
-          <p className="text-xs text-stone-500 leading-relaxed">{description}</p>
-        </div>
-      </div>
-    </>
-  );
-
-  const cardClass = 'relative bg-white border border-stone-200 rounded-xl shadow-sm hover:shadow-md transition-shadow group block';
-
-  if (isExternal) {
-    return (
-      <a href={to} className={cardClass}>
-        {inner}
-      </a>
-    );
-  }
-  return (
-    <Link to={to} className={cardClass}>
-      {inner}
-    </Link>
-  );
-};
-
-// ─── New Course card ──────────────────────────────────────────────────────────
-
-const AddCourseCard: React.FC = () => (
-  <Link
-    to="/generate"
-    className="flex flex-col items-center justify-center bg-white border-2 border-dashed border-stone-200 rounded-xl hover:border-amber-400 hover:bg-amber-50/30 transition-all group min-h-[120px]"
-  >
-    <Plus size={22} className="text-stone-300 group-hover:text-amber-500 transition-colors mb-1" />
-    <span className="text-xs text-stone-400 group-hover:text-amber-700 transition-colors font-medium">
-      New Course
-    </span>
-  </Link>
-);
-
-// ─── Mini Calendar ────────────────────────────────────────────────────────────
-
-const MiniCalendar: React.FC = () => {
-  const today = new Date();
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth()); // 0-indexed
-
-  const MONTH_NAMES = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
-
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
-    else setViewMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
-    else setViewMonth(m => m + 1);
-  };
-
-  // First weekday of the month (0=Sun)
-  const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
-  // Total days in month
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-
-  const isToday = (day: number) =>
-    day === today.getDate() &&
-    viewMonth === today.getMonth() &&
-    viewYear === today.getFullYear();
-
-  const cells: (number | null)[] = [
-    ...Array(firstDayOfMonth).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-
-  return (
-    <div>
-      {/* Month nav */}
-      <div className="flex items-center justify-between mb-2">
-        <button
-          onClick={prevMonth}
-          className="p-0.5 text-stone-400 hover:text-stone-700 transition-colors rounded"
-        >
-          <ChevronLeft size={14} />
-        </button>
-        <span className="text-xs font-semibold text-stone-600">
-          {MONTH_NAMES[viewMonth]} {viewYear}
-        </span>
-        <button
-          onClick={nextMonth}
-          className="p-0.5 text-stone-400 hover:text-stone-700 transition-colors rounded"
-        >
-          <ChevronRight size={14} />
-        </button>
-      </div>
-
-      {/* Day headers */}
-      <div className="grid grid-cols-7 gap-0.5 text-center mb-0.5">
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-          <span key={i} className="text-[10px] text-stone-400 font-medium">{d}</span>
-        ))}
-      </div>
-
-      {/* Date grid */}
-      <div className="grid grid-cols-7 gap-0.5 text-center">
-        {cells.map((day, i) => (
-          <span
-            key={i}
-            className={`text-[11px] py-0.5 rounded-full leading-5 ${
-              day === null
-                ? ''
-                : isToday(day)
-                  ? 'bg-amber-400 text-white font-bold'
-                  : 'text-stone-500 hover:bg-stone-100 cursor-pointer'
-            }`}
-          >
-            {day ?? ''}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-};
 
 // ─── Side panel section ───────────────────────────────────────────────────────
 
