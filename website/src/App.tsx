@@ -130,22 +130,35 @@ function App() {
             transition={{ duration: 0.8 }}
             className="mt-40 mb-20 max-w-4xl mx-auto"
           >
-            <h2 className="text-4xl font-serif font-bold mb-8 text-center">Design Philosophy</h2>
-            <div className="space-y-8 text-lg text-gray-600 leading-relaxed bg-white p-10 rounded-3xl shadow-sm border border-nobel-gold/20">
-              <div>
-                <h4 className="text-xl font-bold text-nobel-dark mb-2">Pedagogically Grounded</h4>
-                <p>Unlike static AI course generators, Plot Ark applies evidence-based instructional design principles—<strong>Bloom's Taxonomy</strong>, <strong>Krashen's i+1</strong> difficulty scaffolding, and <strong>Cognitive Load Theory</strong>—so the curriculum it generates is structured the way learning actually works.</p>
-              </div>
-              <div className="h-px bg-gray-100 w-full"></div>
-              <div>
-                <h4 className="text-xl font-bold text-nobel-dark mb-2">Agentic Pipeline</h4>
-                <p>A Tavily research agent searches real academic sources first, then injects verified URLs into the generation prompt. No hallucinated citations.</p>
-              </div>
-              <div className="h-px bg-gray-100 w-full"></div>
-              <div>
-                <h4 className="text-xl font-bold text-nobel-dark mb-2">Multi-provider AI</h4>
-                <p>Switch between OpenAI (GPT-4o-mini) and Google Gemini via a single environment variable. Bring your own key.</p>
-              </div>
+            <div className="flex items-center justify-center gap-3 mb-8">
+              <span className="text-4xl">🧭</span>
+              <h2 className="text-4xl font-serif font-bold text-center">Design Philosophy</h2>
+            </div>
+            
+            <div className="space-y-6 text-lg text-gray-700 leading-relaxed bg-white p-10 md:p-14 rounded-3xl shadow-sm border border-nobel-gold/20">
+              <p>
+                Most EdTech AI tools treat artificial intelligence as a threat to be monitored — detecting whether students used AI, flagging "inauthentic" work, enforcing originality.
+              </p>
+              
+              <p>
+                Plot Ark takes the opposite position.
+              </p>
+              
+              <p>
+                <strong>AI is a cognitive tool, not a threat.</strong> A student who uses AI to draft an answer, then understands it, refines it, and can explain it in their own words — that student has learned. Copy-paste without comprehension is a student deceiving themselves, not a system to be policed.
+              </p>
+              
+              <p>
+                Plot Ark has no AI detection mechanism. It never will. The question it asks is not <em>"did you use AI?"</em> but <em>"did learning happen?"</em> — and it answers that through Bloom's Taxonomy alignment, i+1 difficulty progression, and xAPI learner behavior tracking.
+              </p>
+              
+              <p>
+                The curriculum engine itself is built the same way: AI generates the structure, pedagogy constrains the output, and the instructor stays in the loop. The tool thinks; the human decides.
+              </p>
+              
+              <p className="text-gray-500 pt-2 border-t border-gray-100">
+                Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophistication and response sophistication — the deeper you engage it, the deeper it responds.
+              </p>
             </div>
           </motion.div>
 
