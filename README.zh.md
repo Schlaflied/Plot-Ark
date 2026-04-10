@@ -273,52 +273,7 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 
 **A2A 分析流水线**
 
-```
-前端（噪声选择器 + 种子按钮）
-        │
-        ▼ POST /api/xapi/seed   POST /api/analytics/report (SSE)
-        │                               │
-        ▼                               ▼
-  xapi_generator.py            OrchestratorNode
-  （4 种噪声级别，                       │
-   HOUR_WEIGHTS，              ┌─────────┼──────────────┐
-   ⚡ 课程感知）                │         │              │
-                              ▼         ▼              ▼
-                       BehaviorAnalyst  RiskDetector   ContentOptimizer
-                       （verb/模块       （6 信号，      （低绩效
-                         参与度）        中≥4 高≥7）      模块）
-                              │         │              │
-                              └────┬────┘──────────────┘
-                                   │         │
-                              CohortComparator
-                              （4 个群组）
-                                   │
-                                   ▼
-                              aggregate
-                         （token_summary，执行摘要）
-                                   │
-                   ┌───────────────┼───────────────┐
-                   ▼               ▼               ▼
-           🔴 Hot Layer    🟡 Warm Layer      🔵 Cold Layer
-           (Redis)         (PG snapshots)     (data/ltm/*.md)
-                                   │
-                                   ▼
-                          最终报告 JSON
-                          → PDF / DOCX / Excel
-                          （第 5 节：分析历史
-                           表格 + 趋势图）
-                                   │
-                                   ▼
-               ThresholdChecker → CurriculumAgent (AI Agent)
-             （读取 Cold LTM，区分结构性/偶发性问题）
-                                   │
-                                   ▼
-                 change_log & module_flags
-              （人在回路 Dashboard Review）
-                                   │
-                                   ▼
-              ⚡ xAPI 重新种子（已应用模块使用 IMPROVED_VERB_DIST）
-```
+![A2A Analytics Pipeline](docs/A2A%20Analytics%20Pipeline.png)
 
 **主动式循环：**
 ```

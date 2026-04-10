@@ -271,52 +271,7 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 
 **A2A Analytics Pipeline**
 
-```
-Frontend (noise selector + seed button)
-        │
-        ▼ POST /api/xapi/seed   POST /api/analytics/report (SSE)
-        │                               │
-        ▼                               ▼
-  xapi_generator.py            OrchestratorNode
-  (4 noise levels,                      │
-   HOUR_WEIGHTS,              ┌─────────┼──────────────┐
-   ⚡ curriculum-aware)        │         │              │
-                              ▼         ▼              ▼
-                       BehaviorAnalyst  RiskDetector   ContentOptimizer
-                       (verb/module     (6 signals,    (underperforming
-                        engagement)      med≥4 hi≥7)    modules)
-                              │         │              │
-                              └────┬────┘──────────────┘
-                                   │         │
-                              CohortComparator
-                              (4 groups)
-                                   │
-                                   ▼
-                              aggregate
-                         (token_summary, exec summary)
-                                   │
-                   ┌───────────────┼───────────────┐
-                   ▼               ▼               ▼
-           🔴 Hot Layer    🟡 Warm Layer      🔵 Cold Layer
-           (Redis)         (PG snapshots)     (data/ltm/*.md)
-                                   │
-                                   ▼
-                          final report JSON
-                          → PDF / DOCX / Excel
-                          (Section 5: Analysis History
-                           table + trend chart)
-                                   │
-                                   ▼
-               ThresholdChecker → CurriculumAgent (AI Agent)
-             (Reads Cold LTM, classifies structural/occasional)
-                                   │
-                                   ▼
-                 change_log & module_flags
-              (Human-in-the-loop Dashboard Review)
-                                   │
-                                   ▼
-              ⚡ xAPI re-seed (IMPROVED_VERB_DIST for applied modules)
-```
+![A2A Analytics Pipeline](docs/A2A%20Analytics%20Pipeline.png)
 
 **Active agentic loop:**
 ```
