@@ -73,7 +73,7 @@ function ChartSVG({
             stroke="#e7e5e4" strokeWidth="0.5"
             strokeDasharray={v === 0 || v === 1 ? '' : '2,3'}
           />
-          <text x={PAD_X - 4} y={yScale(v) + 3} textAnchor="end" fill="#a8a29e" fontSize={fs}>
+          <text x={2} y={yScale(v) + 3} textAnchor="start" fill="#a8a29e" fontSize={fs}>
             {(v * 100).toFixed(0)}%
           </text>
         </g>
