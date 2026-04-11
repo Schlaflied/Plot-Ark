@@ -187,18 +187,6 @@ const TrendChart: React.FC<TrendChartProps> = ({ courseId }) => {
   if (history.length < 2) return null;
 
   const latest = history[history.length - 1];
-  const prev = history[history.length - 2];
-  const riskDelta = latest.at_risk_pct - prev.at_risk_pct;
-  const compDelta = latest.avg_completion_rate - prev.avg_completion_rate;
-
-  const DeltaBadge = ({ delta, inverted }: { delta: number; inverted?: boolean }) => {
-    const good = inverted ? delta <= 0 : delta >= 0;
-    return (
-      <span className={`text-xs font-bold ${good ? 'text-green-500' : 'text-red-500'}`}>
-        {delta > 0 ? '↑' : delta < 0 ? '↓' : '—'}{Math.abs(delta * 100).toFixed(1)}%
-      </span>
-    );
-  };
 
   return (
     <>
@@ -216,12 +204,12 @@ const TrendChart: React.FC<TrendChartProps> = ({ courseId }) => {
             <div className="flex items-center gap-1.5 shrink-0">
               <span className="w-3 h-0.5 bg-red-400 rounded-full inline-block" />
               <span className="text-xs text-stone-400">At-risk %</span>
-              <DeltaBadge delta={riskDelta} inverted />
+              <span className="text-xs font-bold text-red-400">{(latest.at_risk_pct * 100).toFixed(1)}%</span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <span className="w-3 h-0.5 bg-blue-400 rounded-full inline-block" />
               <span className="text-xs text-stone-400">Completion</span>
-              <DeltaBadge delta={compDelta} />
+              <span className="text-xs font-bold text-blue-400">{(latest.avg_completion_rate * 100).toFixed(1)}%</span>
             </div>
             {/* Expand button */}
             <button
@@ -268,12 +256,12 @@ const TrendChart: React.FC<TrendChartProps> = ({ courseId }) => {
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-1 bg-red-400 rounded-full inline-block" />
                   <span className="text-xs text-stone-500 font-medium">At-risk %</span>
-                  <DeltaBadge delta={riskDelta} inverted />
+                  <span className="text-xs font-bold text-red-400">{(latest.at_risk_pct * 100).toFixed(1)}%</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-1 bg-blue-400 rounded-full inline-block" />
                   <span className="text-xs text-stone-500 font-medium">Completion Rate</span>
-                  <DeltaBadge delta={compDelta} />
+                  <span className="text-xs font-bold text-blue-400">{(latest.avg_completion_rate * 100).toFixed(1)}%</span>
                 </div>
                 <button
                   onClick={() => setFullView(false)}
