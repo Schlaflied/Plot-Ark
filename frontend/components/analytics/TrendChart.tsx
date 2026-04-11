@@ -62,7 +62,8 @@ function ChartSVG({
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
-      className="w-full"
+      className="w-full h-full"
+      preserveAspectRatio="none"
       onMouseLeave={() => setHoveredIdx(null)}
     >
       {/* Grid lines */}
@@ -193,7 +194,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ courseId }) => {
   const DeltaBadge = ({ delta, inverted }: { delta: number; inverted?: boolean }) => {
     const good = inverted ? delta <= 0 : delta >= 0;
     return (
-      <span className={`text-[10px] font-bold ${good ? 'text-green-500' : 'text-red-500'}`}>
+      <span className={`text-xs font-bold ${good ? 'text-green-500' : 'text-red-500'}`}>
         {delta > 0 ? '↑' : delta < 0 ? '↓' : '—'}{Math.abs(delta * 100).toFixed(1)}%
       </span>
     );
@@ -210,22 +211,22 @@ const TrendChart: React.FC<TrendChartProps> = ({ courseId }) => {
             </p>
             <span className="text-[10px] text-stone-300">{history.length} runs</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 shrink-0">
             {/* Legend */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <span className="w-3 h-0.5 bg-red-400 rounded-full inline-block" />
-              <span className="text-[10px] text-stone-400">At-risk %</span>
+              <span className="text-xs text-stone-400">At-risk %</span>
               <DeltaBadge delta={riskDelta} inverted />
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <span className="w-3 h-0.5 bg-blue-400 rounded-full inline-block" />
-              <span className="text-[10px] text-stone-400">Completion</span>
+              <span className="text-xs text-stone-400">Completion</span>
               <DeltaBadge delta={compDelta} />
             </div>
             {/* Expand button */}
             <button
               onClick={() => setFullView(true)}
-              className="text-[10px] text-stone-400 hover:text-stone-700 border border-stone-200 rounded px-2 py-0.5 hover:bg-stone-50 transition-colors"
+              className="text-[10px] text-stone-400 hover:text-stone-700 border border-stone-200 rounded px-2 py-0.5 hover:bg-stone-50 transition-colors shrink-0"
               title="Full view"
             >
               ⛶ Full View
@@ -233,10 +234,11 @@ const TrendChart: React.FC<TrendChartProps> = ({ courseId }) => {
           </div>
         </div>
 
-        <div style={{ maxHeight: '130px' }}>
+        <div style={{ height: '155px' }}>
           <ChartSVG
-            history={history} W={600} H={120} PAD_X={42} PAD_Y={16}
+            history={history} W={600} H={155} PAD_X={42} PAD_Y={16}
             hoveredIdx={hoveredIdx} setHoveredIdx={setHoveredIdx}
+            showDateLabels fontSize={7}
           />
         </div>
       </div>
