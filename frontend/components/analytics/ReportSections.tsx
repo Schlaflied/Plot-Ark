@@ -2,7 +2,7 @@
  * ReportSections — Analytics report display sections for StudentDataPage.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +47,85 @@ const ActionItem: React.FC<{ priority: 'high' | 'medium' | 'low'; text: string }
       <span className="text-xs font-bold shrink-0 mt-0.5">{labels[priority]}</span>
       <p className="text-sm">{text}</p>
     </div>
+  );
+};
+
+// ─── Student Comments (accordion by module) ──────────────────────────────────
+
+const StudentCommentsSection: React.FC<{ report: AnalyticsReport }> = ({ report }) => {
+  const comments: any[] = report.content_optimization?.text_comments || [];
+
+  // Group by module_index, preserving insertion order
+  const grouped = comments.reduce<Record<number, { title: string; items: any[] }>>((acc, c) => {
+    const idx: number = c.module_index ?? 0;
+    if (!acc[idx]) {
+      acc[idx] = {
+        title: c.module_title || `Module ${idx + 1}`,
+        items: [],
+      };
+    }
+    acc[idx].items.push(c);
+    return acc;
+  }, {});
+  const sortedIndices = Object.keys(grouped).map(Number).sort((a, b) => a - b);
+
+  const [openSet, setOpenSet] = useState<Set<number>>(() => new Set());
+  const toggle = (idx: number) =>
+    setOpenSet(prev => {
+      const next = new Set(prev);
+      next.has(idx) ? next.delete(idx) : next.add(idx);
+      return next;
+    });
+
+  return (
+    <Section title="Student Comments" icon="💬">
+      {comments.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs text-stone-400 mb-3">
+            {comments.length} open-text {comments.length === 1 ? 'response' : 'responses'} across {sortedIndices.length} {sortedIndices.length === 1 ? 'module' : 'modules'}.
+          </p>
+          {sortedIndices.map(mi => {
+            const { title, items } = grouped[mi];
+            const isOpen = openSet.has(mi);
+            return (
+              <div key={mi} className="border border-stone-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => toggle(mi)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-stone-50 hover:bg-stone-100 transition-colors text-left gap-3"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="shrink-0 text-xs font-medium text-stone-400">
+                      Module {mi + 1}
+                    </span>
+                    <span className="text-sm font-semibold text-stone-800 truncate">{title}</span>
+                    <span className="shrink-0 text-xs text-stone-400">
+                      ({items.length} {items.length === 1 ? 'response' : 'responses'})
+                    </span>
+                  </div>
+                  <svg
+                    className={`shrink-0 w-4 h-4 text-stone-400 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`}
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                {isOpen && (
+                  <div className="divide-y divide-stone-100">
+                    {items.map((c: any, i: number) => (
+                      <div key={i} className="px-5 py-3 text-sm text-stone-700 italic leading-relaxed bg-white">
+                        &ldquo;{c.comment}&rdquo;
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-sm text-stone-400 italic">No student comments collected yet.</p>
+      )}
+    </Section>
   );
 };
 
@@ -400,23 +479,7 @@ const ReportSections: React.FC<ReportSectionsProps> = ({ report, activeSection, 
 
       {/* Student Comments */}
       {activeSection === 'comments' && (
-        <Section title="Student Comments" icon="💬">
-          {(report.content_optimization?.text_comments || []).length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-xs text-stone-400 mb-3">
-                {report.content_optimization.text_comments.length} open-text responses collected across modules.
-              </p>
-              {report.content_optimization.text_comments.map((c: any, i: number) => (
-                <div key={i} className="flex gap-3 text-sm bg-stone-50 border border-stone-200 rounded-xl p-4">
-                  <span className="text-xs text-stone-400 shrink-0 w-20 pt-0.5">Module {c.module_index + 1}</span>
-                  <span className="text-stone-700 italic leading-relaxed">&ldquo;{c.comment}&rdquo;</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-stone-400 italic">No student comments collected yet.</p>
-          )}
-        </Section>
+        <StudentCommentsSection report={report} />
       )}
 
       {/* Cohort Comparison */}
