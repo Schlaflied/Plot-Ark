@@ -3,7 +3,7 @@
  * Displays generated module skeleton for review before saving to CoursePage.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft, Plus, X, Loader2, BookOpen, ChevronDown, ChevronUp,
 } from 'lucide-react';
@@ -20,6 +20,7 @@ interface SkeletonReviewProps {
   courseNarrative: string;
   topic: string;
   loading: boolean;
+  isExpanding?: boolean;
   onAddToCourse: (modules: SkeletonModule[], courseNarrative: string) => void;
   onBack: () => void;
 }
@@ -29,12 +30,18 @@ export const SkeletonReview: React.FC<SkeletonReviewProps> = ({
   courseNarrative: initialNarrative,
   topic,
   loading,
+  isExpanding,
   onAddToCourse,
   onBack,
 }) => {
   const [modules, setModules] = useState<SkeletonModule[]>(initialModules);
   const [courseNarrative, setCourseNarrative] = useState(initialNarrative);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(0);
+
+  useEffect(() => {
+    setModules(initialModules);
+    setCourseNarrative(initialNarrative);
+  }, [initialModules, initialNarrative]);
 
   // ── Inline editing ──
 
@@ -94,7 +101,7 @@ export const SkeletonReview: React.FC<SkeletonReviewProps> = ({
         </h2>
         <p className="text-sm text-stone-500">
           Review and edit titles and objectives below, then click Add to Course Page when ready.
-          Full module expansion (readings, assignments) happens in the Course Page.
+          This will expand each module with AI-recommended readings, assignments, and suggestions.
         </p>
       </div>
 
@@ -209,19 +216,20 @@ export const SkeletonReview: React.FC<SkeletonReviewProps> = ({
       <div className="flex items-center gap-3">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium text-stone-600 border border-stone-200 bg-white hover:bg-stone-50 transition"
+          disabled={isExpanding}
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium text-stone-600 border border-stone-200 bg-white hover:bg-stone-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <ArrowLeft size={14} />
           Back
         </button>
         <button
           onClick={() => onAddToCourse(modules, courseNarrative)}
-          disabled={modules.length === 0}
+          disabled={modules.length === 0 || isExpanding}
           className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ backgroundColor: modules.length > 0 ? '#C5A028' : '#d6d3d1' }}
         >
-          <BookOpen size={16} />
-          Add This Course to Course Page
+          {isExpanding ? <Loader2 size={16} className="animate-spin" /> : <BookOpen size={16} />}
+          {isExpanding ? 'Expanding Modules...' : 'Add This Course to Course Page'}
         </button>
       </div>
     </div>

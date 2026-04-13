@@ -55,6 +55,7 @@ const GeneratePage: React.FC = () => {
 
   // Skeleton review state
   const [skeletonLoading, setSkeletonLoading] = useState(false);
+  const [expandLoading, setExpandLoading] = useState(false);
   const [skeletonModules, setSkeletonModules] = useState<SkeletonModule[]>([]);
   const [courseNarrative, setCourseNarrative] = useState('');
 
@@ -186,14 +187,65 @@ const GeneratePage: React.FC = () => {
   // ── Step 3 → Save & navigate: Save skeleton to DB ─────────────────────────
   const handleAddToCourse = async (editedModules: SkeletonModule[], narrative: string) => {
     setErrorMessage('');
+    setExpandLoading(true);
     try {
-      // Build modules with empty arrays for readings/assignments (skeleton only)
-      const modulesForSave = editedModules.map(m => ({
-        ...m,
-        narrative_preview: '',
-        recommended_readings: [],
-        assignments: [],
-      }));
+      // Expand modules concurrently
+      const expandPromises = editedModules.map(async (mod, idx) => {
+        const payload = {
+          skeleton: editedModules,
+          module_index: idx,
+          topic: topic.trim(),
+          level: level === 'other-custom' ? customLevel.trim() : level,
+          audience: audience.trim(),
+          course_type: courseType,
+          design_approach: designApproach,
+          course_code: courseCode.trim(),
+          accreditation_context: accreditationContext.trim(),
+          session_duration: Number(sessionDuration) || 90,
+          approved_sources: approvedSources,
+        };
+
+        const res = await fetch('/api/curriculum/expand', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok || !res.body) throw new Error(`Server error expanding module ${idx + 1}`);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const dataStr = line.slice(6).trim();
+            if (dataStr === '[DONE]') continue;
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.text) fullText += data.text;
+            } catch { }
+          }
+        }
+
+        const clean = fullText.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+        const first = clean.indexOf('{');
+        const last = clean.lastIndexOf('}');
+        if (first === -1 || last === -1) throw new Error(`Invalid expand response for module ${idx + 1}`);
+
+        return JSON.parse(clean.slice(first, last + 1));
+      });
+
+      const fullModules = await Promise.all(expandPromises);
 
       // Build sources for save
       const sourcesForSave = approvedSources.map(s => ({
@@ -214,9 +266,9 @@ const GeneratePage: React.FC = () => {
           audience: audience.trim(),
           course_code: courseCode.trim(),
           course_type: courseType,
-          module_count: editedModules.length,
+          module_count: fullModules.length,
           design_approach: designApproach,
-          modules: modulesForSave,
+          modules: fullModules,
           sources: sourcesForSave,
           course_narrative: narrative,
         }),
@@ -225,7 +277,9 @@ const GeneratePage: React.FC = () => {
       if (!res.ok) throw new Error(`Save failed: ${res.status}`);
       navigate('/courses');
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to save course');
+      setErrorMessage(err.message || 'Failed to expand and save course');
+    } finally {
+      setExpandLoading(false);
     }
   };
 
@@ -521,6 +575,7 @@ const GeneratePage: React.FC = () => {
               courseNarrative={courseNarrative}
               topic={topic}
               loading={skeletonLoading}
+              isExpanding={expandLoading}
               onAddToCourse={handleAddToCourse}
               onBack={() => setStep('source-review')}
             />
