@@ -264,6 +264,21 @@ docker compose up --build
 
 ---
 
+## 🕸️ Using the Knowledge Graph
+
+The knowledge graph feature lets you ingest your own course materials (PDFs, PPTXs, or DOCXs) and explore them as an interactive concept map.
+
+1. Go to the **Knowledge Graph** tab
+2. In the **Upload Materials** panel on the right, fill in:
+   - **Subject name** (required) — e.g. "Organizational Behavior"
+   - **Course code** (optional) — e.g. "ADMS 2400"
+   - **Year** (required) — which year of study this course belongs to
+3. Drop your PDF / PPTX / DOCX files into the dropzone
+4. Click **Build Graph** — ingestion runs in the background (~$0.10–0.30 per 10 PDFs at gpt-4o-mini rates)
+5. Once complete, the graph appears automatically under the correct year and course tab
+
+---
+
 ## 📁 Project Structure
 
 ```
