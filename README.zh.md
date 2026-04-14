@@ -68,32 +68,97 @@
 ## ✨ 功能特性
 
 <details>
-<summary><strong>🧠 课程生成与编辑</strong></summary>
+<summary><strong>🧠 课程生成</strong></summary>
 
-- **主动式信源检索** — Tavily Agent 优先检索学术、视频及新闻资源，确保引用真实有效。
-- **教学理论约束** — 严格对齐布鲁姆认知分类法，执行 i+1 难度递进与认知负荷限制。
-- **交互式大纲导入** — 自动解析 PDF/DOCX 大纲元数据与必读材料。
-- **SSE 流式传输与内联编辑** — 内容逐 token 加载，支持全量拖拽排序与实时内联文字编辑。
-
-</details>
-
-<details>
-<summary><strong>🕸️ 知识图谱 (LightRAG)</strong></summary>
-
-- **材料摄入** — 拖拽上传 PDF/PPTX 自动在后台构建交互式力导向图谱。
-- **多级课程维系** — 学年分类、课程 Pill 导航与动态的学科标签页管理。
-- **RAG 知识查询** — 对图谱进行自然语言问答，带持久化 Redis 缓存与对应节点高亮。
+- **主动式信源检索** — Tavily Agent 在生成前跨多种领域发起检索：学术（JSTOR、Springer、ResearchGate…）、视频（TED、Coursera、YouTube）以及新闻（HBR、Economist、NYT）
+- **可信引用** — 经验证的真实 URL 直接注入提示词；信源面板显示完整标题、类型标签（📄/🎬/📰）及预计阅读/观看时长
+- **结构自检** — 生成完成后自动验证 complexity_level 递进关系与模块数量；结构无效时自动重试一次
+- **布鲁姆认知分类法对齐** — 课程代码（如 ACCT 301）自动映射到对应认知层级（记忆 → 创造）
+- **i+1 难度递进** — complexity_level 在各模块间递增，每个模块都建立在前一个基础之上
+- **认知负荷约束** — 每个模块最多 2 篇阅读材料，每篇均附有明确的教学理论依据
+- **课程类型** — 支持项目制、论文、辩论/角色扮演、实验/模拟，或混合评估形式
+- **SSE 流式生成** — 内容逐 token 流式输出；生成开始前显示研究 Agent 状态
+- **大纲导入** — 上传 PDF 或 DOCX；GPT 自动提取主题、课程代码、难度级别、目标受众、模块数量及必读材料，预填充表单
+- **课程叙事** — 在骨架生成阶段自动生成 2–3 句话的"课程故事"；教授可编辑，学生只读
 
 </details>
 
 <details>
-<summary><strong>🤖 A2A 多 Agent 分析与课程 Agent</strong></summary>
+<summary><strong>✏️ 模块编辑器</strong></summary>
 
-- **5 节点 Hive 架构** — 协调器统领 BehaviorAnalyst、RiskDetector、ContentOptimizer 及 CohortComparator。
-- **课程感知的 xAPI 数据** — 真实的学习行为仿真，自动感知并适应最近被优化的课程模块。
-- **三层 LTM 架构** — Hot 层（Redis）、Warm 层（PostgreSQL 快照）以及 Cold 层（版本化 Markdown YAML）。
-- **人在回路的课程优化** — Curriculum Agent 动态推送模块改进建议，支持全量还原 (Undo) 历史追踪。
-- **多维报告生成** — 导出包含风险检测与历史趋势图的 PDF/DOCX/Excel 专业图表报告。
+- **单卡片导航** — 左右箭头逐模块切换，或点击侧边栏索引直接跳转
+- **拖拽排序** — 无需重新生成即可调整模块顺序
+- **内联编辑** — 三个标签页（学习目标、资源、评估）中的每个字段均可直接编辑
+- **增删条目** — 学习目标、阅读材料、作业均可自由增删
+- **资源卡片** — 每条阅读材料展示类型标签、预计时长，并直接链接到原始信源
+- **LocalStorage 持久化** — 编辑内容在页面刷新后仍然保留
+- **课程叙事编辑** — 教授可直接内联编辑课程级别的叙事文本；学生端仅展示只读版本
+
+</details>
+
+<details>
+<summary><strong>📦 导出</strong></summary>
+
+- **IMS Common Cartridge（.imscc）** — 可直接导入 Canvas、Moodle、D2L
+- **PDF 导出** — 客户端 jsPDF；每模块显示阅读材料标题，完整引用汇总至结尾 References 部分
+- **DOCX 导出** — python-docx 后端；结构与 PDF 导出一致
+- **Markdown 导出** — 将含阅读材料与作业的完整课程导出为 .md 文件
+- **引用格式选择器** — APA / MLA / Chicago，适用于所有导出格式
+- **复制到剪贴板** — 一键粘贴到任意编辑器
+
+</details>
+
+<details>
+<summary><strong>🕸️ 知识图谱（LightRAG）</strong></summary>
+
+- **材料导入面板** — 右侧常驻面板；拖拽上传 PDF/PPTX（最多 15 个文件，每个 50MB）；逐文件进度追踪；Build Graph 按钮触发 LightRAG 导入
+- **学年侧边栏** — Year 1–4 + All Courses 导航；课程按学年分类展示
+- **课程管理** — 每个学年有课程横幅与 pill 导航；支持增删/重命名/拖拽排序 course pill；每门课有可编辑的完整课程名标签；修改自动保存至 localStorage
+- **动态学科标签页** — 支持增删/重命名/拖拽排序学科标签；标签状态跨 session 持久化
+- **力导向可视化** — 交互式 2D 图谱，暖棕色调配色；节点大小随连接数缩放
+- **节点详情面板** — 点击任意概念节点查看其定义与连接数
+- **全屏模式** — 全屏切换，支持 ESC 键退出
+- **课程搜索** — 按名称或课程代码跨学年搜索；自动定位到对应学年
+- **概念搜索** — 在图谱中筛选并高亮匹配节点
+- **知识查询** — 用自然语言对图谱提问；Redis 缓存答案（持久化缓存）
+- **查询历史** — 可收藏和删除的历史记录，附学科标签
+- **持久事件循环** — LightRAG 异步引擎运行于独立后台线程；首次查询后不再有冷启动延迟
+
+</details>
+
+<details>
+<summary><strong>🤖 A2A 多 Agent 分析系统</strong></summary>
+
+- **5 节点流水线** — `Orchestrator → [BehaviorAnalyst ‖ RiskDetector ‖ ContentOptimizer ‖ CohortComparator] → aggregate → LTM snapshot`。当前所有 Agent 均为 sql-only（Phase 2 = LLM 集成待开发）。
+- **PII 匿名化** — 学生姓名/邮箱在进入 Agent 前全部匿名化；真实身份仅在最终报告聚合后恢复，供教授查看。
+- **xAPI Mock 数据引擎** — 支持 4 种噪声级别（5%/10%/15%/20%），通过前端 UI 选择；基于 `HOUR_WEIGHTS` 的真实 6 周时间戳分布；按学生画像分布（高绩效/普通/挣扎/脱离）。**课程感知模式**：查询 `change_log` 表中已批准的模块，使用 `IMPROVED_VERB_DIST` 模拟优化后改善效果。
+- **Hive 风格节点架构** — 每个 Agent 继承 `BaseNode`，支持 reflexion/重试（最多 3 次）、L3 JSON Schema 校验、SQL Fallback
+- **SharedMemory (Redis)** — Agent 间通过 `a2a:{session_id}:{key}` 键名在 Redis 共享内存通信，支持本地 dict 降级
+- **Token 用量追踪** — `NodeResult` 携带 `tokens_in / tokens_out / tokens_cache_read / tokens_cache_write` 字段；Orchestrator 在每次运行后向后端日志打印 Token 汇总表。
+- **LTM 三层架构** — Hot（Redis，流水线运行时）、Warm（PostgreSQL `course_analysis_snapshots`，每次分析快照）、Cold（`data/ltm/*.md` YAML+Markdown，版本化归档）
+- **历史趋势可视化** — `TrendChart.tsx`（纯 SVG）显示 at-risk % 与 completion rate 随时间变化；迷你模式 + 全屏 Modal（日期标签、更大数据点、概览数据卡片）
+- **SSE 实时流式反馈** — 分析进度通过 Server-Sent Events 流式传输；前端实时显示 Agent 状态
+- **Student Data 仪表板** — 独立全页分析视图，可拖拽侧边栏、分区导航、噪声级别选择器、Token Usage 面板
+- **风险检测** — 6 个信号；阈值：中风险 ≥ 4，高风险 ≥ 7；不活跃窗口：14 / 21 天
+- **群组对比** — 学生分为 high_performers / average / at_risk / disengaged 四个群组，含平均完成率与困难率
+- **6 分区报告导出** — PDF（Anthropic 风格封面）、DOCX、Excel。包含：行为分析、风险评估、内容优化、群组对比、**分析历史**（表格 + matplotlib 趋势图）、总览与建议。文件名含课程 slug + 噪声标签。
+
+</details>
+
+<details>
+<summary><strong>🎯 课程 Agent — 主动式课程优化</strong></summary>
+
+- **教授通知栏** — CoursePage 顶部琰琥色持久通知栏，当 AI 生成的课程建议可用时提醒教授，附带“Dismiss”和“Review →”按钮
+- **教授滑出抽屉** — 点击“Review”从右侧滑出 400px 建议抽屉，分为“待处理建议”（Apply）和“已应用变更”（Redo）两个区域
+- **学生通知栏** — 蓝色横幅显示“N 个模块已更新 — 基于教师优化”，附带 Dismiss 和 Review 按钮
+- **学生滑出抽屉** — 点击“Review”打开蓝色主题抽屉，列出更新的模块并带有“Go to Module”导航按钮
+- **可拖拽悬浮球（FAB）** — 关闭通知栏后，右下角出现可拖拽的悬浮球（🤖 琰琥色 / ✨ 蓝色）；点击直接打开抽屉（不恢复 banner）；hover 显示 ✕ 可彻底关闭；支持自由拖拽到屏幕任意位置
+- **人在回路的 Apply** — 点击 Apply 弹出确认弹窗，展示修改前后对比；教授明确批准每一项变更
+- **Redo（撤销 Apply）** — 应用的变更会备份原始模块数据；点击“Redo”恢复模块到应用前状态，并将建议移回待处理
+- **模块标记** — `module_flags` 表存储被标记的模块，包含信号来源、标记级别及详细指标
+- **变更日志** — `change_log` 表记录所有建议，状态追踪（pending → applied → dismissed）并存储 backup_data 用于 Redo
+- **全课程覆盖** — 种子脚本自动发现所有课程，为每门课生成标记和建议（含备份数据）
+- **分析跳转** — 教授抽屉中的“View Full Analytics →”按钮直接导航到 Student Data 分析页面
 
 </details>
 
