@@ -68,97 +68,40 @@
 ## ✨ Features
 
 <details>
-<summary><strong>🧠 Curriculum Generation</strong></summary>
+<summary><strong>🧠 Curriculum Generation & Editing</strong></summary>
 
-- **Agentic source research** — Tavily agent runs multi-type queries across academic (JSTOR, Springer, ResearchGate…), video (TED, Coursera, YouTube), and news (HBR, Economist, NYT) domains before generation begins
-- **Grounded citations** — verified real URLs injected into the prompt; sources panel shows full titles, type badges (📄/🎬/📰), and estimated read/watch time
-- **Structure self-check** — after generation, validates complexity_level progression and module count; auto-retries once if structure is invalid
-- **Bloom's Taxonomy alignment** — course code (e.g. ACCT 301) automatically maps to the correct cognitive level (Remember → Create)
-- **i+1 difficulty progression** — complexity_level increases across modules so each one builds on the last
-- **Cognitive Load constraints** — max 2 readings per module, each with explicit pedagogical rationale
-- **Course typology** — project-based, essay, debate/roleplay, lab/simulation, or mixed assessment formats
-- **SSE streaming** — content streams token-by-token; research agent status shown before generation starts
-- **Syllabus import** — upload PDF or DOCX; GPT extracts topic, course code, level, audience, module count, and required readings to pre-fill the form
-- **Course narrative** — a 2–3 sentence "story of the course" generated at the skeleton phase; professor-editable, student read-only
-
-</details>
-
-<details>
-<summary><strong>✏️ Module Editor</strong></summary>
-
-- **Single-card navigation** — left/right arrows through modules, or click the sidebar index
-- **Drag-and-drop reordering** — restructure the sequence without regenerating
-- **Inline editing** — edit every field across all three tabs (Objectives, Resources, Assessment)
-- **Add / remove items** — learning objectives, readings, assignments all editable
-- **Resource cards** — each reading shows type badge, estimated time, and links directly to the source
-- **LocalStorage persistence** — edits survive page refresh
-- **Course narrative editing** — professor can edit the course-level narrative inline; students see read-only version
-
-</details>
-
-<details>
-<summary><strong>📦 Export</strong></summary>
-
-- **IMS Common Cartridge (.imscc)** — direct import into Canvas, Moodle, D2L
-- **PDF export** — client-side jsPDF; readings listed as inline titles per module, full citations collected in a References section at the end
-- **DOCX export** — python-docx backend; same structure as PDF
-- **Markdown export** — full curriculum with readings and assignments as a .md file
-- **Citation format selector** — APA / MLA / Chicago, applied across all export formats
-- **Copy to clipboard** — paste into any editor
+- **Agentic Source Research** — Tavily agent retrieves academic, video, and news sources with verified URLs before generation.
+- **Pedagogical Guardrails** — Enforces Bloom's Taxonomy progression, i+1 difficulty, and Cognitive Load constraints.
+- **Interactive Syllabus Import** — Auto-extracts metadata and required readings from uploaded PDFs/DOCXs.
+- **SSE Streaming & Inline Editing** — Token-by-token generation with full drag-and-drop module reordering and inline text editing.
 
 </details>
 
 <details>
 <summary><strong>🕸️ Knowledge Graph (LightRAG)</strong></summary>
 
-- **Material ingestion** — right-side panel always visible; drag-and-drop PDF/PPTX upload (max 15 files, 50MB each); per-file progress tracking; Build Graph button triggers LightRAG ingestion
-- **Undergraduate year sidebar** — Year 1–4 + All Courses navigation; courses organized by academic year
-- **Course management** — course banner with pill navigation per year; add/delete/rename/drag-reorder course pills; each course has an editable full name tag; changes auto-saved to localStorage
-- **Dynamic subject tabs** — add/delete/rename/drag-reorder subject tabs; tab state persists across sessions
-- **Force-directed visualization** — interactive 2D graph with warm brown palette; node size scales with connection count
-- **Node detail panel** — click any concept to see its definition and connection count
-- **Fullscreen mode** — fullscreen toggle with ESC key support
-- **Course search** — search courses by name or code across all years; auto-navigates to correct year
-- **Concept search** — filter and highlight matching nodes across the graph
-- **Knowledge query** — ask natural language questions against the graph; Redis-cached answers (persistent cache)
-- **Query history** — starred + deletable history of past questions with subject tags
-- **Persistent event loop** — LightRAG async engine runs on a dedicated background thread; no cold-start penalty after first query
+- **Material Ingestion** — Drag-and-drop PDF/PPTX upload builds an interactive force-directed graph in the background.
+- **Multi-Level Organization** — Academic year categorization, course pill navigation, and dynamic subject tabs.
+- **RAG Knowledge Query** — Natural language Q&A against the graph with Redis-cached persistence and node highlighting.
 
 </details>
 
 <details>
-<summary><strong>🤖 A2A Multi-Agent Analytics</strong></summary>
+<summary><strong>🤖 A2A Multi-Agent Analytics & Curriculum Agent</strong></summary>
 
-- **5-node pipeline** — `Orchestrator → [BehaviorAnalyst ‖ RiskDetector ‖ ContentOptimizer ‖ CohortComparator] → aggregate → LTM snapshot`. All agents are currently sql-only (Phase 2 = LLM integration pending).
-- **PII anonymisation** — student names/emails are anonymised before agent processing; real identities are restored only in the final aggregated report for the professor.
-- **xAPI mock data engine** — 4 noise levels (5%/10%/15%/20%) seeded from frontend UI; realistic 6-week timestamp distribution with `HOUR_WEIGHTS` and profile-based student spread (high_performer / average / struggling / disengaged). **Curriculum-aware**: queries `change_log` for applied modules and uses `IMPROVED_VERB_DIST` to simulate realistic post-optimization improvement.
-- **Hive-style node architecture** — each agent inherits `BaseNode` with reflexion/retry (max 3), L3 JSON Schema validation, and SQL fallback
-- **SharedMemory (Redis)** — agents communicate through Redis-backed shared memory (`a2a:{session_id}:{key}`) with local dict fallback
-- **Token usage tracking** — `NodeResult` carries `tokens_in / tokens_out / tokens_cache_read / tokens_cache_write`. Orchestrator prints a token summary table to backend log after each run; report JSON includes a `token_summary` block. Frontend sidebar shows a Token Usage panel (currently all zero — sql-only Phase 1).
-- **LTM 3-layer architecture** — Hot (Redis, pipeline runtime), Warm (PostgreSQL `course_analysis_snapshots`, persisted per-run), Cold (`data/ltm/*.md` YAML+Markdown, versioned with course codes)
-- **Historical trend visualization** — `TrendChart.tsx` (pure SVG) shows at-risk % and completion rate over time; mini mode + full-screen modal with date labels, larger data points, and summary stat cards
-- **SSE real-time streaming** — analysis progress streams via Server-Sent Events; frontend shows live agent status
-- **Student Data dashboard** — dedicated full-page analytics view with resizable sidebar, section navigation, noise-level selector, and Token Usage panel
-- **Risk detection** — 6 signals; thresholds: medium ≥ 4, high ≥ 7; inactivity windows: 14 / 21 days
-- **Cohort comparison** — students grouped into high_performers / average / at_risk / disengaged with avg completion and struggle rates
-- **6-section report export** — PDF (Anthropic-style cover), DOCX, Excel. Sections: Behavior Analysis, Risk Assessment, Content Optimization, Cohort Comparison, **Analysis History** (table + matplotlib trend chart), Overview & Recommended Actions. Filenames include course slug + noise label.
+- **5-Node Hive Pipeline** — Orchestrator coordinates BehaviorAnalyst, RiskDetector, ContentOptimizer, and CohortComparator.
+- **Curriculum-Aware xAPI Data** — Realistic student behavior simulation adapting to recent curriculum optimizations.
+- **3-Layer LTM Architecture** — Hot (Redis), Warm (PostgreSQL snapshots), and Cold (versioned Markdown YAML).
+- **Human-in-the-Loop Optimization** — Curriculum Agent dynamically proposes module enhancements with full Undo/Redo capability.
+- **Comprehensive Reporting** — Exports PDF/DOCX/Excel reports featuring risk detection arrays and historical trend charts.
 
 </details>
 
 <details>
-<summary><strong>🎯 Curriculum Agent — Agentic Curriculum Optimization</strong></summary>
+<summary><strong>📦 Export Formats</strong></summary>
 
-- **Professor Notification Bar** — persistent amber bar on CoursePage alerts professors when suggestions are available, with "Dismiss" and "Review →" buttons
-- **Professor Slide-out Drawer** — clicking "Review" opens a 400px drawer with Pending Suggestions (Apply) and Applied Changes (Redo) sections; Redo restores original module content
-- **Student Notification Bar** — blue bar shows "N modules updated — based on instructor optimization" with Dismiss and Review buttons
-- **Student Slide-out Drawer** — clicking "Review" opens a blue-themed drawer listing updated modules with "Go to Module" navigation buttons
-- **Draggable Floating Action Button (FAB)** — after dismissing either banner, a draggable floating ball (🤖 amber / ✨ blue) appears at bottom-right; click opens the drawer directly without restoring the banner; hover reveals ✕ to permanently dismiss; supports free-drag to any screen position
-- **Human-in-the-loop Apply** — clicking "Apply" opens a confirmation modal with before/after preview; professor explicitly approves each change
-- **Redo (Undo Apply)** — applied changes store original module data as backup; clicking "Redo" restores the module to its pre-apply state and moves the suggestion back to Pending
-- **Module Flags** — `module_flags` table stores flagged modules with signal sources, flag levels (yellow / orange), and detailed metrics
-- **Change Log** — `change_log` table records all recommendations with status tracking (pending → applied → dismissed) and backup_data for redo
-- **Cross-course coverage** — seed script auto-discovers all courses and generates flags + suggestions with backup data for every course
-- **Analytics redirect** — "View Full Analytics →" in the professor drawer navigates to the Student Data analytics page
+- **IMS Common Cartridge (.imscc)** for LMS integration (Canvas, Moodle, D2L).
+- **PDF, DOCX, and Markdown** with dynamically formatted citations (APA/MLA/Chicago).
 
 </details>
 
@@ -321,21 +264,6 @@ docker compose up --build
 
 ---
 
-## 🕸️ Using the Knowledge Graph
-
-The knowledge graph feature lets you ingest your own course materials (PDFs, PPTXs, or DOCXs) and explore them as an interactive concept map.
-
-1. Go to the **Knowledge Graph** tab
-2. In the **Upload Materials** panel on the right, fill in:
-   - **Subject name** (required) — e.g. "Organizational Behavior"
-   - **Course code** (optional) — e.g. "ADMS 2400"
-   - **Year** (required) — which year of study this course belongs to
-3. Drop your PDF / PPTX / DOCX files into the dropzone
-4. Click **Build Graph** — ingestion runs in the background (~$0.10–0.30 per 10 PDFs at gpt-4o-mini rates)
-5. Once complete, the graph appears automatically under the correct year and course tab
-
----
-
 ## 📁 Project Structure
 
 ```
@@ -451,49 +379,7 @@ plot-ark/
 
 ## 🗺️ Roadmap
 
-- [x] Flask SSE streaming backend
-- [x] React frontend with module card navigation
-- [x] Docker Compose dev environment
-- [x] Bloom's Taxonomy course code mapping
-- [x] i+1 difficulty progression
-- [x] Inline module editing (all fields)
-- [x] Drag-and-drop module reordering
-- [x] IMS Common Cartridge + Markdown export
-- [x] Tavily agentic research pipeline — real academic sources before generation
-- [x] PostgreSQL history — persist, favorite, and delete curricula
-- [x] LMS-style module sidebar (D2L Brightspace-inspired layout)
-- [x] Multi-type resource pipeline — academic / video / news with type badges and estimated time
-- [x] Structure self-check with auto-retry — validates complexity progression and module count
-- [x] LightRAG knowledge graph — PDF/PPTX ingestion → interactive force-directed concept map
-- [x] Knowledge graph query — natural language Q&A against course material graph, Redis-cached
 - [ ] Assignment Timeline + Due Date calculator
-- [x] Human-in-the-loop source review — approve/reject Tavily results before generation
-- [x] xAPI mini-LRS — statement ingestion, learner state, professor analytics panel (mock data)
-- [x] Syllabus import — PDF/DOCX → auto-fill form + extract required readings
-- [x] Course narrative — course-level story generated at skeleton phase, professor-editable
-- [x] Citation format selector — APA / MLA / Chicago across all exports
-- [x] PDF + DOCX export — client-side jsPDF and python-docx backend
-- [x] Multi-course management — dynamic course slots with add/delete/rename/drag-reorder
-- [x] My Courses dashboard — card grid with course history overview
-- [x] Knowledge Graph course management — year sidebar, course banner, dynamic subject tabs, fullscreen, course search
-- [x] Knowledge Graph ingestion panel — drag-and-drop material upload, always-visible right panel
-- [x] Backend modularization — Flask Blueprints (7 routes + 3 services), app.py reduced to ~30 lines
-- [x] Frontend code splitting — extracted reusable UI components (Select, Input, SyllabusUpload)
-- [x] Session Duration pill selector — quick presets + custom hr/min input
-- [x] Module Count pill selector — quick presets + custom input
-- [x] A2A multi-agent analytics — 5-node pipeline (Orchestrator + 4 parallel agents, sql-only Phase 1)
-- [x] Student Data dashboard — analytics page with resizable sidebar, section nav, noise selector, Token Usage panel
-- [x] Analytics report export — PDF (Anthropic-style cover), DOCX, Excel; filename includes course slug + noise label
-- [x] xAPI mock data engine — 4 noise levels (5/10/15/20%), HOUR_WEIGHTS, profile-based student spread
-- [x] PII anonymisation — student data anonymised before agent processing, de-anonymised in final report
-- [x] Token usage tracking — NodeResult tokens_in/out/cache fields; token_summary in report JSON; backend log table
-- [x] LTM 3-layer architecture — Hot (Redis runtime), Warm (PostgreSQL snapshots), Cold (versioned .md YAML files)
-- [x] Curriculum Agent — agentic curriculum optimization with notification bar, slide-out drawer, human-in-the-loop Apply/Redo, module flags, and change log
-- [x] Student Update Drawer — student-facing slide-out drawer showing updated modules with "Go to Module" navigation
-- [x] Draggable FAB — floating action button after banner dismiss; draggable, click opens drawer, hover ✕ to permanently close
-- [x] Student Feedback — per-module sentiment collection (Got it / Mostly got it / Something's off / Didn't read) with optional comments
-- [x] Curriculum-aware xAPI generator — queries change_log for applied modules, uses IMPROVED_VERB_DIST to simulate post-optimization improvement
-- [x] Historical trend visualization — TrendChart (mini + full-screen modal), matplotlib chart in PDF/DOCX, Analysis History section in reports
 - [ ] A2A Phase 2 — LLM integration for BehaviorAnalyst, RiskDetector, ContentOptimizer, CohortComparator
 - [ ] Progressive summarization — semester-level LTM summaries for LLM context management
 - [ ] Professor LTM — preference learning from edit history
