@@ -46,3 +46,6 @@ exports/
 *.analytics.pdf
 *.analytics.docx
 *.analytics.xlsx
+
+# IDE Support
+.claude/
