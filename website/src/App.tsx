@@ -1,9 +1,11 @@
 import { motion } from 'framer-motion';
 import {ArrowRight, BookOpen, Layers, GitBranch, BrainCircuit } from 'lucide-react';
 import logoUrl from './assets/logo.png';
-import researchUrl from './assets/research.gif';
-import knowledgeUrl from './assets/knowledge.gif';
-import xapiUrl from './assets/xapi.gif';
+import courseGenUrl from './assets/Course generation.gif';
+import aiSuggestionUrl from './assets/AI suggestion within course generation.gif';
+import studentPanelUrl from './assets/Student panel with four buttons.gif';
+import xapiDataUrl from './assets/xAPI student data analysis.gif';
+import curriculumRerunUrl from './assets/Curriculum agent & xAPI rerun.gif';
 
 function App() {
   const fadeIn = {
@@ -172,14 +174,14 @@ function App() {
               className="flex flex-col lg:flex-row items-center gap-16"
             >
               <div className="lg:w-1/2">
-                <h2 className="text-4xl font-serif font-bold mb-6">Agentic Research. <br/>Human in the Loop.</h2>
+                <h2 className="text-4xl font-serif font-bold mb-6">Course Generation</h2>
                 <p className="text-lg text-gray-600 leading-relaxed mb-8">
-                  Tavily agent runs multi-type queries across academic, video, and news domains before generation begins. Humans approve or reject the verified URLs so there are no hallucinated citations.
+                  Agentic source retrieval, syllabus import, and interactive module adjustment. Plot Ark aligns with Bloom's Taxonomy and Cognitive Load for rigorous curriculum design.
                 </p>
               </div>
               <div className="lg:w-1/2">
                 <div className="rounded-2xl overflow-hidden shadow-2xl border border-nobel-gold/20">
-                  <img src={researchUrl} alt="Research Agent Demo" className="w-full h-auto" />
+                  <img src={courseGenUrl} alt="Course Generation Demo" className="w-full h-auto" />
                 </div>
               </div>
             </motion.div>
@@ -192,14 +194,14 @@ function App() {
               className="flex flex-col lg:flex-row-reverse items-center gap-16"
             >
               <div className="lg:w-1/2">
-                <h2 className="text-4xl font-serif font-bold mb-6">Interactive Knowledge Graphs</h2>
+                <h2 className="text-4xl font-serif font-bold mb-6">AI Suggestions</h2>
                 <p className="text-lg text-gray-600 leading-relaxed mb-8">
-                  Ingest PPTXs and PDFs to construct an interactive 2D graph with warm aesthetics. Click any concept to see its definition, or ask natural language queries against the semantic network.
+                  Get contextual AI tutors and teaching suggestions directly within the curriculum editor as you design the course. 
                 </p>
               </div>
               <div className="lg:w-1/2">
-                <div className="rounded-2xl overflow-hidden shadow-2xl border border-nobel-gold/20 bg-nobel-dark p-2">
-                  <img src={knowledgeUrl} alt="Knowledge Graph Demo" className="w-full h-auto rounded-xl" />
+                <div className="rounded-2xl overflow-hidden shadow-2xl border border-nobel-gold/20">
+                  <img src={aiSuggestionUrl} alt="AI Suggestion Demo" className="w-full h-auto" />
                 </div>
               </div>
             </motion.div>
@@ -212,14 +214,54 @@ function App() {
               className="flex flex-col lg:flex-row items-center gap-16"
             >
               <div className="lg:w-1/2">
-                <h2 className="text-4xl font-serif font-bold mb-6">A2A Pipeline & xAPI Analytics</h2>
+                <h2 className="text-4xl font-serif font-bold mb-6">Student Feedback Panel</h2>
                 <p className="text-lg text-gray-600 leading-relaxed mb-8">
-                  A 5-node Agent-to-Agent architecture evaluates student learning behaviors. Inject mock xAPI data with variable noise levels, and watch the pipeline automatically detect at-risk students and cross-reference syllabus engagement to generate detailed PDF/DOCX reports.
+                  Per-module sentiment collection feeds directly into the analytics loop. Students indicate clarity via a four-button interface, logging invaluable data for continuous optimization.
+                </p>
+              </div>
+              <div className="lg:w-1/2">
+                <div className="rounded-2xl overflow-hidden shadow-2xl border border-nobel-gold/20">
+                  <img src={studentPanelUrl} alt="Student Panel Demo" className="w-full h-auto rounded-xl" />
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+              className="flex flex-col lg:flex-row-reverse items-center gap-16"
+            >
+              <div className="lg:w-1/2">
+                <h2 className="text-4xl font-serif font-bold mb-6">xAPI Student Data Analysis</h2>
+                <p className="text-lg text-gray-600 leading-relaxed mb-8">
+                  A 5-node A2A agent pipeline simulates and detects learner risk. Visualizes engagement trends, risk assessments, and automatically exports comprehensive reports.
                 </p>
               </div>
               <div className="lg:w-1/2">
                 <div className="rounded-2xl overflow-hidden shadow-2xl border border-nobel-gold/20 bg-nobel-dark p-2">
-                  <img src={xapiUrl} alt="xAPI Analytics Demo" className="w-full h-auto rounded-xl" />
+                  <img src={xapiDataUrl} alt="xAPI Analysis Demo" className="w-full h-auto rounded-xl" />
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+              className="flex flex-col lg:flex-row items-center gap-16"
+            >
+              <div className="lg:w-1/2">
+                <h2 className="text-4xl font-serif font-bold mb-6">Agentic Curriculum Rerun</h2>
+                <p className="text-lg text-gray-600 leading-relaxed mb-8">
+                  Human-in-the-loop module optimization based on empirical learner data. The curriculum agent dynamically proposes improvements with Redo/Undo history tracking.
+                </p>
+              </div>
+              <div className="lg:w-1/2">
+                <div className="rounded-2xl overflow-hidden shadow-2xl border border-nobel-gold/20">
+                  <img src={curriculumRerunUrl} alt="Curriculum Rerun Demo" className="w-full h-auto rounded-xl" />
                 </div>
               </div>
             </motion.div>

@@ -39,25 +39,25 @@
 
 ## 🎬 Demo
 
-**syllabus upload** — drop PDF/DOCX → auto-fill form fields + extract required readings
+**Course generation** — agentic source retrieval, syllabus import, and interactive module adjustment
 
-![syllabus upload](docs/Syllabus%20Upload.gif)
+![Course generation](docs/Course%20generation.gif)
 
-**research agent&human in the loop** — Tavily research agent → human source review → approve/reject
+**AI suggestion within course generation** — AI tutors and teaching suggestions directly within the curriculum editor
 
-![research agent&human in the loop](docs/research%20agent%26human%20in%20the%20loop.gif)
+![AI suggestion within course generation](docs/AI%20suggestion%20within%20course%20generation.gif)
 
-**module adjuistment** — drag-and-drop reorder, inline editing, all fields editable
+**Student panel with four buttons** — per-module sentiment collection feeding into the analytics loop
 
-![module adjuistment](docs/module%20adjuistment.gif)
+![Student panel with four buttons](docs/Student%20panel%20with%20four%20buttons.gif)
 
-**Knowledge Graph** — concept map, node detail, natural language query with node highlight
+**xAPI student data analysis** — 5-node A2A agent pipeline simulating and detecting learner risk
 
-![Knowledge Graph](docs/Knowledge%20graph%20.gif)
+![xAPI student data analysis](docs/xAPI%20student%20data%20analysis.gif)
 
-**xAPI Analytics** — seed mock learner data → run A2A multi-agent pipeline → export PDF/DOCX/Excel report
+**Curriculum agent & xAPI rerun** — human-in-the-loop module optimization based on learner data
 
-![xAPI Analytics](docs/xAPI%20usage.gif)
+![Curriculum agent & xAPI rerun](docs/Curriculum%20agent%20%26%20xAPI%20rerun.gif)
 
 ▶ [Full demo video (Google Drive)](https://drive.google.com/file/d/14SLOJFImW9TqyyXipJL1wumkptir7WuU/view?usp=sharing)
 

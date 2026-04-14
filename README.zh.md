@@ -39,25 +39,25 @@
 
 ## 🎬 演示
 
-**syllabus upload** — 拖入 PDF/DOCX → 自动填充表单字段 + 提取必读材料
+**课程生成 (Course generation)** — 主动式信源检索、大纲导入与交互式模块调整
 
-![syllabus upload](docs/Syllabus%20Upload.gif)
+![Course generation](docs/Course%20generation.gif)
 
-**research agent&human in the loop** — Tavily 研究 Agent → 人工信源审核 → 批准/拒绝
+**生成过程中的 AI 建议 (AI suggestion)** — 将 AI 助教与教学建议直接嵌入课程编辑器
 
-![research agent&human in the loop](docs/research%20agent%26human%20in%20the%20loop.gif)
+![AI suggestion within course generation](docs/AI%20suggestion%20within%20course%20generation.gif)
 
-**module adjuistment** — 拖拽排序、内联编辑、所有字段均可修改
+**带四按钮的学生面板 (Student panel)** — 每模块情绪收集，数据回流到分析闭环
 
-![module adjuistment](docs/module%20adjuistment.gif)
+![Student panel with four buttons](docs/Student%20panel%20with%20four%20buttons.gif)
 
-**Knowledge Graph** — 概念图、节点详情、自然语言查询与节点高亮
+**xAPI 学生数据分析 (Data analysis)** — 5 节点 A2A 分析流水线，模拟并检测学习者预警风险
 
-![Knowledge Graph](docs/Knowledge%20graph%20.gif)
+![xAPI student data analysis](docs/xAPI%20student%20data%20analysis.gif)
 
-**xAPI 学习分析** — 注入模拟学习者数据 → 运行 A2A 多 Agent 流水线 → 导出 PDF/DOCX/Excel 报告
+**课程 Agent 与 xAPI 重演 (Curriculum agent & xAPI rerun)** — 基于学习者数据的、人在回路的模块内容优化
 
-![xAPI Analytics](docs/xAPI%20usage.gif)
+![Curriculum agent & xAPI rerun](docs/Curriculum%20agent%20%26%20xAPI%20rerun.gif)
 
 ▶ [完整演示视频（Google Drive）](https://drive.google.com/file/d/14SLOJFImW9TqyyXipJL1wumkptir7WuU/view?usp=sharing)
 
