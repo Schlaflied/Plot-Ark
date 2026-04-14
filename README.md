@@ -343,10 +343,11 @@ plot-ark/
 ├── docker-compose.yml
 ├── .env.example
 ├── docs/
-│   ├── Syllabus Upload.gif              ← Demo: syllabus import → form auto-fill
-│   ├── research agent&human in the loop.gif  ← Demo: research agent + source review
-│   ├── module adjuistment.gif           ← Demo: module editing + drag-and-drop
-│   └── Knowledge graph .gif             ← Demo: knowledge graph features
+│   ├── Course generation.gif                    ← Demo: Agentic generation, syllabus import, module adjustment
+│   ├── AI suggestion within course generation.gif ← Demo: In-editor AI tutors and suggestions
+│   ├── Student panel with four buttons.gif      ← Demo: Per-module sentiment collection
+│   ├── xAPI student data analysis.gif           ← Demo: 5-node A2A agent pipeline and report export
+│   └── Curriculum agent & xAPI rerun.gif        ← Demo: Human-in-the-loop module optimization
 │
 ├── backend/                             ← Flask (modular Blueprints)
 │   ├── app.py                           ← Entry point (~30 lines, registers Blueprints)

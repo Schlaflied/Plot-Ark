@@ -345,10 +345,11 @@ plot-ark/
 ├── docker-compose.yml
 ├── .env.example
 ├── docs/
-│   ├── Syllabus Upload.gif              ← 演示：大纲导入 → 表单自动填充
-│   ├── research agent&human in the loop.gif  ← 演示：研究 Agent + 人工信源审核
-│   ├── module adjuistment.gif           ← 演示：模块编辑 + 拖拽排序
-│   └── Knowledge graph .gif             ← 演示：知识图谱功能
+│   ├── Course generation.gif                    ← 演示: 主动式课程生成、大纲导入与模块排序
+│   ├── AI suggestion within course generation.gif ← 演示: 课程编辑器中的 AI 助教建议
+│   ├── Student panel with four buttons.gif      ← 演示: 每模块学情情绪收集反馈
+│   ├── xAPI student data analysis.gif           ← 演示: 5 节点多 Agent 数据分析流水线
+│   └── Curriculum agent & xAPI rerun.gif        ← 演示: 人在回路的课程内容动态优化闭环
 │
 ├── backend/                             ← Flask（模块化 Blueprints）
 │   ├── app.py                           ← 入口文件（~30 行，注册 Blueprints）

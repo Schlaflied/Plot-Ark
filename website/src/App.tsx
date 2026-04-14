@@ -255,9 +255,20 @@ function App() {
             >
               <div className="lg:w-1/2">
                 <h2 className="text-4xl font-serif font-bold mb-6">Agentic Curriculum Rerun</h2>
-                <p className="text-lg text-gray-600 leading-relaxed mb-8">
+                <p className="text-lg text-gray-600 leading-relaxed mb-6">
                   Human-in-the-loop module optimization based on empirical learner data. The curriculum agent dynamically proposes improvements with Redo/Undo history tracking.
                 </p>
+                <div className="p-5 bg-white rounded-xl shadow-sm border border-nobel-gold/20 flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-nobel-gold/10 flex items-center justify-center">
+                      <Layers className="w-4 h-4 text-nobel-gold" />
+                    </div>
+                    <h3 className="font-semibold text-nobel-dark">The Active Agentic Loop</h3>
+                  </div>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    <span className="font-medium text-nobel-gold/80">xAPI Events</span> → A2A Assessment → LTM Snapshot → Curriculum Agent → <span className="font-medium text-nobel-gold/80">Professor HITL</span> → Apply → Curriculum-aware re-seed → A2A re-assessment → updated LTM
+                  </p>
+                </div>
               </div>
               <div className="lg:w-1/2">
                 <div className="rounded-2xl overflow-hidden shadow-2xl border border-nobel-gold/20">
