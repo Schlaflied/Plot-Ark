@@ -126,10 +126,17 @@ const NeedHelpSection: React.FC<NeedHelpSectionProps> = ({ courseId, events, byM
               {expandedModule === m.module_id && (
                 <div className="mt-1 ml-4 border-l-2 border-amber-200 pl-4 space-y-1">
                   {events.filter(e => e.module_id === m.module_id).map((e, i) => (
-                    <div key={i} className="flex items-center justify-between py-1.5 text-xs text-stone-600">
-                      <span className="font-medium">{e.student_name}</span>
-                      <span className="text-stone-400">{e.student_email}</span>
-                      <span className="text-stone-400">{e.timestamp ? new Date(e.timestamp).toLocaleString() : '—'}</span>
+                    <div key={i} className="py-2 text-xs text-stone-600 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-stone-800">{e.student_name}</span>
+                        <span className="text-stone-400 shrink-0">{e.student_email}</span>
+                        <span className="text-stone-400 shrink-0">{e.timestamp ? new Date(e.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—'}</span>
+                      </div>
+                      {e.message && (
+                        <p className="ml-0 px-3 py-2 bg-amber-50 border border-amber-100 rounded-lg text-stone-700 leading-snug">
+                          "{e.message}"
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -61,6 +61,7 @@ const CoursePage: React.FC = () => {
   const [studentDrawerOpen, setStudentDrawerOpen] = useState(false);
   const [needHelpOpen, setNeedHelpOpen] = useState(false);
   const [needHelpSent, setNeedHelpSent] = useState<Record<number, boolean>>({});
+  const [needHelpMessage, setNeedHelpMessage] = useState('');
   const [notifDismissed, setNotifDismissed] = useState(false);
   const [profFabDismissed, setProfFabDismissed] = useState(false);
   const [studentFabDismissed, setStudentFabDismissed] = useState(false);
@@ -481,25 +482,9 @@ const CoursePage: React.FC = () => {
                   {/* I need help */}
                   <div className="mt-4 pt-4 border-t border-stone-100">
                     <button
-                      onClick={async () => {
+                      onClick={() => {
                         if (needHelpSent[currentModuleIndex]) return;
-                        const modId = `module_${currentModuleIndex + 1}`;
-                        try {
-                          await fetch('/api/xapi/statement', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              actor: { name: auth?.email || 'student', mbox: `mailto:${auth?.email || 'student@plotark'}` },
-                              verb: { id: 'https://w3id.org/xapi/adl/verbs/requested-help', display: { 'en-US': 'requested-help' } },
-                              object: {
-                                id: `${modId}/${currentModule?.title || modId}`,
-                                definition: { name: { 'en-US': currentModule?.title || modId } },
-                              },
-                              context: { extensions: { curriculum_topic: curriculum?.topic || '', course_id: Number(id) } },
-                            }),
-                          });
-                          setNeedHelpSent(prev => ({ ...prev, [currentModuleIndex]: true }));
-                        } catch (e) { console.error('need-help xAPI error', e); }
+                        setNeedHelpMessage('');
                         setNeedHelpOpen(true);
                       }}
                       className={`flex items-center gap-2 text-sm font-medium transition-colors ${
@@ -757,6 +742,18 @@ const CoursePage: React.FC = () => {
                 Your instructor has been notified that you need help with <strong>{currentModule?.title}</strong>. They may post additional resources or adjust this module.
               </div>
               <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2 block">
+                  What are you struggling with? <span className="font-normal normal-case tracking-normal text-stone-400">(optional)</span>
+                </label>
+                <textarea
+                  value={needHelpMessage}
+                  onChange={e => setNeedHelpMessage(e.target.value)}
+                  placeholder="Describe the specific part that's unclear — the more specific, the faster your instructor can help."
+                  rows={4}
+                  className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm text-stone-700 placeholder-stone-300 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition"
+                />
+              </div>
+              <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-3">While you wait</p>
                 <ul className="space-y-2 text-sm text-stone-600">
                   <li className="flex items-start gap-2"><span className="text-amber-500 mt-0.5">→</span>Re-read the module objectives — sometimes clarity comes on the second pass.</li>
@@ -765,10 +762,36 @@ const CoursePage: React.FC = () => {
                 </ul>
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-stone-100">
+            <div className="px-5 py-4 border-t border-stone-100 flex gap-3">
+              <button
+                onClick={async () => {
+                  const modId = `module_${currentModuleIndex + 1}`;
+                  try {
+                    await fetch('/api/xapi/statement', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        actor: { name: auth?.email || 'student', mbox: `mailto:${auth?.email || 'student@plotark'}` },
+                        verb: { id: 'https://w3id.org/xapi/adl/verbs/requested-help', display: { 'en-US': 'requested-help' } },
+                        object: {
+                          id: `${modId}/${currentModule?.title || modId}`,
+                          definition: { name: { 'en-US': currentModule?.title || modId } },
+                        },
+                        result: needHelpMessage.trim() ? { response: needHelpMessage.trim() } : undefined,
+                        context: { extensions: { curriculum_topic: curriculum?.topic || '', course_id: Number(id) } },
+                      }),
+                    });
+                    setNeedHelpSent(prev => ({ ...prev, [currentModuleIndex]: true }));
+                  } catch (e) { console.error('need-help xAPI error', e); }
+                  setNeedHelpOpen(false);
+                }}
+                className="flex-1 py-2.5 rounded-lg bg-stone-900 hover:bg-stone-700 text-white text-sm font-medium transition-colors"
+              >
+                Send
+              </button>
               <button
                 onClick={() => setNeedHelpOpen(false)}
-                className="w-full py-2.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-sm font-medium transition-colors"
+                className="px-5 py-2.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-sm font-medium transition-colors"
               >
                 Skip
               </button>

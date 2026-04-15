@@ -148,6 +148,7 @@ def init_db():
                 """)
                 # Safe migrations for columns added after initial deploy
                 cur.execute("ALTER TABLE xapi_statements ADD COLUMN IF NOT EXISTS course_id INTEGER")
+                cur.execute("ALTER TABLE xapi_statements ADD COLUMN IF NOT EXISTS response TEXT")
                 cur.execute("ALTER TABLE course_analysis_snapshots ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE")
                 conn.commit()
                 cur.close()

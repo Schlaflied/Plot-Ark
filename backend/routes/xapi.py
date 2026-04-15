@@ -27,6 +27,7 @@ def receive_xapi():
     obj_name = obj.get("definition", {}).get("name", {}).get("en-US", obj_id)
     curriculum_topic = statement.get("context", {}).get("extensions", {}).get("curriculum_topic", "")
     course_id = statement.get("context", {}).get("extensions", {}).get("course_id")
+    response_text = statement.get("result", {}).get("response", "") or ""
 
     # Persist to DB
     conn = get_db()
@@ -34,8 +35,8 @@ def receive_xapi():
         try:
             cur = conn.cursor()
             cur.execute(
-                "INSERT INTO xapi_statements (actor_email, actor_name, verb, object_id, object_name, curriculum_topic, course_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (email, name, verb_id, obj_id, obj_name, curriculum_topic, course_id)
+                "INSERT INTO xapi_statements (actor_email, actor_name, verb, object_id, object_name, curriculum_topic, course_id, response) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (email, name, verb_id, obj_id, obj_name, curriculum_topic, course_id, response_text or None)
             )
             conn.commit()
             cur.close()
@@ -61,7 +62,7 @@ def get_need_help_events(course_id):
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT actor_name, actor_email, object_id, object_name, timestamp
+            SELECT actor_name, actor_email, object_id, object_name, timestamp, response
             FROM xapi_statements
             WHERE verb = 'requested-help' AND course_id = %s
             ORDER BY timestamp DESC
@@ -72,7 +73,7 @@ def get_need_help_events(course_id):
 
         events = []
         module_counts: dict = {}
-        for name, email, obj_id, obj_name, ts in rows:
+        for name, email, obj_id, obj_name, ts, response in rows:
             mod_id = obj_id.split("/")[0] if "/" in (obj_id or "") else (obj_id or "")
             events.append({
                 "student_name": name,
@@ -80,6 +81,7 @@ def get_need_help_events(course_id):
                 "module_id": mod_id,
                 "module_name": obj_name,
                 "timestamp": ts.isoformat() if ts else None,
+                "message": response or None,
             })
             module_counts[mod_id] = module_counts.get(mod_id, {"module_id": mod_id, "module_name": obj_name, "count": 0})
             module_counts[mod_id]["count"] += 1
