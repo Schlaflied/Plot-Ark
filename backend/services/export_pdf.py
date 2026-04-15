@@ -538,6 +538,12 @@ def export_pdf(report: dict) -> bytes:
         elements.append(Paragraph(
             f"{len(highlighted)} key comments selected from {total_comments} total responses.",
             insight_style))
+        elements.append(Paragraph(
+            '<font color="#DC2626">●</font> Negative / confusion  '
+            '<font color="#D97706">●</font> Mixed  '
+            '<font color="#16A34A">●</font> Positive  '
+            '<font color="#6B7280">●</font> Neutral',
+            insight_style))
         elements.append(Spacer(1, 0.1*inch))
 
         # Group by module for cleaner layout

@@ -382,6 +382,17 @@ def export_docx(report: dict) -> bytes:
         r_cnt.font.size = Pt(9)
         r_cnt.font.color.rgb = STONE_500
 
+        p_leg = doc.add_paragraph()
+        for label, color in [
+            ("● Negative / confusion  ", SENTIMENT_RGB['negative']),
+            ("● Mixed  ",                SENTIMENT_RGB['mixed']),
+            ("● Positive  ",             SENTIMENT_RGB['positive']),
+            ("● Neutral",                SENTIMENT_RGB['neutral']),
+        ]:
+            r = p_leg.add_run(label)
+            r.font.size = Pt(8)
+            r.font.color.rgb = color
+
         by_mod: dict = {}
         for c in highlighted:
             idx = c.get('module_index', 0)

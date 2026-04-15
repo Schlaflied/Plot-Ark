@@ -137,6 +137,12 @@ const StudentCommentsSection: React.FC<{ report: AnalyticsReport }> = ({ report 
         <p className="text-xs text-stone-400">
           {highlighted.length} key comments selected from {allComments.length} total responses · grouped by module
         </p>
+        <div className="flex flex-wrap gap-3 text-xs">
+          <span className="flex items-center gap-1"><span className="text-red-500">●</span><span className="text-stone-500">Negative / confusion</span></span>
+          <span className="flex items-center gap-1"><span className="text-amber-500">●</span><span className="text-stone-500">Mixed</span></span>
+          <span className="flex items-center gap-1"><span className="text-green-500">●</span><span className="text-stone-500">Positive</span></span>
+          <span className="flex items-center gap-1"><span className="text-stone-400">●</span><span className="text-stone-500">Neutral</span></span>
+        </div>
         {sortedIndices.map(mi => {
           const { title, items } = grouped[mi];
           const allForMod = allGrouped[mi]?.items || [];
