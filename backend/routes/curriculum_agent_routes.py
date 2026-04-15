@@ -490,6 +490,128 @@ def redo_curriculum_suggestion():
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Auto-analyze — structural flags for newly generated courses
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _run_structural_analysis(course_id: int) -> None:
+    """Generate structural flags + curriculum-agent suggestions for a new course.
+
+    Called in a background thread after course save so the professor sees
+    suggestions immediately without waiting for student xAPI data.
+
+    Strategy:
+      1. Load course modules from DB.
+      2. Analyse structure: complexity jumps, missing readings, dense early modules.
+      3. Write flags to module_flags.
+      4. Run CurriculumAgentNode on those flags → suggestions in change_log.
+    """
+    from db import get_db
+    from services.threshold_checker import _save_flags
+    from agents.curriculum_agent import CurriculumAgentNode
+    from agents.base import SharedMemory
+    from extensions import redis_client
+
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT modules, topic FROM curricula WHERE id = %s", (course_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return
+        modules_raw, topic = row
+        modules = modules_raw if isinstance(modules_raw, list) else (
+            json.loads(modules_raw) if modules_raw else []
+        )
+    except Exception as e:
+        print(f"[AutoAnalyze] DB read error: {e}")
+        return
+
+    if not modules:
+        return
+
+    structural_flags: list[dict] = []
+
+    for i, mod in enumerate(modules):
+        mod_id = f"module_{i + 1}"
+        mod_name = mod.get("title", mod_id)
+        signals = []
+
+        cl = mod.get("complexity_level", 0)
+        # Steep complexity jump from previous module
+        if i > 0:
+            prev_cl = modules[i - 1].get("complexity_level", 0)
+            if isinstance(cl, (int, float)) and isinstance(prev_cl, (int, float)) and cl - prev_cl >= 2:
+                signals.append({
+                    "source": "structural",
+                    "detail": f"Complexity jumps from {prev_cl} to {cl} — consider a bridging exercise or scaffolding activity before this module.",
+                })
+
+        # No readings assigned
+        readings = mod.get("recommended_readings", [])
+        if not readings:
+            signals.append({
+                "source": "structural",
+                "detail": "No recommended readings assigned. Adding at least one grounded source improves student preparation.",
+            })
+
+        # High complexity in first two modules
+        if i < 2 and isinstance(cl, (int, float)) and cl >= 4:
+            signals.append({
+                "source": "structural",
+                "detail": f"High complexity ({cl}/5) in an early module — may overwhelm students before foundational concepts are established.",
+            })
+
+        if signals:
+            structural_flags.append({
+                "module_id": mod_id,
+                "module_name": mod_name,
+                "flag_level": "orange" if len(signals) >= 2 else "yellow",
+                "signals": signals,
+            })
+
+    # Always generate at least one flag so the drawer has content
+    if not structural_flags and modules:
+        first = modules[0]
+        structural_flags.append({
+            "module_id": "module_1",
+            "module_name": first.get("title", "Module 1"),
+            "flag_level": "yellow",
+            "signals": [{
+                "source": "structural",
+                "detail": "No student data yet. Review module objectives and ensure learning outcomes align with Bloom's Taxonomy before the course begins.",
+            }],
+        })
+
+    # Persist flags
+    _save_flags(course_id, structural_flags)
+    print(f"[AutoAnalyze] Course {course_id}: {len(structural_flags)} structural flags written.")
+
+    # Run curriculum agent to generate suggestions
+    try:
+        sm = SharedMemory(f"curriculum-{course_id}-auto", redis_client)
+        sm.set("course_id", course_id)
+        sm.set("flagged_modules", structural_flags)
+        agent = CurriculumAgentNode()
+        result = agent.execute(sm)
+        print(f"[AutoAnalyze] Curriculum agent finished: {result.status}")
+    except Exception as e:
+        print(f"[AutoAnalyze] Curriculum agent error: {e}")
+
+
+@curriculum_agent_bp.route("/api/curriculum/auto-analyze/<int:course_id>", methods=["POST"])
+def auto_analyze_course(course_id):
+    """Trigger structural analysis for a newly generated course (called post-save)."""
+    import threading
+    t = threading.Thread(target=_run_structural_analysis, args=(course_id,), daemon=True)
+    t.start()
+    return jsonify({"status": "started", "course_id": course_id})
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Student-facing changes
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

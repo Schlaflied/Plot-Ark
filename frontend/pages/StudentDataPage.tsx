@@ -78,6 +78,159 @@ const WARNING_STATUSES = new Set(['fallback', 'ltm_warning', 'threshold_error'])
 const ERROR_STATUSES = new Set(['error', 'ltm_error']);
 const INFO_STATUSES = new Set(['ltm_written', 'flags_clear', 'flags_detected']);
 
+// ─── NeedHelpSection ─────────────────────────────────────────────────────────
+
+interface NeedHelpSectionProps {
+  courseId: number | null;
+  events: any[];
+  byModule: any[];
+  loading: boolean;
+  onLoad: () => void;
+}
+
+const NeedHelpSection: React.FC<NeedHelpSectionProps> = ({ courseId, events, byModule, loading, onLoad }) => {
+  const [expandedModule, setExpandedModule] = useState<string | null>(null);
+
+  React.useEffect(() => { if (courseId) onLoad(); }, [courseId]);
+
+  if (!courseId) return <p className="text-stone-400 text-sm mt-4">Select a course first.</p>;
+  if (loading) return <p className="text-stone-400 text-sm mt-4 animate-pulse">Loading…</p>;
+
+  if (events.length === 0) return (
+    <div className="mt-4 bg-white rounded-2xl border border-stone-200 p-8 text-center">
+      <p className="text-stone-500 text-sm">No students have requested help yet for this course.</p>
+    </div>
+  );
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="bg-white rounded-2xl border border-stone-200 p-5">
+        <p className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-4">
+          By Module — {events.length} total request{events.length !== 1 ? 's' : ''}
+        </p>
+        <div className="space-y-2">
+          {byModule.map(m => (
+            <div key={m.module_id}>
+              <button
+                onClick={() => setExpandedModule(expandedModule === m.module_id ? null : m.module_id)}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-stone-50 hover:bg-amber-50 border border-stone-200 transition-colors"
+              >
+                <span className="text-sm font-medium text-stone-800">{m.module_name || m.module_id}</span>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${m.count >= 50 ? 'bg-red-100 text-red-700' : m.count >= 10 ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-600'}`}>
+                    {m.count} student{m.count !== 1 ? 's' : ''}
+                  </span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${expandedModule === m.module_id ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+              </button>
+              {expandedModule === m.module_id && (
+                <div className="mt-1 ml-4 border-l-2 border-amber-200 pl-4 space-y-1">
+                  {events.filter(e => e.module_id === m.module_id).map((e, i) => (
+                    <div key={i} className="flex items-center justify-between py-1.5 text-xs text-stone-600">
+                      <span className="font-medium">{e.student_name}</span>
+                      <span className="text-stone-400">{e.student_email}</span>
+                      <span className="text-stone-400">{e.timestamp ? new Date(e.timestamp).toLocaleString() : '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// ─── HistorySection ───────────────────────────────────────────────────────────
+
+interface HistorySectionProps {
+  courseId: number | null;
+  snapshots: any[];
+  loading: boolean;
+  onLoad: () => void;
+  onToggleFavorite: (id: number) => void;
+  onDelete: (id: number) => void;
+}
+
+const HistorySection: React.FC<HistorySectionProps> = ({ courseId, snapshots, loading, onLoad, onToggleFavorite, onDelete }) => {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  React.useEffect(() => { if (courseId) onLoad(); }, [courseId]);
+
+  if (!courseId) return <p className="text-stone-400 text-sm mt-4">Select a course first.</p>;
+  if (loading) return <p className="text-stone-400 text-sm mt-4 animate-pulse">Loading…</p>;
+
+  if (snapshots.length === 0) return (
+    <div className="mt-4 bg-white rounded-2xl border border-stone-200 p-8 text-center">
+      <p className="text-stone-500 text-sm">No analysis runs recorded yet. Run an analysis to start building history.</p>
+    </div>
+  );
+
+  const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+
+  return (
+    <div className="mt-4 space-y-2">
+      {snapshots.map(s => (
+        <div key={s.id} className={`bg-white rounded-xl border transition-colors ${s.is_favorite ? 'border-amber-300' : 'border-stone-200'}`}>
+          <div className="flex items-center gap-3 px-4 py-3">
+            {/* Star */}
+            <button
+              onClick={() => onToggleFavorite(s.id)}
+              title={s.is_favorite ? 'Unfavorite' : 'Save this run'}
+              className={`shrink-0 transition-colors ${s.is_favorite ? 'text-amber-400 hover:text-amber-500' : 'text-stone-300 hover:text-amber-400'}`}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill={s.is_favorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+            </button>
+
+            {/* Timestamp + meta */}
+            <button
+              onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}
+              className="flex-1 flex items-center justify-between text-left min-w-0"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-stone-800 truncate">{fmt(s.run_at)}</p>
+                <p className="text-xs text-stone-400 mt-0.5">
+                  {s.noise_label || 'unknown'} · {s.total_students ?? '—'} students · {Math.round((s.at_risk_pct || 0) * 100)}% at-risk
+                </p>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`ml-3 shrink-0 transition-transform ${expandedId === s.id ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+
+            {/* Delete */}
+            <button
+              onClick={() => onDelete(s.id)}
+              title="Remove this run"
+              className="shrink-0 text-stone-300 hover:text-red-500 transition-colors"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+
+          {expandedId === s.id && (
+            <div className="px-4 pb-4 pt-1 grid grid-cols-3 gap-3 border-t border-stone-100">
+              {[
+                { label: 'At-risk', value: `${Math.round((s.at_risk_pct || 0) * 100)}%` },
+                { label: 'High-risk', value: s.high_risk_count ?? '—' },
+                { label: 'Avg completion', value: `${Math.round((s.avg_completion_rate || 0) * 100)}%` },
+              ].map(stat => (
+                <div key={stat.label} className="bg-stone-50 rounded-lg p-3 text-center">
+                  <p className="text-lg font-bold text-stone-800">{stat.value}</p>
+                  <p className="text-xs text-stone-400 mt-0.5">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+
 // ─── Page Component ───────────────────────────────────────────────────────────
 
 const StudentDataPage: React.FC = () => {
@@ -95,6 +248,15 @@ const StudentDataPage: React.FC = () => {
   const [sidebarWidth, setSidebarWidth] = useState(224);
   const [flags, setFlags] = useState<ModuleFlag[]>([]);
   const [showFlagModal, setShowFlagModal] = useState(false);
+  // Need-help drawer
+  const [needHelpDrawerOpen, setNeedHelpDrawerOpen] = useState(false);
+  const [needHelpEvents, setNeedHelpEvents] = useState<any[]>([]);
+  const [needHelpByModule, setNeedHelpByModule] = useState<any[]>([]);
+  const [needHelpLoading, setNeedHelpLoading] = useState(false);
+  // Analysis history drawer
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  const [snapshots, setSnapshots] = useState<any[]>([]);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   const courseDropdownRef = useRef<HTMLDivElement>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
@@ -201,6 +363,44 @@ const StudentDataPage: React.FC = () => {
     setSeeding(false);
   };
 
+  const fetchNeedHelp = async () => {
+    if (!selectedCourseId) return;
+    setNeedHelpLoading(true);
+    try {
+      const res = await fetch(`/api/xapi/need-help/${selectedCourseId}`);
+      const data = await res.json();
+      setNeedHelpEvents(data.events || []);
+      setNeedHelpByModule(data.by_module || []);
+    } catch { /* ignore */ }
+    setNeedHelpLoading(false);
+  };
+
+  const fetchSnapshots = async () => {
+    if (!selectedCourseId) return;
+    setSnapshotsLoading(true);
+    try {
+      const res = await fetch(`/api/analytics/history/${selectedCourseId}?limit=50`);
+      const data = await res.json();
+      setSnapshots(data.history || []);
+    } catch { /* ignore */ }
+    setSnapshotsLoading(false);
+  };
+
+  const toggleSnapshotFavorite = async (id: number) => {
+    try {
+      const res = await fetch(`/api/analytics/history/snapshot/${id}/favorite`, { method: 'POST' });
+      const data = await res.json();
+      setSnapshots(prev => prev.map(s => s.id === id ? { ...s, is_favorite: data.is_favorite } : s));
+    } catch { /* ignore */ }
+  };
+
+  const deleteSnapshot = async (id: number) => {
+    try {
+      await fetch(`/api/analytics/history/snapshot/${id}`, { method: 'DELETE' });
+      setSnapshots(prev => prev.filter(s => s.id !== id));
+    } catch { /* ignore */ }
+  };
+
   const sections = [
     { id: 'summary', label: 'Executive Summary', icon: '📋' },
     { id: 'behavior', label: 'Behavior Analysis', icon: '📈' },
@@ -211,6 +411,8 @@ const StudentDataPage: React.FC = () => {
     { id: 'cohort', label: 'Cohort Comparison', icon: '👥' },
     { id: 'overview', label: 'Overview & Actions', icon: '📊' },
     { id: 'ai-suggestions', label: 'AI Suggestions', icon: '🤖' },
+    { id: 'need-help', label: 'Student Needed Help', icon: '🆘' },
+    { id: 'history', label: 'Analysis History', icon: '📅' },
   ];
 
   return (
@@ -470,6 +672,17 @@ const StudentDataPage: React.FC = () => {
               {selectedCourseId && report && (
                 <TrendChart courseId={selectedCourseId} />
               )}
+              {/* Need-help / History — available even without running analysis */}
+              {!report && selectedCourseId && (activeSection === 'need-help' || activeSection === 'history') && (
+                <div className="mt-4">
+                  {activeSection === 'need-help' && (
+                    <NeedHelpSection courseId={selectedCourseId} events={needHelpEvents} byModule={needHelpByModule} loading={needHelpLoading} onLoad={fetchNeedHelp} />
+                  )}
+                  {activeSection === 'history' && (
+                    <HistorySection courseId={selectedCourseId} snapshots={snapshots} loading={snapshotsLoading} onLoad={fetchSnapshots} onToggleFavorite={toggleSnapshotFavorite} onDelete={deleteSnapshot} />
+                  )}
+                </div>
+              )}
               {/* Report sections */}
               {report && (
                 <>
@@ -477,6 +690,23 @@ const StudentDataPage: React.FC = () => {
                     <AISuggestionsSection
                       report={report}
                       courseId={selectedCourseId}
+                    />
+                  ) : activeSection === 'need-help' ? (
+                    <NeedHelpSection
+                      courseId={selectedCourseId}
+                      events={needHelpEvents}
+                      byModule={needHelpByModule}
+                      loading={needHelpLoading}
+                      onLoad={fetchNeedHelp}
+                    />
+                  ) : activeSection === 'history' ? (
+                    <HistorySection
+                      courseId={selectedCourseId}
+                      snapshots={snapshots}
+                      loading={snapshotsLoading}
+                      onLoad={fetchSnapshots}
+                      onToggleFavorite={toggleSnapshotFavorite}
+                      onDelete={deleteSnapshot}
                     />
                   ) : (
                     <ReportSections report={report} activeSection={activeSection} selectedCourse={selectedCourse} />

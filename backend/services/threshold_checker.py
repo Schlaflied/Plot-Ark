@@ -10,7 +10,78 @@ Most reliable combination:
 """
 
 import json
+import re
 from db import get_db
+
+
+# ── Year-based need-help thresholds ──────────────────────────────────────────
+# Year 1-2 large-enrollment courses: human intervention when >50 students flag a module
+# Year 3-4 small-enrollment courses: review triggered at >10
+_NEED_HELP_THRESHOLDS = {1: 50, 2: 50, 3: 10, 4: 10}
+_DEFAULT_NEED_HELP_THRESHOLD = 20
+
+
+def _extract_year_from_course(course_id: int) -> int:
+    """Derive academic year (1-4) from the course_code stored in curricula.
+
+    Heuristic: first digit of the numeric part of the course code.
+    E.g. ACCT 101 → 1, PSYCH 301 → 3.  Fallback → 2.
+    """
+    conn = get_db()
+    if not conn:
+        return 2
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT course_code, level FROM curricula WHERE id = %s", (course_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return 2
+        code, level = row
+        # Try course code first: grab first digit of embedded number
+        if code:
+            m = re.search(r'(\d)', code)
+            if m:
+                d = int(m.group(1))
+                return max(1, min(4, d))
+        # Fall back to level field ("100-level", "undergraduate year 2", etc.)
+        if level:
+            m = re.search(r'(\d)', level)
+            if m:
+                d = int(m.group(1))
+                if 1 <= d <= 4:
+                    return d
+        return 2
+    except Exception:
+        return 2
+
+
+def _get_need_help_counts(course_id: int) -> dict[str, int]:
+    """Return {module_id: count} of 'requested-help' xAPI events for this course."""
+    conn = get_db()
+    if not conn:
+        return {}
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT object_id, COUNT(*) as cnt
+            FROM xapi_statements
+            WHERE verb = 'requested-help'
+              AND course_id = %s
+            GROUP BY object_id
+        """, (course_id,))
+        result = {}
+        for row in cur.fetchall():
+            obj_id, cnt = row
+            # object_id format: "module_{n}" or "module_1/Title"
+            mod_key = obj_id.split("/")[0] if "/" in obj_id else obj_id
+            result[mod_key] = result.get(mod_key, 0) + int(cnt)
+        cur.close()
+        conn.close()
+        return result
+    except Exception:
+        return {}
 
 
 def check_thresholds(report: dict) -> list[dict]:
@@ -81,6 +152,24 @@ def check_thresholds(report: dict) -> list[dict]:
                               f"({len(at_risk_students)} of {total_students} students)",
                     "at_risk_pct": round(at_risk_pct, 2),
                 })
+
+    # Signal source 4: need-help xAPI events — year-based thresholds
+    year = _extract_year_from_course(course_id)
+    threshold = _NEED_HELP_THRESHOLDS.get(year, _DEFAULT_NEED_HELP_THRESHOLD)
+    need_help_counts = _get_need_help_counts(course_id)
+
+    for mod_id, count in need_help_counts.items():
+        if count >= threshold:
+            if mod_id not in module_signals:
+                module_signals[mod_id] = []
+            module_signals[mod_id].append({
+                "source": "need_help",
+                "detail": f"{count} students requested help (Year {year} threshold: {threshold}). "
+                          "Consider posting an announcement or redesigning this module.",
+                "need_help_count": count,
+                "threshold": threshold,
+                "year": year,
+            })
 
     # ── Determine flag level ──────────────────────────────────────────────
     flags = []

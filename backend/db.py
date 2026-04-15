@@ -47,7 +47,8 @@ def init_db():
                         object_id TEXT NOT NULL,
                         object_name TEXT NOT NULL,
                         timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                        curriculum_topic TEXT
+                        curriculum_topic TEXT,
+                        course_id INTEGER
                     )
                 """)
                 cur.execute("""
@@ -79,7 +80,8 @@ def init_db():
                         top_signals JSONB,
                         module_engagement_summary JSONB,
                         verb_distribution JSONB,
-                        cohort_groups JSONB
+                        cohort_groups JSONB,
+                        is_favorite BOOLEAN DEFAULT FALSE
                     )
                 """)
                 cur.execute("""
@@ -144,6 +146,9 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS idx_xapi_timestamp
                     ON xapi_statements(timestamp)
                 """)
+                # Safe migrations for columns added after initial deploy
+                cur.execute("ALTER TABLE xapi_statements ADD COLUMN IF NOT EXISTS course_id INTEGER")
+                cur.execute("ALTER TABLE course_analysis_snapshots ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE")
                 conn.commit()
                 cur.close()
                 conn.close()
@@ -158,21 +163,25 @@ def init_db():
     print("Could not connect to DB after 10 attempts. Continuing without DB.")
 
 
-def save_curriculum(topic, level, audience, course_code, course_type, module_count, data, design_approach="addie"):
+def save_curriculum(topic, level, audience, course_code, course_type, module_count, data, design_approach="addie") -> int | None:
+    """Save curriculum and return the new course id."""
     conn = get_db()
     if not conn:
-        return
+        return None
     try:
         cur = conn.cursor()
         cur.execute(
             """INSERT INTO curricula (topic, level, audience, course_code, course_type, module_count, modules, sources)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
             (topic, level, audience, course_code, course_type, module_count,
              json.dumps(data.get("modules", [])),
              json.dumps(data.get("sources", [])))
         )
+        new_id = cur.fetchone()[0]
         conn.commit()
         cur.close()
         conn.close()
+        return new_id
     except Exception as e:
         print(f"DB save error: {e}")
+        return None

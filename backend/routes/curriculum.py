@@ -186,7 +186,14 @@ def generate_curriculum():
 
 @curriculum_bp.route("/api/curriculum/save", methods=["POST"])
 def save_curriculum_endpoint():
-    """Save a fully expanded curriculum (from two-phase generation) to history."""
+    """Save a fully expanded curriculum (from two-phase generation) to history.
+
+    After saving, fires a background structural analysis so the professor
+    sees initial curriculum-agent suggestions immediately.
+    """
+    import threading
+    from routes.curriculum_agent_routes import _run_structural_analysis
+
     data = request.get_json()
     topic = data.get("topic", "")
     level = data.get("level", "")
@@ -200,8 +207,11 @@ def save_curriculum_endpoint():
     course_narrative = data.get("course_narrative", "")
     parsed = {"modules": modules, "sources": sources, "course_narrative": course_narrative}
     try:
-        save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed, design_approach)
-        return jsonify({"status": "saved"})
+        new_id = save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed, design_approach)
+        if new_id:
+            t = threading.Thread(target=_run_structural_analysis, args=(new_id,), daemon=True)
+            t.start()
+        return jsonify({"status": "saved", "course_id": new_id})
     except Exception as e:
         print(f"Save endpoint error: {e}")
         return jsonify({"error": str(e)}), 500

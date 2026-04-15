@@ -163,18 +163,17 @@ def get_analysis_history(course_id):
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT run_at, total_students, at_risk_count, high_risk_count,
-                   module_engagement_summary, noise_label
+            SELECT id, run_at, total_students, at_risk_count, high_risk_count,
+                   module_engagement_summary, noise_label, is_favorite
             FROM course_analysis_snapshots
             WHERE course_id = %s
-            ORDER BY run_at ASC
+            ORDER BY run_at DESC
             LIMIT %s
         """, (course_id, limit))
 
         history = []
         for row in cur.fetchall():
-            run_at, total, at_risk, high_risk, mod_summary_json, noise = row
-            # Calculate average completion rate from module engagement
+            snap_id, run_at, total, at_risk, high_risk, mod_summary_json, noise, is_fav = row
             avg_completion = 0
             if mod_summary_json:
                 mods = mod_summary_json if isinstance(mod_summary_json, list) else json.loads(mod_summary_json)
@@ -184,6 +183,7 @@ def get_analysis_history(course_id):
             at_risk_pct = round(at_risk / max(total, 1), 3)
 
             history.append({
+                "id": snap_id,
                 "run_at": run_at.isoformat() if run_at else None,
                 "total_students": total,
                 "at_risk_count": at_risk,
@@ -191,6 +191,7 @@ def get_analysis_history(course_id):
                 "high_risk_count": high_risk,
                 "avg_completion_rate": avg_completion,
                 "noise_label": noise,
+                "is_favorite": bool(is_fav),
             })
 
         cur.close()
@@ -199,4 +200,45 @@ def get_analysis_history(course_id):
     except Exception as e:
         conn.close()
         return jsonify({"history": [], "error": str(e)}), 500
+
+
+@analytics_bp.route("/api/analytics/history/snapshot/<int:snapshot_id>/favorite", methods=["POST"])
+def toggle_snapshot_favorite(snapshot_id):
+    """Toggle the is_favorite flag on an analysis snapshot."""
+    from db import get_db
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE course_analysis_snapshots SET is_favorite = NOT is_favorite WHERE id = %s RETURNING is_favorite", (snapshot_id,))
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        if not row:
+            return jsonify({"error": "Not found"}), 404
+        return jsonify({"id": snapshot_id, "is_favorite": bool(row[0])})
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+
+
+@analytics_bp.route("/api/analytics/history/snapshot/<int:snapshot_id>", methods=["DELETE"])
+def delete_snapshot(snapshot_id):
+    """Remove an analysis snapshot from history."""
+    from db import get_db
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM course_analysis_snapshots WHERE id = %s", (snapshot_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "deleted", "id": snapshot_id})
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
 
