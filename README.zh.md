@@ -1,6 +1,6 @@
 [English](README.md) | 中文
 
-# Plot Ark — 主动式课程引擎
+# Plot Ark — 生成 · 追踪 · 优化
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![GitHub stars](https://img.shields.io/github/stars/Schlaflied/Plot-Ark?style=social&cacheSeconds=1)](https://github.com/Schlaflied/Plot-Ark/stargazers)
@@ -27,13 +27,13 @@
   👉 <a href="https://schlaflied.github.io/Plot-Ark/">访问精美的互动式官方主页</a> 👈
 </h3>
 
-**一款开源主动式课程引擎，通过叙事框架生成基于教学理论的课程内容。**
+**一款开源主动式平台，完整覆盖课程闭环：基于教学理论生成课程内容、通过 xAPI 追踪真实学习行为，并借助 AI 驱动的反馈循环持续优化课程模块。**
 
-> 与静态 AI 课程生成器不同，Plot Ark 将循证教学设计原则落地于实践——布鲁姆认知分类法、Krashen 的 i+1 难度递进、以及认知负荷理论——确保生成的课程结构符合真实学习规律。
+> **生成（Generate）** — Tavily 研究 Agent 在内容生成前检索经验证的学术、视频与新闻来源。布鲁姆认知分类法、Krashen 的 i+1 难度递进和认知负荷理论内置于生成流水线，确保课程结构符合真实学习规律。不会出现幻觉引用。
 
-> **主动式流水线** — Tavily 研究 Agent 优先检索真实学术来源，再将经验证的 URL 注入生成提示词。不会出现幻觉引用。
+> **追踪（Track）** — 学生的每一次交互均生成 xAPI 语句。一条 5 节点 A2A 多 Agent 流水线（行为分析师 · 风险检测器 · 内容优化器 · 群组对比器）分析学习参与模式、标记高风险学习者、识别表现欠佳的模块，并提供完整的分析仪表板与可导出报告。
 
-> **多 AI 提供商** — 通过单个环境变量在 OpenAI（GPT-4o-mini）和 Google Gemini 之间自由切换，自带 API Key 即可使用。
+> **优化（Optimize）** — 课程 Agent 将分析结果转化为具体的模块修改建议。教师通过修改前后对比预览逐一审阅并批准或拒绝每条 AI 建议。已批准的修改回流至下一轮学习数据周期——闭环完成。
 
 ---
 

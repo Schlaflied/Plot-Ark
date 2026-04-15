@@ -1,6 +1,6 @@
 [English](README.md) | [中文](README.zh.md)
 
-# Plot Ark — Agentic Curriculum Engine
+# Plot Ark — Generate · Track · Optimize
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![GitHub stars](https://img.shields.io/github/stars/Schlaflied/Plot-Ark?style=social&cacheSeconds=1)](https://github.com/Schlaflied/Plot-Ark/stargazers)
@@ -27,13 +27,13 @@
   👉 <a href="https://schlaflied.github.io/Plot-Ark/">Visit the Official Landing Page</a> 👈
 </h3>
 
-**An open-source agentic curriculum engine that generates pedagogically grounded course content through narrative frameworks.**
+**An open-source agentic platform that closes the curriculum loop — generate evidence-based course content, track real learner behavior via xAPI, and continuously optimize modules through an AI agent with instructor-in-the-loop control.**
 
-> Unlike static AI course generators, Plot Ark applies evidence-based instructional design principles — Bloom's Taxonomy, Krashen's i+1 difficulty scaffolding, and Cognitive Load Theory — so the curriculum it generates is structured the way learning actually works.
+> **Generate** — A Tavily research agent queries academic, video, and news sources before any content is written. Bloom's Taxonomy alignment, Krashen's i+1 difficulty progression, and Cognitive Load Theory are built into the generation pipeline, so the curriculum structure is grounded in how learning actually works. No hallucinated citations.
 
-> **Agentic pipeline** — a Tavily research agent searches real academic sources first, then injects verified URLs into the generation prompt. No hallucinated citations.
+> **Track** — Every student interaction produces xAPI statements. A 5-node A2A multi-agent pipeline (BehaviorAnalyst · RiskDetector · ContentOptimizer · CohortComparator) analyzes engagement patterns, flags at-risk learners, and surfaces underperforming modules — with a full analytics dashboard and exportable reports.
 
-> **Multi-provider AI** — switch between OpenAI (GPT-4o-mini) and Google Gemini via a single env variable. Bring your own key.
+> **Optimize** — The Curriculum Agent translates analytics findings into targeted module edits. Instructors review each suggestion with a before/after preview and approve or reject changes individually. Approved edits feed back into the next xAPI data cycle — the loop closes.
 
 ---
 

@@ -4,8 +4,9 @@
 */
 
 import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Globe, Moon, Sun, Settings, Network } from 'lucide-react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Globe, Moon, Sun, Settings, Network, LogOut } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 // ─── Extracted components ─────────────────────────────────────────────────────
 
@@ -63,14 +64,24 @@ const SideSection: React.FC<{ title: string; children: React.ReactNode }> = ({ t
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const CoursesPage: React.FC = () => {
+  const { auth, logout } = useAuth();
+  const navigate = useNavigate();
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
+  // Auth role is the source of truth; professors can temporarily preview student view
   const [viewMode, setViewMode] = useState<'professor' | 'student'>(
-    searchParams.get('view') === 'student' ? 'student' : 'professor'
+    auth?.role === 'student' || searchParams.get('view') === 'student' ? 'student' : 'professor'
   );
   const isStudent = viewMode === 'student';
+  // Students can never switch to professor view
+  const canSwitchView = auth?.role === 'professor';
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   // Toolbar state
   const [language, setLanguage] = useState<Language>('EN');
@@ -135,21 +146,30 @@ const CoursesPage: React.FC = () => {
           </span>
           {isStudent && <span className="text-xs text-green-600 font-normal">— read only</span>}
         </div>
-        <button
-          onClick={() => {
-            const nextMode = isStudent ? 'professor' : 'student';
-            setViewMode(nextMode);
-            setSearchParams(nextMode === 'student' ? { view: 'student' } : {});
-          }}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg border bg-white transition-colors font-medium text-xs ${
-            isStudent
-              ? 'border-green-300 hover:bg-green-100 text-green-800'
-              : 'border-amber-300 hover:bg-amber-100 text-amber-800'
-          }`}
-        >
-          {isStudent ? 'Back to Professor View' : 'Switch to Student View'}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        </button>
+        <div className="flex items-center gap-3">
+          {auth?.email && (
+            <span className={`text-xs font-normal ${isStudent ? 'text-green-600' : 'text-amber-700'}`}>
+              {auth.email}
+            </span>
+          )}
+          {canSwitchView && (
+            <button
+              onClick={() => {
+                const next = isStudent ? 'professor' : 'student';
+                setViewMode(next);
+                setSearchParams(next === 'student' ? { view: 'student' } : {});
+              }}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg border bg-white transition-colors font-medium text-xs ${
+                isStudent
+                  ? 'border-green-300 hover:bg-green-100 text-green-800'
+                  : 'border-amber-300 hover:bg-amber-100 text-amber-800'
+              }`}
+            >
+              {isStudent ? 'Back to Professor View' : 'Switch to Student View'}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+          )}
+        </div>
       </div>
       {/* ── Body (Main + Side) ──────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
@@ -181,7 +201,14 @@ const CoursesPage: React.FC = () => {
             >
               {darkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <SettingsButton />
+            {!isStudent && <SettingsButton />}
+            <button
+              onClick={handleLogout}
+              title="Sign out"
+              className="p-1.5 rounded-lg text-stone-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <LogOut size={18} />
+            </button>
           </div>
         </div>
 

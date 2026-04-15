@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { ChevronLeft, ChevronRight, Globe, Moon, Settings, BookOpen } from 'lucide-react';
 import { arrayMove } from '@dnd-kit/sortable';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -32,8 +33,10 @@ import DraggableFab from '../components/ui/DraggableFab';
 
 const CoursePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const { auth } = useAuth();
   const [searchParams] = useSearchParams();
-  const isStudent = searchParams.get('view') === 'student';
+  // Auth context is the source of truth; URL param kept for dev bypass
+  const isStudent = auth?.role === 'student' || searchParams.get('view') === 'student';
   const [curriculum, setCurriculum] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
