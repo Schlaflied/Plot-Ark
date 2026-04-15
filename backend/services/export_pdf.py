@@ -532,19 +532,38 @@ def export_pdf(report: dict) -> bytes:
     elements.append(Paragraph('<a name="sec_comments"/>5. Student Comments', h2_style))
     elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D1D5DB"), spaceBefore=2, spaceAfter=8))
 
-    text_comments = co_fb.get("text_comments", [])
-    if text_comments:
+    highlighted = co_fb.get("highlighted_comments") or []
+    total_comments = len(co_fb.get("text_comments", []))
+    if highlighted:
         elements.append(Paragraph(
-            f"{len(text_comments)} open-text responses collected across modules.",
+            f"{len(highlighted)} key comments selected from {total_comments} total responses.",
             insight_style))
         elements.append(Spacer(1, 0.1*inch))
-        for c in text_comments:
-            mod_label = f"Module {c.get('module_index', 0) + 1}"
+
+        # Group by module for cleaner layout
+        by_mod: dict = {}
+        for c in highlighted:
+            idx = c.get('module_index', 0)
+            by_mod.setdefault(idx, []).append(c)
+
+        SENTIMENT_COLORS = {
+            'negative': '#DC2626',  # red-600
+            'mixed':    '#D97706',  # amber-600
+            'positive': '#16A34A',  # green-600
+            'neutral':  '#6B7280',  # stone-500
+        }
+        for idx in sorted(by_mod.keys()):
+            mod_title = by_mod[idx][0].get('module_title', f'Module {idx + 1}')
             elements.append(Paragraph(
-                f'<font color="{COLORS["stone_500"]}">[{mod_label}]</font> '
-                f'<i>"{c.get("comment", "")}"</i>',
+                f'<b>Module {idx + 1} — {mod_title}</b>',
                 body_style))
-            elements.append(Spacer(1, 0.06*inch))
+            for c in by_mod[idx]:
+                color = SENTIMENT_COLORS.get(c.get('sentiment', 'neutral'), COLORS['stone_500'])
+                elements.append(Paragraph(
+                    f'<font color="{color}">●</font> <i>"{c.get("comment", "")}"</i>',
+                    body_style))
+                elements.append(Spacer(1, 0.04*inch))
+            elements.append(Spacer(1, 0.08*inch))
     else:
         elements.append(Paragraph("No student comments collected yet.", body_style))
 

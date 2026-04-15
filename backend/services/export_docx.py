@@ -368,17 +368,34 @@ def export_docx(report: dict) -> bytes:
     # Section 5: Student Comments
     doc.add_page_break()
     _color_heading(doc.add_heading("5. Student Comments", level=1))
-    text_comments = co_fb.get("text_comments", [])
-    if text_comments:
+    highlighted = co_fb.get("highlighted_comments") or []
+    total_comments = len(co_fb.get("text_comments", []))
+    SENTIMENT_RGB = {
+        'negative': RGBColor(0xDC, 0x26, 0x26),
+        'mixed':    RGBColor(0xD9, 0x77, 0x06),
+        'positive': RGBColor(0x16, 0xA3, 0x4A),
+        'neutral':  STONE_500,
+    }
+    if highlighted:
         p_cnt = doc.add_paragraph()
-        r_cnt = p_cnt.add_run(f"{len(text_comments)} open-text responses collected across modules.")
+        r_cnt = p_cnt.add_run(f"{len(highlighted)} key comments selected from {total_comments} total responses.")
         r_cnt.font.size = Pt(9)
         r_cnt.font.color.rgb = STONE_500
-        for c in text_comments:
-            mod_label = f"Module {c.get('module_index', 0) + 1}"
-            p = doc.add_paragraph()
-            p.add_run(f"[{mod_label}] ").bold = True
-            p.add_run(f'"{c.get("comment", "")}"').italic = True
+
+        by_mod: dict = {}
+        for c in highlighted:
+            idx = c.get('module_index', 0)
+            by_mod.setdefault(idx, []).append(c)
+
+        for idx in sorted(by_mod.keys()):
+            mod_title = by_mod[idx][0].get('module_title', f'Module {idx + 1}')
+            ph = doc.add_paragraph()
+            ph.add_run(f"Module {idx + 1} — {mod_title}").bold = True
+            for c in by_mod[idx]:
+                p = doc.add_paragraph()
+                dot = p.add_run("● ")
+                dot.font.color.rgb = SENTIMENT_RGB.get(c.get('sentiment', 'neutral'), STONE_500)
+                p.add_run(f'"{c.get("comment", "")}"').italic = True
     else:
         doc.add_paragraph("No student comments collected yet.")
 

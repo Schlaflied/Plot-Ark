@@ -1,7 +1,92 @@
 """Content Optimizer Agent — identifies underperforming content and suggests improvements."""
 
+import re
 from agents.base import BaseNode, SharedMemory
 from db import get_db
+
+
+# ── Comment importance scorer ─────────────────────────────────────────────────
+
+_NEGATIVE_KW = [
+    'confus', 'unclear', 'lost', "didn't", "don't", "can't", 'cant',
+    'jargon', 'hard', 'difficult', 'struggl', 'too fast', 'too slow',
+    'vague', 'wrong', 'miss', 'lack', 'without', 'no definition',
+    'too much', 'overwhelm', 'boring', 'not sure',
+]
+_SIGNAL_KW = [
+    'need', 'more example', 'should', 'could use', 'would help',
+    'please', 'wish', 'suggest', 'recommend',
+]
+_POSITIVE_KW = [
+    'great', 'clear', 'perfect', 'well done', 'excellent', 'helpful',
+    'loved', 'amazing', 'understood', 'finally',
+]
+
+
+def _score_comment(text: str) -> tuple[int, str]:
+    """Return (score, sentiment_tag) for a comment string."""
+    lower = text.lower()
+    score = 0
+    neg = any(kw in lower for kw in _NEGATIVE_KW)
+    sig = any(kw in lower for kw in _SIGNAL_KW)
+    pos = any(kw in lower for kw in _POSITIVE_KW)
+
+    if neg:
+        score += 3
+    if sig:
+        score += 2
+    if pos:
+        score += 1
+    if len(text) > 40:
+        score += 1
+    if len(text) > 80:
+        score += 1
+
+    if neg and pos:
+        sentiment = 'mixed'
+    elif neg or sig:
+        sentiment = 'negative'
+    elif pos:
+        sentiment = 'positive'
+    else:
+        sentiment = 'neutral'
+
+    return score, sentiment
+
+
+def _highlight_comments(text_comments: list, max_per_module: int = 4) -> list:
+    """
+    From the raw comment list, pick the most informative comments per module.
+    Returns a flat list with score + sentiment tags, capped at max_per_module each.
+    """
+    # Group by module
+    by_module: dict = {}
+    for c in text_comments:
+        idx = c.get('module_index', 0)
+        by_module.setdefault(idx, []).append(c)
+
+    result = []
+    for idx in sorted(by_module.keys()):
+        items = by_module[idx]
+        scored = []
+        for c in items:
+            score, sentiment = _score_comment(c.get('comment', ''))
+            scored.append({**c, 'score': score, 'sentiment': sentiment})
+
+        # Sort: negatives first (actionable), then signals, then positives
+        scored.sort(key=lambda x: -x['score'])
+
+        # Ensure some sentiment diversity: keep at least 1 positive if available
+        selected = scored[:max_per_module]
+        has_positive = any(s['sentiment'] == 'positive' for s in selected)
+        if not has_positive and len(scored) > max_per_module:
+            positives = [s for s in scored[max_per_module:] if s['sentiment'] == 'positive']
+            if positives:
+                selected[-1] = positives[0]  # swap last slot for a positive
+
+        result.extend(selected)
+
+    return result
 
 
 class ContentOptimizerNode(BaseNode):
@@ -212,11 +297,13 @@ class ContentOptimizerNode(BaseNode):
 
         underperforming.sort(key=lambda x: x["struggle_rate"], reverse=True)
 
+        raw_comments = text_comments[:50]  # cap at 50 for token efficiency
         return {
             "underperforming_content": underperforming,
             "high_performing_content": high_performing,
             "feedback_signals": feedback_signals,
-            "text_comments": text_comments[:50],  # cap at 50 for token efficiency
+            "text_comments": raw_comments,
+            "highlighted_comments": _highlight_comments(raw_comments),
         }
 
     def _fallback_sql(self, sm: SharedMemory) -> dict:

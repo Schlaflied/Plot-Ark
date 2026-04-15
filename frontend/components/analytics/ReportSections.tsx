@@ -50,71 +50,76 @@ const ActionItem: React.FC<{ priority: 'high' | 'medium' | 'low'; text: string }
   );
 };
 
-// ─── Student Comments (accordion by module) ──────────────────────────────────
+// ─── Student Comments (highlighted by default, full list expandable) ──────────
+
+const SENTIMENT_STYLES: Record<string, { dot: string; bg: string; border: string }> = {
+  negative: { dot: 'text-red-500',   bg: 'bg-red-50',    border: 'border-red-100' },
+  mixed:    { dot: 'text-amber-500', bg: 'bg-amber-50',  border: 'border-amber-100' },
+  positive: { dot: 'text-green-500', bg: 'bg-green-50',  border: 'border-green-100' },
+  neutral:  { dot: 'text-stone-400', bg: 'bg-stone-50',  border: 'border-stone-100' },
+};
 
 const StudentCommentsSection: React.FC<{ report: AnalyticsReport }> = ({ report }) => {
-  const comments: any[] = report.content_optimization?.text_comments || [];
+  const highlighted: any[] = report.content_optimization?.highlighted_comments || [];
+  const allComments: any[] = report.content_optimization?.text_comments || [];
 
-  // Group by module_index, preserving insertion order
-  const grouped = comments.reduce<Record<number, { title: string; items: any[] }>>((acc, c) => {
+  // Group highlighted by module
+  const grouped = highlighted.reduce<Record<number, { title: string; items: any[] }>>((acc, c) => {
     const idx: number = c.module_index ?? 0;
-    if (!acc[idx]) {
-      acc[idx] = {
-        title: c.module_title || `Module ${idx + 1}`,
-        items: [],
-      };
-    }
+    if (!acc[idx]) acc[idx] = { title: c.module_title || `Module ${idx + 1}`, items: [] };
     acc[idx].items.push(c);
     return acc;
   }, {});
   const sortedIndices = Object.keys(grouped).map(Number).sort((a, b) => a - b);
 
-  const [openSet, setOpenSet] = useState<Set<number>>(() => new Set());
-  const toggle = (idx: number) =>
-    setOpenSet(prev => {
-      const next = new Set(prev);
-      next.has(idx) ? next.delete(idx) : next.add(idx);
-      return next;
-    });
+  // All comments grouped (for expanded view + fallback)
+  const allGrouped = allComments.reduce<Record<number, { title: string; items: any[] }>>((acc, c) => {
+    const idx: number = c.module_index ?? 0;
+    if (!acc[idx]) acc[idx] = { title: c.module_title || `Module ${idx + 1}`, items: [] };
+    acc[idx].items.push(c);
+    return acc;
+  }, {});
 
-  return (
-    <Section title="Student Comments" icon="💬">
-      {comments.length > 0 ? (
+  // All hooks must be unconditional
+  const [showAll, setShowAll] = useState<Set<number>>(() => new Set());
+  const toggleAll = (idx: number) =>
+    setShowAll(prev => { const n = new Set(prev); n.has(idx) ? n.delete(idx) : n.add(idx); return n; });
+
+  const [openSet, setOpenSet] = useState<Set<number>>(() => new Set());
+  const toggleOpen = (idx: number) =>
+    setOpenSet(prev => { const n = new Set(prev); n.has(idx) ? n.delete(idx) : n.add(idx); return n; });
+
+  if (highlighted.length === 0 && allComments.length === 0) {
+    return (
+      <Section title="Student Comments" icon="💬">
+        <p className="text-sm text-stone-400 italic">No student comments collected yet.</p>
+      </Section>
+    );
+  }
+
+  // Fallback: old report without highlighted_comments — plain accordion
+  if (highlighted.length === 0) {
+    const oldIndices = Object.keys(allGrouped).map(Number).sort((a, b) => a - b);
+    return (
+      <Section title="Student Comments" icon="💬">
         <div className="space-y-2">
-          <p className="text-xs text-stone-400 mb-3">
-            {comments.length} open-text {comments.length === 1 ? 'response' : 'responses'} across {sortedIndices.length} {sortedIndices.length === 1 ? 'module' : 'modules'}.
-          </p>
-          {sortedIndices.map(mi => {
-            const { title, items } = grouped[mi];
-            const isOpen = openSet.has(mi);
+          <p className="text-xs text-stone-400 mb-3">{allComments.length} responses across {oldIndices.length} modules.</p>
+          {oldIndices.map(mi => {
+            const { title, items } = allGrouped[mi];
             return (
               <div key={mi} className="border border-stone-200 rounded-xl overflow-hidden">
-                <button
-                  onClick={() => toggle(mi)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-stone-50 hover:bg-stone-100 transition-colors text-left gap-3"
-                >
+                <button onClick={() => toggleOpen(mi)} className="w-full flex items-center justify-between px-4 py-3 bg-stone-50 hover:bg-stone-100 transition-colors text-left gap-3">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="shrink-0 text-xs font-medium text-stone-400">
-                      Module {mi + 1}
-                    </span>
+                    <span className="shrink-0 text-xs font-medium text-stone-400">Module {mi + 1}</span>
                     <span className="text-sm font-semibold text-stone-800 truncate">{title}</span>
-                    <span className="shrink-0 text-xs text-stone-400">
-                      ({items.length} {items.length === 1 ? 'response' : 'responses'})
-                    </span>
+                    <span className="shrink-0 text-xs text-stone-400">({items.length})</span>
                   </div>
-                  <svg
-                    className={`shrink-0 w-4 h-4 text-stone-400 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`}
-                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                  >
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
+                  <svg className={`shrink-0 w-4 h-4 text-stone-400 transition-transform ${openSet.has(mi) ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
                 </button>
-                {isOpen && (
+                {openSet.has(mi) && (
                   <div className="divide-y divide-stone-100">
                     {items.map((c: any, i: number) => (
-                      <div key={i} className="px-5 py-3 text-sm text-stone-700 italic leading-relaxed bg-white">
-                        &ldquo;{c.comment}&rdquo;
-                      </div>
+                      <div key={i} className="px-5 py-3 text-sm text-stone-700 italic leading-relaxed bg-white">&ldquo;{c.comment}&rdquo;</div>
                     ))}
                   </div>
                 )}
@@ -122,9 +127,55 @@ const StudentCommentsSection: React.FC<{ report: AnalyticsReport }> = ({ report 
             );
           })}
         </div>
-      ) : (
-        <p className="text-sm text-stone-400 italic">No student comments collected yet.</p>
-      )}
+      </Section>
+    );
+  }
+
+  return (
+    <Section title="Student Comments" icon="💬">
+      <div className="space-y-3">
+        <p className="text-xs text-stone-400">
+          {highlighted.length} key comments selected from {allComments.length} total responses · grouped by module
+        </p>
+        {sortedIndices.map(mi => {
+          const { title, items } = grouped[mi];
+          const allForMod = allGrouped[mi]?.items || [];
+          const extraCount = allForMod.length - items.length;
+          const expanded = showAll.has(mi);
+          const displayItems = expanded ? allForMod : items;
+
+          return (
+            <div key={mi} className="border border-stone-200 rounded-xl overflow-hidden">
+              {/* Module header */}
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-stone-50 border-b border-stone-100">
+                <span className="text-xs font-medium text-stone-400 shrink-0">Module {mi + 1}</span>
+                <span className="text-sm font-semibold text-stone-800 truncate">{title}</span>
+              </div>
+              {/* Comments */}
+              <div className="divide-y divide-stone-100">
+                {displayItems.map((c: any, i: number) => {
+                  const s = SENTIMENT_STYLES[c.sentiment || 'neutral'] || SENTIMENT_STYLES.neutral;
+                  return (
+                    <div key={i} className={`px-4 py-3 flex items-start gap-2.5 ${s.bg}`}>
+                      <span className={`mt-1 shrink-0 text-[10px] ${s.dot}`}>●</span>
+                      <p className="text-sm text-stone-700 italic leading-relaxed">&ldquo;{c.comment}&rdquo;</p>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* View all toggle */}
+              {extraCount > 0 && (
+                <button
+                  onClick={() => toggleAll(mi)}
+                  className="w-full px-4 py-2 text-xs text-stone-400 hover:text-amber-600 hover:bg-amber-50 transition-colors border-t border-stone-100 text-left"
+                >
+                  {expanded ? `↑ Show key comments only` : `↓ View all ${allForMod.length} responses for this module`}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </Section>
   );
 };
