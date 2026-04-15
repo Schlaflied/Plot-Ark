@@ -147,6 +147,7 @@ const NeedHelpSection: React.FC<NeedHelpSectionProps> = ({ courseId, events, byM
 
 interface HistorySectionProps {
   courseId: number | null;
+  courseName?: string;
   snapshots: any[];
   loading: boolean;
   onLoad: () => void;
@@ -154,7 +155,7 @@ interface HistorySectionProps {
   onDelete: (id: number) => void;
 }
 
-const HistorySection: React.FC<HistorySectionProps> = ({ courseId, snapshots, loading, onLoad, onToggleFavorite, onDelete }) => {
+const HistorySection: React.FC<HistorySectionProps> = ({ courseId, courseName, snapshots, loading, onLoad, onToggleFavorite, onDelete }) => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   React.useEffect(() => { if (courseId) onLoad(); }, [courseId]);
@@ -168,7 +169,7 @@ const HistorySection: React.FC<HistorySectionProps> = ({ courseId, snapshots, lo
     </div>
   );
 
-  const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
 
   return (
     <div className="mt-4 space-y-2">
@@ -194,7 +195,7 @@ const HistorySection: React.FC<HistorySectionProps> = ({ courseId, snapshots, lo
               <div className="min-w-0">
                 <p className="text-sm font-medium text-stone-800 truncate">{fmt(s.run_at)}</p>
                 <p className="text-xs text-stone-400 mt-0.5">
-                  {s.noise_label || 'unknown'} · {s.total_students ?? '—'} students · {Math.round((s.at_risk_pct || 0) * 100)}% at-risk
+                  {courseName || `Course ${courseId}`} · {s.total_students ?? '—'} students · {Math.round((s.at_risk_pct || 0) * 100)}% at-risk
                 </p>
               </div>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`ml-3 shrink-0 transition-transform ${expandedId === s.id ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
@@ -412,7 +413,6 @@ const StudentDataPage: React.FC = () => {
     { id: 'overview', label: 'Overview & Actions', icon: '📊' },
     { id: 'ai-suggestions', label: 'AI Suggestions', icon: '🤖' },
     { id: 'need-help', label: 'Student Needed Help', icon: '🆘' },
-    { id: 'history', label: 'Analysis History', icon: '📅' },
   ];
 
   return (
@@ -431,6 +431,15 @@ const StudentDataPage: React.FC = () => {
           onFlagsLoaded={handleFlagsLoaded}
           onClick={() => setShowFlagModal(true)}
         />
+        <button
+          disabled={!selectedCourseId}
+          onClick={() => { setHistoryDrawerOpen(true); fetchSnapshots(); }}
+          title="View analysis history"
+          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-amber-50 hover:text-amber-700 text-stone-600 border border-stone-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          History
+        </button>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -567,7 +576,7 @@ const StudentDataPage: React.FC = () => {
               <button
                 key={s.id}
                 onClick={() => setActiveSection(s.id)}
-                disabled={!report && s.id !== 'summary'}
+                disabled={!report && s.id !== 'summary' && s.id !== 'need-help'}
                 className={`w-full text-left px-2.5 py-2 rounded-lg text-xs transition-all flex items-center gap-2 ${
                   activeSection === s.id
                     ? 'bg-stone-700 text-white'
@@ -672,15 +681,10 @@ const StudentDataPage: React.FC = () => {
               {selectedCourseId && report && (
                 <TrendChart courseId={selectedCourseId} />
               )}
-              {/* Need-help / History — available even without running analysis */}
-              {!report && selectedCourseId && (activeSection === 'need-help' || activeSection === 'history') && (
+              {/* Need-help — available even without running analysis */}
+              {!report && selectedCourseId && activeSection === 'need-help' && (
                 <div className="mt-4">
-                  {activeSection === 'need-help' && (
-                    <NeedHelpSection courseId={selectedCourseId} events={needHelpEvents} byModule={needHelpByModule} loading={needHelpLoading} onLoad={fetchNeedHelp} />
-                  )}
-                  {activeSection === 'history' && (
-                    <HistorySection courseId={selectedCourseId} snapshots={snapshots} loading={snapshotsLoading} onLoad={fetchSnapshots} onToggleFavorite={toggleSnapshotFavorite} onDelete={deleteSnapshot} />
-                  )}
+                  <NeedHelpSection courseId={selectedCourseId} events={needHelpEvents} byModule={needHelpByModule} loading={needHelpLoading} onLoad={fetchNeedHelp} />
                 </div>
               )}
               {/* Report sections */}
@@ -699,15 +703,6 @@ const StudentDataPage: React.FC = () => {
                       loading={needHelpLoading}
                       onLoad={fetchNeedHelp}
                     />
-                  ) : activeSection === 'history' ? (
-                    <HistorySection
-                      courseId={selectedCourseId}
-                      snapshots={snapshots}
-                      loading={snapshotsLoading}
-                      onLoad={fetchSnapshots}
-                      onToggleFavorite={toggleSnapshotFavorite}
-                      onDelete={deleteSnapshot}
-                    />
                   ) : (
                     <ReportSections report={report} activeSection={activeSection} selectedCourse={selectedCourse} />
                   )}
@@ -720,6 +715,51 @@ const StudentDataPage: React.FC = () => {
           )}
         </main>
       </div>
+
+      {/* Analysis History Drawer */}
+      {historyDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div
+            onClick={() => setHistoryDrawerOpen(false)}
+            className="flex-1 bg-black/20 backdrop-blur-sm"
+          />
+          <div className="w-[440px] bg-[#F9F8F4] shadow-2xl flex flex-col border-l border-stone-200">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 bg-white shrink-0">
+              <div>
+                <h2 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  Analysis History
+                </h2>
+                {selectedCourse && (
+                  <p className="text-xs text-stone-400 mt-0.5">
+                    {selectedCourse.course_code ? `${selectedCourse.course_code} — ` : ''}{selectedCourse.topic}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setHistoryDrawerOpen(false)}
+                className="text-stone-400 hover:text-stone-700 transition-colors p-1"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {selectedCourseId && <TrendChart courseId={selectedCourseId} />}
+              <HistorySection
+                courseId={selectedCourseId}
+                courseName={selectedCourse
+                  ? (selectedCourse.course_code ? `${selectedCourse.course_code} — ${selectedCourse.topic}` : selectedCourse.topic)
+                  : undefined}
+                snapshots={snapshots}
+                loading={snapshotsLoading}
+                onLoad={fetchSnapshots}
+                onToggleFavorite={toggleSnapshotFavorite}
+                onDelete={deleteSnapshot}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Flag Modal */}
       {showFlagModal && flags.length > 0 && selectedCourseId && (
