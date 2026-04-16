@@ -37,6 +37,24 @@
 
 ---
 
+## 🧭 Design Philosophy
+
+Most EdTech AI tools treat artificial intelligence as a threat to be monitored — detecting whether students used AI, flagging "inauthentic" work, enforcing originality.
+
+Plot Ark takes the opposite position.
+
+**AI is a cognitive tool, not a threat.** A student who uses AI to draft an answer, then understands it, refines it, and can explain it in their own words — that student has learned. Copy-paste without comprehension is a student deceiving themselves, not a system to be policed.
+
+Plot Ark has no AI detection mechanism. It never will. The question it asks is not *"did you use AI?"* but *"did learning happen?"* — and it answers that through Bloom's Taxonomy alignment, i+1 difficulty progression, and xAPI learner behavior tracking.
+
+The curriculum engine itself is built the same way: AI generates the structure, pedagogy constrains the output, and the instructor stays in the loop. The tool thinks; the human decides.
+
+This system was built so that no one gets left behind by the system. The author was one of those people.
+
+Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophistication and response sophistication — the deeper you engage it, the deeper it responds.
+
+---
+
 ## 🎬 Demo
 
 **Course generation** — agentic source retrieval, syllabus import, and interactive module adjustment
@@ -172,24 +190,6 @@
 - **PDF, DOCX, and Markdown** with dynamically formatted citations (APA/MLA/Chicago).
 
 </details>
-
-## 🧭 Design Philosophy
-
-Most EdTech AI tools treat artificial intelligence as a threat to be monitored — detecting whether students used AI, flagging "inauthentic" work, enforcing originality.
-
-Plot Ark takes the opposite position.
-
-**AI is a cognitive tool, not a threat.** A student who uses AI to draft an answer, then understands it, refines it, and can explain it in their own words — that student has learned. Copy-paste without comprehension is a student deceiving themselves, not a system to be policed.
-
-Plot Ark has no AI detection mechanism. It never will. The question it asks is not *"did you use AI?"* but *"did learning happen?"* — and it answers that through Bloom's Taxonomy alignment, i+1 difficulty progression, and xAPI learner behavior tracking.
-
-The curriculum engine itself is built the same way: AI generates the structure, pedagogy constrains the output, and the instructor stays in the loop. The tool thinks; the human decides.
-
-This system was built so that no one gets left behind by the system. The author was one of those people.
-
-Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophistication and response sophistication — the deeper you engage it, the deeper it responds.
-
----
 
 ## 🏗️ Architecture
 
