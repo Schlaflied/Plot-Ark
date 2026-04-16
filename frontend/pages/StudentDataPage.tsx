@@ -128,8 +128,14 @@ const NeedHelpSection: React.FC<NeedHelpSectionProps> = ({ courseId, events, byM
                   {events.filter(e => e.module_id === m.module_id).map((e, i) => (
                     <div key={i} className="py-2 text-xs text-stone-600 space-y-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-stone-800">{e.student_name}</span>
-                        <span className="text-stone-400 shrink-0">{e.student_email}</span>
+                        {e.student_email === 'anonymous@plotark.internal' ? (
+                          <span className="font-medium text-stone-400 italic">Anonymous</span>
+                        ) : (
+                          <>
+                            <span className="font-medium text-stone-800">{e.student_name}</span>
+                            <span className="text-stone-400 shrink-0">{e.student_email}</span>
+                          </>
+                        )}
                         <span className="text-stone-400 shrink-0">{e.timestamp ? new Date(e.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—'}</span>
                       </div>
                       {e.message && (

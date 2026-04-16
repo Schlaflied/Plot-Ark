@@ -63,6 +63,7 @@ const CoursePage: React.FC = () => {
   const [needHelpOpen, setNeedHelpOpen] = useState(false);
   const [needHelpSent, setNeedHelpSent] = useState<Record<number, boolean>>({});
   const [needHelpMessage, setNeedHelpMessage] = useState('');
+  const [needHelpShareIdentity, setNeedHelpShareIdentity] = useState(false);
   const [notifDismissed, setNotifDismissed] = useState(false);
   const [profFabDismissed, setProfFabDismissed] = useState(false);
   const [studentFabDismissed, setStudentFabDismissed] = useState(false);
@@ -496,6 +497,7 @@ const CoursePage: React.FC = () => {
                       onClick={() => {
                         if (needHelpSent[currentModuleIndex]) return;
                         setNeedHelpMessage('');
+                        setNeedHelpShareIdentity(false);
                         setNeedHelpOpen(true);
                       }}
                       className={`flex items-center gap-2 text-sm font-medium transition-colors ${
@@ -750,7 +752,7 @@ const CoursePage: React.FC = () => {
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">
-                Your instructor has been notified that you need help with <strong>{currentModule?.title}</strong>. They may post additional resources or adjust this module.
+                Your instructor will be notified that someone needs help with <strong>{currentModule?.title}</strong>. By default this is anonymous — your name won't be shared unless you choose to.
               </div>
               <div>
                 <label className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2 block">
@@ -763,6 +765,17 @@ const CoursePage: React.FC = () => {
                   rows={4}
                   className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm text-stone-700 placeholder-stone-300 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition"
                 />
+                <label className="mt-3 flex items-start gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={needHelpShareIdentity}
+                    onChange={e => setNeedHelpShareIdentity(e.target.checked)}
+                    className="mt-0.5 accent-amber-500"
+                  />
+                  <span className="text-xs text-stone-500 leading-relaxed">
+                    Share my email so my instructor can follow up with me personally
+                  </span>
+                </label>
               </div>
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-3">While you wait</p>
@@ -782,7 +795,9 @@ const CoursePage: React.FC = () => {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        actor: { name: auth?.email || 'student', mbox: `mailto:${auth?.email || 'student@plotark'}` },
+                        actor: needHelpShareIdentity
+                          ? { name: auth?.email || 'student', mbox: `mailto:${auth?.email || 'student@plotark'}` }
+                          : { name: 'Anonymous Student', mbox: 'mailto:anonymous@plotark.internal' },
                         verb: { id: 'https://w3id.org/xapi/adl/verbs/requested-help', display: { 'en-US': 'requested-help' } },
                         object: {
                           id: `${modId}/${currentModule?.title || modId}`,
