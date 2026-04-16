@@ -13,6 +13,11 @@ const stripModulePrefix = (title: string): string =>
 
 type TabKey = 'objectives' | 'resources' | 'assessment' | 'ai-suggestion';
 
+interface ModuleHint {
+  message: string;
+  tips: string[];
+}
+
 interface ModuleCardProps {
   module: Module;
   moduleIndex: number;
@@ -20,6 +25,7 @@ interface ModuleCardProps {
   isStudent: boolean;
   autoSaveStatus: 'idle' | 'saving' | 'saved';
   showEditHint: boolean;
+  moduleHint?: ModuleHint | null;
   onTabChange: (tab: TabKey) => void;
   onEditField: (field: string, value: any) => void;
   onDismissHint: () => void;
@@ -34,6 +40,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
   isStudent,
   autoSaveStatus,
   showEditHint,
+  moduleHint,
   onTabChange,
   onEditField,
   onDismissHint,
@@ -124,7 +131,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
 
         {/* Tab: Objectives */}
         {activeTab === 'objectives' && (
-          <ObjectivesTab module={currentModule} isStudent={isStudent} onEditField={onEditField} />
+          <ObjectivesTab module={currentModule} isStudent={isStudent} onEditField={onEditField} moduleHint={moduleHint} />
         )}
 
         {/* Tab: Resources */}
@@ -152,7 +159,8 @@ const ObjectivesTab: React.FC<{
   module: Module;
   isStudent: boolean;
   onEditField: (field: string, value: any) => void;
-}> = ({ module: m, isStudent, onEditField }) => (
+  moduleHint?: ModuleHint | null;
+}> = ({ module: m, isStudent, onEditField, moduleHint }) => (
   <>
     <ul className="space-y-2 mb-4">
       {(m.learning_objectives || []).map((obj, i) => (
@@ -210,6 +218,22 @@ const ObjectivesTab: React.FC<{
             onChange={e => onEditField('narrative_preview', e.target.value)}
           />
         )}
+      </div>
+    )}
+
+    {/* Student-facing hint — shown only on flagged modules */}
+    {isStudent && moduleHint && (
+      <div className="mt-6 rounded-xl border border-stone-200 bg-stone-50 p-4">
+        <p className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-2">A note for you</p>
+        <p className="text-sm text-stone-600 leading-relaxed mb-3">{moduleHint.message}</p>
+        <ul className="space-y-1.5">
+          {moduleHint.tips.map((tip, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-stone-500">
+              <span className="mt-1 w-1 h-1 rounded-full bg-stone-400 flex-shrink-0" />
+              {tip}
+            </li>
+          ))}
+        </ul>
       </div>
     )}
   </>

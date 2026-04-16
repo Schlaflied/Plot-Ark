@@ -145,9 +145,12 @@ def seed():
                     if curr_modules and 0 <= mod_idx < len(curr_modules):
                         backup_data = json.dumps(curr_modules[mod_idx])
 
+            change_type = "objective_update" if status == "applied" else (
+                "reference_suggestion" if idx == 1 else "assignment_alert"
+            )
             cur.execute("""
-                INSERT INTO change_log (course_id, module_id, flag_reason, recommendation, agent, status, backup_data)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO change_log (course_id, module_id, flag_reason, recommendation, agent, status, backup_data, change_type)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 str(course_id),
                 mod_id,
@@ -156,6 +159,7 @@ def seed():
                 "curriculum_agent",
                 status,
                 backup_data,
+                change_type,
             ))
 
             print(f"  [CHANGE_LOG] {mod_id}  status={status}  reasons={flag_reasons}{' (with backup)' if backup_data else ''}")

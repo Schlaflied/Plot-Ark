@@ -951,3 +951,89 @@ def get_curriculum_changes(course_id):
         print(f"[Curriculum Changes] Error: {e}")
 
     return jsonify({"course_id": course_id, "changes": changes})
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Student-facing module hints
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+_HINT_TIPS = [
+    "Work through each learning objective one at a time before moving on.",
+    "Try the recommended readings in the Resources tab — a different explanation often helps.",
+    "Write down the specific thing that feels unclear. The more specific you can get, the easier it is to get unstuck.",
+    "It's okay to move on and come back. Sometimes the next module makes this one click.",
+]
+
+_SIGNAL_MESSAGES = {
+    "structural":         "This module introduces concepts that build on each other quickly. Many students find they need to sit with it longer than usual — that's not a sign something's wrong.",
+    "complexity":         "A lot of students pause at this module. The ideas here are dense by design — it gets easier once the first few concepts settle.",
+    "low_completion_rate":"This section has a higher drop-off than most. If you're feeling stuck, you're in good company.",
+    "negative_feedback":  "Students often find this module the most challenging in the course. That's expected — the content here is meant to push you.",
+    "time_on_task_anomaly":"Many students spend more time here than they expect to. That usually means the material is worth the extra attention.",
+    "at_risk_concentration":"This is a common stopping point. Taking a short break and returning with fresh eyes tends to help more than pushing through.",
+    "high_struggle_rate": "A lot of students find this section genuinely hard. If something isn't clicking, it's the material — not you.",
+}
+
+_DEFAULT_MESSAGE = "Many students find this module takes a second pass. That's completely normal — some ideas just need more time to land."
+
+
+@curriculum_agent_bp.route("/api/curriculum/student-hints/<int:course_id>", methods=["GET"])
+def get_student_hints(course_id):
+    """Return gentle, normalizing hints for flagged modules — shown proactively in student view.
+
+    Each hint: { message, tips[] } keyed by module_id.
+    Template-based (no LLM). Framing: normalise struggle, give entry points.
+    """
+    from db import get_db
+    conn = get_db()
+    if not conn:
+        return jsonify({"hints": {}}), 200
+
+    hints: dict = {}
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT module_id, signals
+            FROM module_flags
+            WHERE course_id = %s
+        """, (course_id,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        import random
+        for module_id, signals in rows:
+            signal_sources = []
+            if signals:
+                if isinstance(signals, list):
+                    signal_sources = [s.get("source", "") if isinstance(s, dict) else str(s) for s in signals]
+                elif isinstance(signals, str):
+                    import json as _json
+                    try:
+                        parsed = _json.loads(signals)
+                        signal_sources = [s.get("source", "") if isinstance(s, dict) else str(s) for s in parsed]
+                    except Exception:
+                        pass
+
+            # Pick message from first matching signal key
+            message = _DEFAULT_MESSAGE
+            for src in signal_sources:
+                for key, msg in _SIGNAL_MESSAGES.items():
+                    if key in src:
+                        message = msg
+                        break
+                else:
+                    continue
+                break
+
+            tips = random.sample(_HINT_TIPS, 3)
+            hints[module_id] = {"message": message, "tips": tips}
+
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        print(f"[StudentHints] Error: {e}")
+
+    return jsonify({"course_id": course_id, "hints": hints})

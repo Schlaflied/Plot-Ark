@@ -67,8 +67,11 @@ const CoursesPage: React.FC = () => {
   const { auth, logout } = useAuth();
   const navigate = useNavigate();
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [demoSeeding, setDemoSeeding] = useState(false);
+  const [demoStep, setDemoStep] = useState('');
+  const [demoDone, setDemoDone] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   // Auth role is the source of truth; professors can temporarily preview student view
   const [viewMode, setViewMode] = useState<'professor' | 'student'>(
@@ -102,6 +105,37 @@ const CoursesPage: React.FC = () => {
   };
 
   useEffect(() => { fetchHistory(); }, []);
+
+  const loadDemoData = async () => {
+    setDemoSeeding(true);
+    setDemoStep('Starting…');
+    try {
+      const res = await fetch('/api/demo/seed', { method: 'POST' });
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) return;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value);
+        for (const line of text.split('\n')) {
+          if (!line.startsWith('data:')) continue;
+          try {
+            const payload = JSON.parse(line.slice(5).trim());
+            setDemoStep(payload.message || '');
+            if (payload.status === 'done') {
+              setDemoDone(true);
+              await fetchHistory();
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    } catch {
+      setDemoStep('Something went wrong. Please try again.');
+    } finally {
+      setDemoSeeding(false);
+    }
+  };
 
   const deleteHistory = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
@@ -211,6 +245,36 @@ const CoursesPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Onboarding banner — shown when DB is empty (or ?preview_banner=1 for QA) */}
+        {!historyLoading && (historyEntries.length === 0 || searchParams.get('preview_banner') === '1') && !demoDone && !isStudent && (
+          <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 relative">
+            <button
+              onClick={() => setDemoDone(true)}
+              className="absolute top-3 right-3 text-amber-400 hover:text-amber-700 transition-colors"
+              aria-label="Dismiss"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <div className="flex-1 pr-4">
+              <p className="font-semibold text-amber-900 mb-1">No courses yet</p>
+              <p className="text-sm text-amber-700 leading-relaxed">
+                Load sample data to see the full system — courses, student behaviour, curriculum agent suggestions, and analytics — all pre-populated and ready to explore.
+              </p>
+              {demoSeeding && (
+                <p className="mt-2 text-xs text-amber-600 animate-pulse">{demoStep}</p>
+              )}
+            </div>
+            {!demoSeeding && (
+              <button
+                onClick={loadDemoData}
+                className="shrink-0 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-medium text-sm transition-colors shadow-sm"
+              >
+                Load Demo Data
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Search input */}
         <input

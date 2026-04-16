@@ -59,6 +59,7 @@ const CoursePage: React.FC = () => {
   const [moduleChanges, setModuleChanges] = useState<any[]>([]);
   const [changesExpanded, setChangesExpanded] = useState(true);
   const [studentDrawerOpen, setStudentDrawerOpen] = useState(false);
+  const [studentHints, setStudentHints] = useState<Record<string, { message: string; tips: string[] }>>({});
   const [needHelpOpen, setNeedHelpOpen] = useState(false);
   const [needHelpSent, setNeedHelpSent] = useState<Record<number, boolean>>({});
   const [needHelpMessage, setNeedHelpMessage] = useState('');
@@ -136,6 +137,15 @@ const CoursePage: React.FC = () => {
       .then(r => r.ok ? r.json() : { changes: [] })
       .then(data => setModuleChanges(data.changes || []))
       .catch(() => setModuleChanges([]));
+  }, [id, isStudent]);
+
+  // Fetch student hints (proactive module-level nudges for flagged modules)
+  useEffect(() => {
+    if (!isStudent || !id) return;
+    fetch(`/api/curriculum/student-hints/${id}`)
+      .then(r => r.ok ? r.json() : { hints: {} })
+      .then(data => setStudentHints(data.hints || {}))
+      .catch(() => setStudentHints({}));
   }, [id, isStudent]);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -411,6 +421,7 @@ const CoursePage: React.FC = () => {
                 isStudent={isStudent}
                 autoSaveStatus={autoSaveStatus}
                 showEditHint={showEditHint}
+                moduleHint={isStudent ? (studentHints[`module_${currentModuleIndex + 1}`] ?? null) : null}
                 onTabChange={setActiveTab}
                 onEditField={handleEditField}
                 onDismissHint={() => setShowEditHint(false)}
