@@ -159,7 +159,7 @@ function App() {
               </p>
 
               <p>
-                This system was built so that no one gets left behind by the system. The author was one of those people who was ignored by the system.
+                This system was built so that no one gets left behind by the system. The author was one of those people who were ignored by the system.
               </p>
 
               <p className="text-gray-500 pt-2 border-t border-gray-100">

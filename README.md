@@ -49,7 +49,7 @@ Plot Ark has no AI detection mechanism. It never will. The question it asks is n
 
 The curriculum engine itself is built the same way: AI generates the structure, pedagogy constrains the output, and the instructor stays in the loop. The tool thinks; the human decides.
 
-This system was built so that no one gets left behind by the system. The author was one of those people who was ignored by the system.
+This system was built so that no one gets left behind by the system. The author was one of those people who were ignored by the system.
 
 Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophistication and response sophistication — the deeper you engage it, the deeper it responds.
 
