@@ -157,7 +157,11 @@ function App() {
               <p>
                 The curriculum engine itself is built the same way: AI generates the structure, pedagogy constrains the output, and the instructor stays in the loop. The tool thinks; the human decides.
               </p>
-              
+
+              <p>
+                This system was built so that no one gets left behind by the system. The author was one of those people.
+              </p>
+
               <p className="text-gray-500 pt-2 border-t border-gray-100">
                 Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophistication and response sophistication — the deeper you engage it, the deeper it responds.
               </p>

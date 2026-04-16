@@ -148,17 +148,20 @@
 <details>
 <summary><strong>🎯 课程 Agent — 主动式课程优化</strong></summary>
 
-- **教授通知栏** — CoursePage 顶部琰琥色持久通知栏，当 AI 生成的课程建议可用时提醒教授，附带“Dismiss”和“Review →”按钮
-- **教授滑出抽屉** — 点击“Review”从右侧滑出 400px 建议抽屉，分为“待处理建议”（Apply）和“已应用变更”（Redo）两个区域
-- **学生通知栏** — 蓝色横幅显示“N 个模块已更新 — 基于教师优化”，附带 Dismiss 和 Review 按钮
-- **学生滑出抽屉** — 点击“Review”打开蓝色主题抽屉，列出更新的模块并带有“Go to Module”导航按钮
+- **三层人在回路（HITL）设计** — 建议按信号强度和变更范围分为三个操作层级：
+  - **第一层 — 学习目标（AI 直接改）**：琥珀色徽章；一键 Apply 写入更新后的 learning objectives 并降低 complexity_level；弹出修改前后对比确认框；支持 Redo 还原
+  - **第二层 — 参考资料（用户触发搜索）**：紫色徽章；”Search References”按钮基于模块学习目标调用 Tavily 搜索，返回去重候选项（按域名去重，排除已有 readings）；教授勾选后直接写入 `recommended_readings`
+  - **第三层 — 作业（AI 只提醒）**：蓝色徽章；只读提示框说明变更背景和建议教授手动核查的内容；没有 Apply 按钮，教授自行决定
+- **教授通知栏** — CoursePage 顶部琰琥色持久通知栏，当 AI 生成的课程建议可用时提醒教授，附带”Dismiss”和”Review →”按钮
+- **教授滑出抽屉** — 点击”Review”从右侧滑出 400px 建议抽屉，按徽章层级分组展示待处理建议（Apply / Search）与已应用变更（Redo）
+- **学生通知栏** — 蓝色横幅显示”N 个模块已更新 — 基于教师优化”，附带 Dismiss 和 Review 按钮
+- **学生滑出抽屉** — 点击”Review”打开蓝色主题抽屉，列出更新的模块并带有”Go to Module”导航按钮
 - **可拖拽悬浮球（FAB）** — 关闭通知栏后，右下角出现可拖拽的悬浮球（🤖 琰琥色 / ✨ 蓝色）；点击直接打开抽屉（不恢复 banner）；hover 显示 ✕ 可彻底关闭；支持自由拖拽到屏幕任意位置
-- **人在回路的 Apply** — 点击 Apply 弹出确认弹窗，展示修改前后对比；教授明确批准每一项变更
-- **Redo（撤销 Apply）** — 应用的变更会备份原始模块数据；点击“Redo”恢复模块到应用前状态，并将建议移回待处理
+- **生成后自动分析** — 每门新课保存后立即触发后台结构分析，生成全部三种 change_type 建议条目，无需等待 xAPI 运行即可看到建议
+- **Redo（撤销 Apply）** — 应用的变更会备份原始模块数据；点击”Redo”恢复模块到应用前状态，并将建议移回待处理
 - **模块标记** — `module_flags` 表存储被标记的模块，包含信号来源、标记级别及详细指标
-- **变更日志** — `change_log` 表记录所有建议，状态追踪（pending → applied → dismissed）并存储 backup_data 用于 Redo
-- **全课程覆盖** — 种子脚本自动发现所有课程，为每门课生成标记和建议（含备份数据）
-- **分析跳转** — 教授抽屉中的“View Full Analytics →”按钮直接导航到 Student Data 分析页面
+- **变更日志** — `change_log` 表记录所有建议，含 `change_type` 字段（objective_update / reference_suggestion / assignment_alert）、状态追踪（pending → applied → dismissed）及 backup_data
+- **分析跳转** — 教授抽屉中的”View Full Analytics →”按钮直接导航到 Student Data 分析页面
 
 </details>
 
@@ -181,6 +184,8 @@ Plot Ark 持完全相反的立场。
 Plot Ark 没有 AI 检测机制，也永远不会有。它问的不是"你用了 AI 吗？"，而是"学习发生了吗？"——并通过布鲁姆认知分类法对齐、i+1 难度递进和 xAPI 学习行为追踪来回答这个问题。
 
 课程引擎本身也遵循同样的逻辑：AI 生成结构，教学理论约束输出，教师始终掌握最终决策权。工具负责思考；人负责决定。
+
+这个系统的设计初衷，是让没有人被系统漏掉。作者本人，就是那个曾经被漏掉的人。
 
 Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复复杂度之间的相关系数 r = 0.925 —— 你投入的思考越深，它给出的回应越深。
 
@@ -368,7 +373,7 @@ plot-ark/
 │   ├── constants.py                     ← Bloom's 分类、会话约束、评估格式
 │   ├── routes/
 │   │   ├── curriculum.py                ← /api/curriculum/*（生成、验架、展开、保存）
-│   │   ├── curriculum_agent_routes.py   ← /api/curriculum/ 标记、建议、应用、撤销、变更
+│   │   ├── curriculum_agent_routes.py   ← /api/curriculum/ 标记、建议、应用、撤销、references/search、references/apply、auto-analyze
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
 │   │   ├── sources.py                   ← Tavily 源预览
 │   │   ├── graph.py                     ← 知识图谱 + RAG 查询
@@ -426,7 +431,7 @@ plot-ark/
 │   │   │   ├── ReportSections.tsx       ← A2A 分析报告的展示组件
 │   │   │   ├── TrendChart.tsx           ← SVG 趋势图（迷你 + 全屏 Modal）
 │   │   │   ├── CurriculumApplyModal.tsx ← AI 建议应用确认弹窗
-│   │   │   ├── CurriculumDrawer.tsx     ← 教授端滑出抽屉（Apply / Redo）
+│   │   │   ├── CurriculumDrawer.tsx     ← 教授端滑出抽屉（三层 HITL：Apply / Search References / Alert）
 │   │   │   ├── StudentChangesDrawer.tsx ← 学生端滑出抽屉（Go to Module）
 │   │   │   ├── AISuggestionsSection.tsx ← AI 专属建议详情展示区块
 │   │   │   ├── FlagBadge.tsx            ← 模块预警状态红色/琥珀色徽章

@@ -111,6 +111,13 @@ def init_db():
                     EXCEPTION WHEN duplicate_column THEN NULL;
                     END $$;
                 """)
+                # Add change_type column to distinguish objective/reference/assignment changes
+                cur.execute("""
+                    DO $$ BEGIN
+                        ALTER TABLE change_log ADD COLUMN change_type VARCHAR DEFAULT 'objective_update';
+                    EXCEPTION WHEN duplicate_column THEN NULL;
+                    END $$;
+                """)
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS module_flags (
                         id SERIAL PRIMARY KEY,

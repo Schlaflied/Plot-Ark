@@ -353,6 +353,7 @@ class OrchestratorNode(BaseNode):
                 "⚠️ Failed to save analysis snapshot to long-term memory")
 
         # ── Threshold check ────────────────────────────────────────────────
+        flags = []
         try:
             flags = check_thresholds(report)
             if flags:
@@ -368,6 +369,25 @@ class OrchestratorNode(BaseNode):
             print(f"[Orchestrator] Threshold check error: {e}")
             yield _sse_event("orchestrator", "threshold_error",
                 "⚠️ Threshold check failed — flags may be incomplete")
+
+        # ── Curriculum Agent — auto-run after flags ────────────────────────
+        try:
+            from agents.curriculum_agent import CurriculumAgentNode
+            yield _sse_event("orchestrator", "curriculum_running",
+                "🤖 Running Curriculum Agent to generate suggestions...")
+            ca_sm = SharedMemory(f"curriculum-{course_id}-auto", redis_client)
+            ca_sm.set("course_id", course_id)
+            ca_sm.set("flagged_modules", flags)
+            ca_agent = CurriculumAgentNode()
+            ca_result = ca_agent.execute(ca_sm)
+            rec_count = len((ca_result.data or {}).get("recommendations", []))
+            yield _sse_event("orchestrator", "curriculum_done",
+                f"✅ Curriculum Agent generated {rec_count} suggestion(s)",
+                ca_result.data or {})
+        except Exception as e:
+            print(f"[Orchestrator] Curriculum Agent error: {e}")
+            yield _sse_event("orchestrator", "curriculum_error",
+                "⚠️ Curriculum Agent failed — suggestions may be unavailable")
 
     def run_analysis_sync(self, course_id: int) -> dict:
         """Non-streaming version — returns complete report dict."""
@@ -409,16 +429,27 @@ class OrchestratorNode(BaseNode):
         module_diff = _detect_module_diff(course_id)
         report = self._aggregate_report(course_id, agent_results, anon_map, module_diff)
 
-        # LTM Cold write + Threshold check (sync path)
+        # LTM Cold write + Threshold check + Curriculum Agent (sync path)
         try:
             write_cold_snapshot(report)
         except Exception as e:
             print(f"[Orchestrator] LTM Cold write error (non-fatal): {e}")
 
+        flags = []
         try:
-            check_thresholds(report)
+            flags = check_thresholds(report)
         except Exception as e:
             print(f"[Orchestrator] Threshold check error (non-fatal): {e}")
+
+        try:
+            from agents.curriculum_agent import CurriculumAgentNode
+            ca_sm = SharedMemory(f"curriculum-{course_id}-sync", redis_client)
+            ca_sm.set("course_id", course_id)
+            ca_sm.set("flagged_modules", flags)
+            ca_agent = CurriculumAgentNode()
+            ca_agent.execute(ca_sm)
+        except Exception as e:
+            print(f"[Orchestrator] Curriculum Agent error (non-fatal): {e}")
 
         return report
 

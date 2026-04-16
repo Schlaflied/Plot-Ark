@@ -1,20 +1,30 @@
 /**
- * CurriculumDrawer — Slide-out drawer panel for AI curriculum suggestions.
+ * CurriculumDrawer — Slide-out drawer for three-layer AI curriculum suggestions.
  *
- * Split into two sections:
- *  1. Pending Suggestions — with "Apply" button
- *  2. Applied Changes — with "Redo" (undo) button
+ * Layer 1 — objective_update:  AI applies directly (Apply / Redo)
+ * Layer 2 — reference_suggestion: Tavily search, professor selects
+ * Layer 3 — assignment_alert: read-only reminder, professor acts manually
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 
-interface Suggestion {
+const API = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
+
+export interface Suggestion {
   module_id: string;
   module_name: string;
   recommendation: string;
   reasons?: string[];
   source?: string;
-  status?: string; // 'pending' | 'applied'
+  status?: string;           // 'pending' | 'applied'
+  change_type?: string;      // 'objective_update' | 'reference_suggestion' | 'assignment_alert'
+}
+
+interface RefCandidate {
+  title: string;
+  url: string;
+  domain: string;
+  snippet: string;
 }
 
 interface CurriculumDrawerProps {
@@ -53,7 +63,7 @@ const CurriculumDrawer: React.FC<CurriculumDrawerProps> = ({
 
       {/* Drawer Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-[400px] max-w-[90vw] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${
+        className={`fixed top-0 right-0 h-full w-[420px] max-w-[90vw] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -99,7 +109,9 @@ const CurriculumDrawer: React.FC<CurriculumDrawerProps> = ({
                         key={`p-${i}`}
                         suggestion={s}
                         variant="pending"
-                        onAction={() => onApply(s)}
+                        courseId={courseId}
+                        onApply={() => onApply(s)}
+                        onRedo={() => onRedo(s)}
                       />
                     ))}
                   </div>
@@ -118,7 +130,9 @@ const CurriculumDrawer: React.FC<CurriculumDrawerProps> = ({
                         key={`a-${i}`}
                         suggestion={s}
                         variant="applied"
-                        onAction={() => onRedo(s)}
+                        courseId={courseId}
+                        onApply={() => onApply(s)}
+                        onRedo={() => onRedo(s)}
                       />
                     ))}
                   </div>
@@ -164,55 +178,93 @@ const CurriculumDrawer: React.FC<CurriculumDrawerProps> = ({
 interface SuggestionCardProps {
   suggestion: Suggestion;
   variant: 'pending' | 'applied';
-  onAction: () => void;
+  courseId: string | undefined;
+  onApply: () => void;
+  onRedo: () => void;
 }
 
-const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, variant, onAction }) => {
+const SuggestionCard: React.FC<SuggestionCardProps> = ({
+  suggestion,
+  variant,
+  courseId,
+  onApply,
+  onRedo,
+}) => {
   const isPending = variant === 'pending';
+  const changeType = suggestion.change_type ?? 'objective_update';
 
   return (
     <div
       className={`rounded-xl p-4 hover:shadow-sm transition-shadow ${
-        isPending
+        changeType === 'assignment_alert'
+          ? 'bg-blue-50/60 border border-blue-200/60'
+          : isPending
           ? 'bg-amber-50/70 border border-amber-200/60'
           : 'bg-green-50/60 border border-green-200/60'
       }`}
     >
-      {/* Module name + Action button */}
+      {/* Module name + layer badge */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full shrink-0 ${isPending ? 'bg-amber-400' : 'bg-green-500'}`} />
+          <span className={`w-2 h-2 rounded-full shrink-0 ${
+            changeType === 'assignment_alert' ? 'bg-blue-400'
+            : isPending ? 'bg-amber-400'
+            : 'bg-green-500'
+          }`} />
           <p className="text-sm font-semibold text-stone-800">
             {suggestion.module_name || suggestion.module_id}
           </p>
         </div>
-        {suggestion.source === 'curriculum_agent' && (
-          <button
-            onClick={onAction}
-            className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors shadow-sm ${
-              isPending
-                ? 'bg-amber-500 text-white hover:bg-amber-600'
-                : 'bg-amber-500 text-white hover:bg-amber-600'
-            }`}
-          >
-            {isPending ? 'Apply' : 'Redo'}
-          </button>
-        )}
+        <LayerBadge changeType={changeType} />
       </div>
 
       {/* Recommendation text */}
-      <p className="text-sm text-stone-600 leading-relaxed mb-2.5">
+      <p className="text-sm text-stone-600 leading-relaxed mb-3">
         {suggestion.recommendation}
       </p>
 
+      {/* Layer-specific CTA */}
+      {changeType === 'objective_update' && suggestion.source === 'curriculum_agent' && (
+        <div className="flex gap-2">
+          {isPending ? (
+            <button
+              onClick={onApply}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm"
+            >
+              Apply Objectives
+            </button>
+          ) : (
+            <button
+              onClick={onRedo}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium bg-stone-200 text-stone-700 hover:bg-stone-300 transition-colors"
+            >
+              Redo
+            </button>
+          )}
+        </div>
+      )}
+
+      {changeType === 'reference_suggestion' && isPending && courseId && (
+        <ReferenceSearchPanel
+          courseId={courseId}
+          moduleId={suggestion.module_id}
+        />
+      )}
+
+      {changeType === 'assignment_alert' && (
+        <AssignmentAlertNote />
+      )}
+
       {/* Reason tags */}
       {suggestion.reasons && suggestion.reasons.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 mt-2.5">
           {suggestion.reasons.map((r, j) => (
             <span
               key={j}
               className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                isPending
+                changeType === 'assignment_alert'
+                  ? 'bg-white border border-blue-200 text-blue-700'
+                  : isPending
                   ? 'bg-white border border-amber-200 text-amber-700'
                   : 'bg-white border border-green-200 text-green-700'
               }`}
@@ -225,5 +277,205 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, variant, on
     </div>
   );
 };
+
+
+/* ── LayerBadge ─────────────────────────────────────────────────────────── */
+
+const LayerBadge: React.FC<{ changeType: string }> = ({ changeType }) => {
+  if (changeType === 'objective_update') {
+    return (
+      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold border border-amber-200">
+        Objectives
+      </span>
+    );
+  }
+  if (changeType === 'reference_suggestion') {
+    return (
+      <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold border border-violet-200">
+        References
+      </span>
+    );
+  }
+  if (changeType === 'assignment_alert') {
+    return (
+      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-semibold border border-blue-200">
+        Assignments
+      </span>
+    );
+  }
+  return null;
+};
+
+
+/* ── AssignmentAlertNote ────────────────────────────────────────────────── */
+
+const AssignmentAlertNote: React.FC = () => (
+  <div className="mt-1 flex items-start gap-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+    <span className="shrink-0 mt-0.5">⚠️</span>
+    <span>
+      Assignments require manual review — please update them directly in the course editor to match the revised objectives.
+    </span>
+  </div>
+);
+
+
+/* ── ReferenceSearchPanel ───────────────────────────────────────────────── */
+
+interface ReferenceSearchPanelProps {
+  courseId: string;
+  moduleId: string;
+}
+
+const ReferenceSearchPanel: React.FC<ReferenceSearchPanelProps> = ({ courseId, moduleId }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [candidates, setCandidates] = useState<RefCandidate[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSearch = async () => {
+    setSearching(true);
+    setError('');
+    setCandidates([]);
+    setSelected(new Set());
+    setExpanded(true);
+    try {
+      const res = await fetch(`${API}/api/curriculum/references/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ course_id: Number(courseId), module_id: moduleId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Search failed');
+      setCandidates(data.candidates || []);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const toggleSelect = (url: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
+      return next;
+    });
+  };
+
+  const handleApply = async () => {
+    const refs = candidates.filter(c => selected.has(c.url));
+    if (!refs.length) return;
+    setApplying(true);
+    setError('');
+    try {
+      const res = await fetch(`${API}/api/curriculum/references/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          course_id: Number(courseId),
+          module_id: moduleId,
+          references: refs,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Apply failed');
+      setApplied(true);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  if (applied) {
+    return (
+      <div className="mt-2 flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+        <span>✅</span>
+        <span>{selected.size} reference{selected.size !== 1 ? 's' : ''} added to module.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 space-y-2">
+      <button
+        onClick={handleSearch}
+        disabled={searching}
+        className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg font-medium bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-60 transition-colors shadow-sm"
+      >
+        {searching ? (
+          <>
+            <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+            Searching…
+          </>
+        ) : (
+          <>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+            </svg>
+            Search References
+          </>
+        )}
+      </button>
+
+      {error && (
+        <p className="text-xs text-red-600">{error}</p>
+      )}
+
+      {expanded && !searching && candidates.length === 0 && !error && (
+        <p className="text-xs text-stone-500 italic">No new references found.</p>
+      )}
+
+      {candidates.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[10px] text-stone-400 uppercase tracking-wide font-semibold">
+            Select references to add:
+          </p>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+            {candidates.map(c => (
+              <label
+                key={c.url}
+                className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                  selected.has(c.url)
+                    ? 'bg-violet-50 border-violet-300'
+                    : 'bg-white border-stone-200 hover:border-violet-200'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(c.url)}
+                  onChange={() => toggleSelect(c.url)}
+                  className="mt-0.5 accent-violet-500 shrink-0"
+                />
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-stone-800 leading-snug">{c.title}</p>
+                  <p className="text-[10px] text-violet-600 truncate">{c.domain}</p>
+                  {c.snippet && (
+                    <p className="text-[10px] text-stone-400 mt-0.5 line-clamp-2">{c.snippet}</p>
+                  )}
+                </div>
+              </label>
+            ))}
+          </div>
+
+          {selected.size > 0 && (
+            <button
+              onClick={handleApply}
+              disabled={applying}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-60 transition-colors shadow-sm"
+            >
+              {applying ? 'Adding…' : `Add ${selected.size} Selected`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 export default CurriculumDrawer;

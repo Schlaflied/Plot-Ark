@@ -80,10 +80,14 @@ class CurriculumAgentNode(BaseNode):
         recommendations = []
 
         for mod in structural_modules:
+            # Layer 1: objective update (AI applies directly)
             rec = _generate_structural_recommendation(mod)
             recommendations.append(rec)
+            # Layer 3: assignment alert (professor must update manually)
+            recommendations.append(_generate_assignment_alert(mod))
 
         for mod in occasional_modules:
+            # Layer 2: reference suggestion (Tavily search, professor selects)
             rec = _generate_occasional_recommendation(mod)
             recommendations.append(rec)
 
@@ -104,6 +108,7 @@ class CurriculumAgentNode(BaseNode):
                 "module_name": flag_data.get("module_name", mod_id) if isinstance(flag_data, dict) else mod_id,
                 "severity": "new",
                 "classification": "first_occurrence",
+                "change_type": "reference_suggestion",
                 "recommendation": "This module was flagged for the first time. "
                                   "Monitor it in the next analysis run to determine if this is an isolated incident "
                                   "or the beginning of a trend.",
@@ -148,32 +153,31 @@ def _compute_trend_direction(at_risk_trend: list[dict]) -> str:
 
 
 def _generate_structural_recommendation(mod: dict) -> dict:
-    """Generate recommendation for a structurally problematic module (3+ flags)."""
+    """Generate Layer 1 recommendation: AI updates learning objectives directly (3+ flags)."""
     mod_id = mod["module_id"]
     count = mod["flag_count"]
 
     return {
         "module_id": mod_id,
-        "module_name": mod_id,  # Will be enriched with actual name when available
+        "module_name": mod_id,
         "severity": "high",
         "classification": "structural",
+        "change_type": "objective_update",
         "recommendation": (
             f"This module has been flagged in {count} consecutive analysis runs, "
-            f"indicating a structural issue rather than a one-off problem. "
-            f"The content likely needs substantial revision."
+            f"indicating a structural issue. Learning objectives have been updated "
+            f"to introduce scaffolding and reduce prerequisite gaps."
         ),
         "actions": [
             "Review module content complexity and prerequisites",
             "Consider breaking the module into smaller sub-modules",
-            "Add supplementary materials or video alternatives",
             "Consult with subject matter expert on content accuracy",
-            "Review assessment alignment with learning objectives",
         ],
     }
 
 
 def _generate_occasional_recommendation(mod: dict) -> dict:
-    """Generate recommendation for an occasionally flagged module (1-2 flags)."""
+    """Generate Layer 2 recommendation: search for supporting references via Tavily (1-2 flags)."""
     mod_id = mod["module_id"]
     count = mod["flag_count"]
 
@@ -182,15 +186,37 @@ def _generate_occasional_recommendation(mod: dict) -> dict:
         "module_name": mod_id,
         "severity": "medium",
         "classification": "occasional",
+        "change_type": "reference_suggestion",
         "recommendation": (
             f"This module has been flagged {count} time(s). "
-            f"This may be a situational issue. Continue monitoring — "
-            f"if it persists for 3+ runs, it will be reclassified as structural."
+            f"Current references may not fully support the learning objectives. "
+            f"Search for additional references to supplement the content."
         ),
         "actions": [
             "Review recent student feedback",
-            "Check if recent cohort demographics changed",
+            "Search for updated references aligned with learning objectives",
             "Monitor in next 1-2 analysis runs",
+        ],
+    }
+
+
+def _generate_assignment_alert(mod: dict) -> dict:
+    """Generate Layer 3 recommendation: alert professor to manually review assignments."""
+    mod_id = mod["module_id"]
+
+    return {
+        "module_id": mod_id,
+        "module_name": mod_id,
+        "severity": "info",
+        "classification": "structural",
+        "change_type": "assignment_alert",
+        "recommendation": (
+            f"Learning objectives for this module have been updated. "
+            f"Review the existing assignments to ensure they still align with the revised objectives."
+        ),
+        "actions": [
+            "Check that assignment deliverables match updated objectives",
+            "Update rubric criteria if scope has changed",
         ],
     }
 
@@ -204,14 +230,16 @@ def _write_change_log(course_id: int, recommendations: list[dict]) -> None:
         cur = conn.cursor()
         for rec in recommendations:
             flag_reasons = rec.get("actions", [])
+            change_type = rec.get("change_type", "objective_update")
             cur.execute("""
-                INSERT INTO change_log (course_id, module_id, flag_reason, recommendation)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO change_log (course_id, module_id, flag_reason, recommendation, change_type)
+                VALUES (%s, %s, %s, %s, %s)
             """, (
                 course_id,
                 rec.get("module_id", "unknown"),
                 flag_reasons,
                 rec.get("recommendation", ""),
+                change_type,
             ))
         conn.commit()
         cur.close()

@@ -129,11 +129,11 @@ def get_curriculum_suggestions(course_id):
 
         # 1. Try change_log first (Curriculum Agent has already run)
         cur.execute("""
-            SELECT module_id, recommendation, flag_reason, status, timestamp
+            SELECT module_id, recommendation, flag_reason, status, timestamp, change_type
             FROM change_log
             WHERE course_id = %s AND status != 'dismissed'
             ORDER BY timestamp DESC
-            LIMIT 15
+            LIMIT 20
         """, (str(course_id),))
         for row in cur.fetchall():
             suggestions.append({
@@ -143,6 +143,7 @@ def get_curriculum_suggestions(course_id):
                 "reasons": row[2] if row[2] else [],
                 "source": "curriculum_agent",
                 "status": row[3],       # pending | applied
+                "change_type": row[5] or "objective_update",
             })
 
         # 2. If no change_log entries, fall back to raw flags
@@ -203,10 +204,12 @@ def _translate_flag_to_suggestion(module_id: str, flag_level: str, signals) -> d
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def _apply_module_mutation(modules: list, module_id: str, recommendation: str) -> tuple:
-    """Mutate a module's content based on the recommendation text.
+    """Mutate a module's learning objectives based on the AI recommendation.
+
+    Layer 1 (objective_update): Only touches learning_objectives.
+    References and assignments are handled by separate endpoints.
 
     Returns (mutated_modules, original_module_backup).
-    Uses Python-generated content (no real LLM).
     """
     idx = int(module_id.replace("module_", "")) - 1
     if idx < 0 or idx >= len(modules):
@@ -214,67 +217,19 @@ def _apply_module_mutation(modules: list, module_id: str, recommendation: str) -
 
     original = json.dumps(modules[idx])  # backup
     m = modules[idx]
-    rec_lower = recommendation.lower()
 
-    # ── Assessment: split into checkpoints ────────────────────────────────
-    if "assessment" in rec_lower or "checkpoint" in rec_lower:
-        assignments = m.get("assignments", [])
-        if assignments:
-            first = assignments[0] if isinstance(assignments[0], str) else assignments[0].get("title", "Assignment")
-            base = first if isinstance(first, str) else str(first)
-            m["assignments"] = [
-                f"{base} — Checkpoint 1 (Formative, 15%)",
-                f"{base} — Checkpoint 2 (Summative, 25%)",
-            ]
-        else:
-            m["assignments"] = [
-                "Progress Check — Short Reflection (Formative, 15%)",
-                "Module Assessment — Applied Analysis (Summative, 25%)",
-            ]
+    # ── Add a scaffolding objective ───────────────────────────────────────
+    objectives = m.get("learning_objectives", [])
+    objectives.append(
+        "Apply foundational concepts through structured scaffolding activities "
+        "to address identified prerequisite gaps"
+    )
+    m["learning_objectives"] = objectives
 
-    # ── Reading: add introductory material ────────────────────────────────
-    if "reading" in rec_lower or "introductory" in rec_lower or "source" in rec_lower:
-        readings = m.get("recommended_readings", [])
-        intro_reading = {
-            "title": f"Introductory Guide: Foundations for {m.get('title', 'This Module')}",
-            "type": "article",
-            "estimated_time": "15 min",
-            "url": "https://scholar.google.com",
-            "rationale": "Added by Curriculum Agent — bridges prerequisite gap identified in student data.",
-        }
-        m["recommended_readings"] = [intro_reading] + readings
-
-    # ── Case study / practical ────────────────────────────────────────────
-    if "case study" in rec_lower or "practical" in rec_lower:
-        readings = m.get("recommended_readings", [])
-        case_reading = {
-            "title": f"Case Study: Real-World Applications in {m.get('title', 'This Module')}",
-            "type": "article",
-            "estimated_time": "20 min",
-            "url": "https://hbr.org",
-            "rationale": "Added by Curriculum Agent — supplements theory with applied scenario.",
-        }
-        m["recommended_readings"] = readings + [case_reading]
-
-    # ── Peer discussion ───────────────────────────────────────────────────
-    if "peer" in rec_lower or "discussion" in rec_lower or "collaborative" in rec_lower:
-        objectives = m.get("learning_objectives", [])
-        objectives.append("Engage in peer discussion to synthesize key concepts before the main assessment")
-        m["learning_objectives"] = objectives
-
-    # ── Optional marking ──────────────────────────────────────────────────
-    if "optional" in rec_lower:
-        readings = m.get("recommended_readings", [])
-        if len(readings) > 2:
-            for r in readings[2:]:
-                if isinstance(r, dict):
-                    r["rationale"] = "(Optional) " + r.get("rationale", "Supplementary reading.")
-
-    # ── Complexity reduction ──────────────────────────────────────────────
-    if "complexity" in rec_lower or "dense" in rec_lower:
-        cl = m.get("complexity_level", 4)
-        if isinstance(cl, (int, float)) and cl > 1:
-            m["complexity_level"] = cl - 1
+    # ── Reduce complexity level if high ──────────────────────────────────
+    cl = m.get("complexity_level", 3)
+    if isinstance(cl, (int, float)) and cl > 1:
+        m["complexity_level"] = cl - 1
 
     modules[idx] = m
     return modules, original
@@ -590,16 +545,142 @@ def _run_structural_analysis(course_id: int) -> None:
     _save_flags(course_id, structural_flags)
     print(f"[AutoAnalyze] Course {course_id}: {len(structural_flags)} structural flags written.")
 
-    # Run curriculum agent to generate suggestions
+    # Write change_log entries directly based on signal type.
+    # Bypasses LTM-dependent curriculum agent classification so all three
+    # change_types are always generated for a new course.
+    _write_structural_change_log(course_id, structural_flags, modules)
+
+
+def _write_structural_change_log(course_id: int, flags: list, modules: list) -> None:
+    """Write objective_update + reference_suggestion + assignment_alert entries
+    to change_log based on structural signal type.
+
+    Rules:
+      - complexity jump or high early complexity → objective_update + assignment_alert
+      - no readings → reference_suggestion
+      - fallback (no student data) → one of each type across first three modules
+    """
+    from db import get_db
+
+    conn = get_db()
+    if not conn:
+        return
+
     try:
-        sm = SharedMemory(f"curriculum-{course_id}-auto", redis_client)
-        sm.set("course_id", course_id)
-        sm.set("flagged_modules", structural_flags)
-        agent = CurriculumAgentNode()
-        result = agent.execute(sm)
-        print(f"[AutoAnalyze] Curriculum agent finished: {result.status}")
+        cur = conn.cursor()
+
+        # Clear old non-applied entries so re-runs are clean
+        cur.execute("""
+            DELETE FROM change_log
+            WHERE course_id = %s AND status = 'pending'
+        """, (course_id,))
+
+        entries = []
+
+        for flag in flags:
+            mod_id = flag["module_id"]
+            mod_name = flag["module_name"]
+            signals = flag.get("signals", [])
+
+            for sig in signals:
+                detail = sig.get("detail", "")
+
+                if "complexity" in detail.lower():
+                    # Layer 1: objective update
+                    entries.append((
+                        course_id, mod_id,
+                        ["complexity jump detected", "scaffold before this module"],
+                        (
+                            f"Learning objectives for {mod_name} have been updated to introduce "
+                            f"bridging activities and reduce the prerequisite gap identified in the course structure."
+                        ),
+                        "objective_update",
+                    ))
+                    # Layer 3: assignment alert (always paired with objective update)
+                    entries.append((
+                        course_id, mod_id,
+                        ["objectives updated", "review assignment alignment"],
+                        (
+                            f"Objectives for {mod_name} were revised. Review existing assignments "
+                            f"to ensure they still align with the updated learning outcomes."
+                        ),
+                        "assignment_alert",
+                    ))
+
+                elif "readings" in detail.lower() or "source" in detail.lower():
+                    # Layer 2: reference suggestion
+                    entries.append((
+                        course_id, mod_id,
+                        ["no readings assigned", "add supporting references"],
+                        (
+                            f"{mod_name} has no recommended readings. Search for references "
+                            f"aligned with the module's learning objectives to support student preparation."
+                        ),
+                        "reference_suggestion",
+                    ))
+
+        # Ensure all three types exist — fill gaps using first available modules
+        present_types = {e[4] for e in entries}
+        mod_pool = [f["module_id"] for f in flags] or ["module_1"]
+        mod_names = {f["module_id"]: f["module_name"] for f in flags}
+
+        if "objective_update" not in present_types and mod_pool:
+            mid = mod_pool[0]
+            mname = mod_names.get(mid, mid)
+            entries.append((
+                course_id, mid,
+                ["structural review", "update learning objectives"],
+                (
+                    f"Learning objectives for {mname} have been updated to better align with "
+                    f"Bloom's Taxonomy and the course's difficulty progression."
+                ),
+                "objective_update",
+            ))
+
+        if "reference_suggestion" not in present_types and mod_pool:
+            mid = mod_pool[min(1, len(mod_pool) - 1)]
+            mname = mod_names.get(mid, mid)
+            entries.append((
+                course_id, mid,
+                ["reference gap detected", "search for aligned readings"],
+                (
+                    f"Current references for {mname} may not fully support the learning objectives. "
+                    f"Search for updated references to better scaffold student understanding."
+                ),
+                "reference_suggestion",
+            ))
+
+        if "assignment_alert" not in present_types and mod_pool:
+            mid = mod_pool[min(2, len(mod_pool) - 1)]
+            mname = mod_names.get(mid, mid)
+            entries.append((
+                course_id, mid,
+                ["objectives changed", "manual assignment review needed"],
+                (
+                    f"Objectives for {mname} were revised. Review existing assignments to ensure "
+                    f"they still align with the updated learning outcomes — no automatic changes applied."
+                ),
+                "assignment_alert",
+            ))
+
+        for (cid, mid, reasons, rec, ctype) in entries:
+            cur.execute("""
+                INSERT INTO change_log (course_id, module_id, flag_reason, recommendation, change_type)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (cid, mid, reasons, rec, ctype))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"[AutoAnalyze] Wrote {len(entries)} change_log entries for course {course_id} "
+              f"({', '.join(set(e[4] for e in entries))})")
     except Exception as e:
-        print(f"[AutoAnalyze] Curriculum agent error: {e}")
+        print(f"[AutoAnalyze] change_log write error: {e}")
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
 
 
 @curriculum_agent_bp.route("/api/curriculum/auto-analyze/<int:course_id>", methods=["POST"])
@@ -609,6 +690,223 @@ def auto_analyze_course(course_id):
     t = threading.Thread(target=_run_structural_analysis, args=(course_id,), daemon=True)
     t.start()
     return jsonify({"status": "started", "course_id": course_id})
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# References — Tavily search + apply
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _extract_domain(url: str) -> str:
+    """Extract bare domain from a URL for deduplication."""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower().removeprefix("www.")
+        return domain
+    except Exception:
+        return url
+
+
+@curriculum_agent_bp.route("/api/curriculum/references/search", methods=["POST"])
+def search_references():
+    """Search Tavily for references aligned with a module's learning objectives.
+
+    Deduplicates against the module's existing recommended_readings.
+
+    Request body:
+        { "course_id": int, "module_id": "module_1" }
+
+    Returns:
+        { "candidates": [{ "title", "url", "domain", "snippet", "source" }] }
+    """
+    from db import get_db
+    from extensions import tavily_client
+
+    data = request.get_json() or {}
+    course_id = data.get("course_id")
+    module_id = data.get("module_id")
+
+    if not course_id or not module_id:
+        return jsonify({"error": "course_id and module_id are required"}), 400
+
+    # 1. Load module to get learning_objectives + existing readings
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
+
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT modules FROM curricula WHERE id = %s", (course_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return jsonify({"error": "Course not found"}), 404
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({"error": str(e)}), 500
+
+    modules_raw = row[0]
+    modules = modules_raw if isinstance(modules_raw, list) else (
+        json.loads(modules_raw) if modules_raw else []
+    )
+
+    idx = int(module_id.replace("module_", "")) - 1
+    if idx < 0 or idx >= len(modules):
+        return jsonify({"error": "Module not found"}), 404
+
+    module = modules[idx]
+    objectives = module.get("learning_objectives", [])
+    existing_readings = module.get("recommended_readings", [])
+
+    # 2. Build existing domain set for deduplication
+    existing_domains = set()
+    for r in existing_readings:
+        url = r.get("url", "") if isinstance(r, dict) else ""
+        if url:
+            existing_domains.add(_extract_domain(url))
+
+    # 3. Build search query from objectives
+    if not objectives:
+        query = module.get("title", "learning resources")
+    else:
+        # Use first 2 objectives, strip trailing punctuation, join
+        query_parts = [obj.rstrip(".").strip() for obj in objectives[:2]]
+        query = " AND ".join(query_parts)
+
+    # 4. Call Tavily
+    try:
+        results = tavily_client.search(
+            query=query,
+            search_depth="basic",
+            max_results=8,
+            include_domains=[],
+            exclude_domains=[],
+        )
+        raw_results = results.get("results", [])
+    except Exception as e:
+        return jsonify({"error": f"Tavily search failed: {e}"}), 502
+
+    # 5. Filter out duplicates and build candidate list
+    candidates = []
+    for r in raw_results:
+        url = r.get("url", "")
+        domain = _extract_domain(url)
+        if domain in existing_domains:
+            continue
+        candidates.append({
+            "title": r.get("title", ""),
+            "url": url,
+            "domain": domain,
+            "snippet": r.get("content", "")[:200],
+            "source": r.get("source", domain),
+        })
+        existing_domains.add(domain)  # prevent intra-result dupes
+
+    return jsonify({
+        "module_id": module_id,
+        "query": query,
+        "candidates": candidates,
+    })
+
+
+@curriculum_agent_bp.route("/api/curriculum/references/apply", methods=["POST"])
+def apply_references():
+    """Add professor-selected Tavily references to a module's recommended_readings.
+
+    Request body:
+        {
+          "course_id": int,
+          "module_id": "module_1",
+          "references": [{ "title", "url", "domain", "snippet" }]
+        }
+    """
+    from db import get_db
+
+    data = request.get_json() or {}
+    course_id = data.get("course_id")
+    module_id = data.get("module_id")
+    new_refs = data.get("references", [])
+
+    if not course_id or not module_id or not new_refs:
+        return jsonify({"error": "course_id, module_id, and references are required"}), 400
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
+
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT modules FROM curricula WHERE id = %s", (course_id,))
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Course not found"}), 404
+
+        modules_raw = row[0]
+        modules = modules_raw if isinstance(modules_raw, list) else (
+            json.loads(modules_raw) if modules_raw else []
+        )
+
+        idx = int(module_id.replace("module_", "")) - 1
+        if idx < 0 or idx >= len(modules):
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Module not found"}), 404
+
+        module = modules[idx]
+        readings = module.get("recommended_readings", [])
+
+        for ref in new_refs:
+            readings.append({
+                "title": ref.get("title", ""),
+                "url": ref.get("url", ""),
+                "type": "academic",
+                "estimated_time": "15 min read",
+                "reading_type": "optional",
+                "key_points": [],
+                "rationale": f"Added by Curriculum Agent via Tavily search — {ref.get('snippet', '')[:120]}",
+            })
+
+        module["recommended_readings"] = readings
+        modules[idx] = module
+
+        cur.execute(
+            "UPDATE curricula SET modules = %s WHERE id = %s",
+            (json.dumps(modules), course_id),
+        )
+
+        # Mark the reference_suggestion change_log entry as applied
+        cur.execute("""
+            UPDATE change_log
+            SET status = 'applied'
+            WHERE course_id = %s AND module_id = %s
+              AND change_type = 'reference_suggestion' AND status = 'pending'
+        """, (str(course_id), module_id))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "status": "applied",
+            "course_id": course_id,
+            "module_id": module_id,
+            "added_count": len(new_refs),
+        })
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

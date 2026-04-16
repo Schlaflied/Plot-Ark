@@ -148,16 +148,19 @@
 <details>
 <summary><strong>🎯 Curriculum Agent — Agentic Curriculum Optimization</strong></summary>
 
+- **Three-layer HITL design** — suggestions are classified into three action tiers based on signal severity and change scope:
+  - **Layer 1 — Objectives (AI applies directly)**: amber badge; one-click Apply writes updated learning objectives + reduces complexity_level; before/after confirmation modal; Redo restores original
+  - **Layer 2 — References (human-triggered search)**: violet badge; "Search References" button fires a Tavily query against module objectives, returns deduplicated candidates (domain-level dedup vs existing readings); professor selects and adds references directly to `recommended_readings`
+  - **Layer 3 — Assignments (AI alert only)**: blue badge; read-only info box summarizing what changed and what the professor should manually review; no Apply button — professor decides
 - **Professor Notification Bar** — persistent amber bar on CoursePage alerts professors when suggestions are available, with "Dismiss" and "Review →" buttons
-- **Professor Slide-out Drawer** — clicking "Review" opens a 400px drawer with Pending Suggestions (Apply) and Applied Changes (Redo) sections; Redo restores original module content
+- **Professor Slide-out Drawer** — clicking "Review" opens a 400px drawer with Pending Suggestions (Apply/Search) and Applied Changes (Redo) sections grouped by layer badge
 - **Student Notification Bar** — blue bar shows "N modules updated — based on instructor optimization" with Dismiss and Review buttons
 - **Student Slide-out Drawer** — clicking "Review" opens a blue-themed drawer listing updated modules with "Go to Module" navigation buttons
 - **Draggable Floating Action Button (FAB)** — after dismissing either banner, a draggable floating ball (🤖 amber / ✨ blue) appears at bottom-right; click opens the drawer directly without restoring the banner; hover reveals ✕ to permanently dismiss; supports free-drag to any screen position
-- **Human-in-the-loop Apply** — clicking "Apply" opens a confirmation modal with before/after preview; professor explicitly approves each change
+- **Auto-analyze on generation** — every new course triggers a background structural analysis immediately after save; generates all three change_type entries so suggestions are ready without waiting for an xAPI run
 - **Redo (Undo Apply)** — applied changes store original module data as backup; clicking "Redo" restores the module to its pre-apply state and moves the suggestion back to Pending
 - **Module Flags** — `module_flags` table stores flagged modules with signal sources, flag levels (yellow / orange), and detailed metrics
-- **Change Log** — `change_log` table records all recommendations with status tracking (pending → applied → dismissed) and backup_data for redo
-- **Cross-course coverage** — seed script auto-discovers all courses and generates flags + suggestions with backup data for every course
+- **Change Log** — `change_log` table records all recommendations with `change_type` (objective_update / reference_suggestion / assignment_alert), status tracking (pending → applied → dismissed), and backup_data for redo
 - **Analytics redirect** — "View Full Analytics →" in the professor drawer navigates to the Student Data analytics page
 
 </details>
@@ -181,6 +184,8 @@ Plot Ark takes the opposite position.
 Plot Ark has no AI detection mechanism. It never will. The question it asks is not *"did you use AI?"* but *"did learning happen?"* — and it answers that through Bloom's Taxonomy alignment, i+1 difficulty progression, and xAPI learner behavior tracking.
 
 The curriculum engine itself is built the same way: AI generates the structure, pedagogy constrains the output, and the instructor stays in the loop. The tool thinks; the human decides.
+
+This system was built so that no one gets left behind by the system. The author was one of those people.
 
 Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophistication and response sophistication — the deeper you engage it, the deeper it responds.
 
@@ -366,7 +371,7 @@ plot-ark/
 │   ├── constants.py                     ← Bloom's taxonomy, session constraints, formats
 │   ├── routes/
 │   │   ├── curriculum.py                ← /api/curriculum/* (generate, skeleton, expand, save)
-│   │   ├── curriculum_agent_routes.py   ← /api/curriculum/ flags, suggestions, apply, redo, changes
+│   │   ├── curriculum_agent_routes.py   ← /api/curriculum/ flags, suggestions, apply, redo, references/search, references/apply, auto-analyze
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
 │   │   ├── sources.py                   ← Tavily source preview
 │   │   ├── graph.py                     ← KG data + RAG query
@@ -424,7 +429,7 @@ plot-ark/
 │   │   │   ├── ReportSections.tsx       ← A2A analytics report viewer component
 │   │   │   ├── TrendChart.tsx           ← SVG trend chart (mini + full-view modal)
 │   │   │   ├── CurriculumApplyModal.tsx ← AI suggestion apply confirmation modal
-│   │   │   ├── CurriculumDrawer.tsx     ← Professor slide-out drawer (Apply / Redo)
+│   │   │   ├── CurriculumDrawer.tsx     ← Professor slide-out drawer (three-layer HITL: Apply / Search References / Alert)
 │   │   │   ├── StudentChangesDrawer.tsx ← Student slide-out drawer (Go to Module)
 │   │   │   ├── AISuggestionsSection.tsx ← AI exclusive suggestions detail section
 │   │   │   ├── FlagBadge.tsx            ← Red/amber module issue flags

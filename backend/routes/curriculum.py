@@ -168,8 +168,12 @@ def generate_curriculum():
                 m["learning_objectives"] = [
                     o[0].upper() + o[1:] if o else o for o in (m.get("learning_objectives") or [])
                 ]
-            save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed, design_approach)
-            print(f"Saved curriculum: {topic}")
+            new_id = save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed, design_approach)
+            print(f"Saved curriculum: {topic} (id={new_id})")
+            if new_id:
+                import threading
+                from routes.curriculum_agent_routes import _run_structural_analysis
+                threading.Thread(target=_run_structural_analysis, args=(new_id,), daemon=True).start()
         except Exception as e:
             print(f"Failed to parse/save curriculum: {e}")
         yield "data: [DONE]\n\n"
