@@ -1,6 +1,7 @@
 """Curriculum generation routes: generate, skeleton, expand, save."""
 
 import json
+import re
 from flask import Blueprint, request, Response, stream_with_context, jsonify
 from config import AI_PROVIDER
 from extensions import openai_client, redis_client
@@ -12,6 +13,43 @@ from services.prompt_builder import (
 )
 
 curriculum_bp = Blueprint("curriculum", __name__)
+
+
+def _sanitize_json(text: str) -> str:
+    """
+    Escape literal control characters (\n, \r, \t, etc.) that appear
+    inside JSON string values.  LLMs occasionally emit these instead of
+    their proper \\n / \\t escape sequences, causing json.loads() to fail
+    with "Bad control character in string literal".
+
+    The function walks the raw text, tracks whether the cursor is inside a
+    JSON string, and replaces any bare control character it finds there with
+    the correct JSON escape sequence.
+    """
+    result = []
+    in_string = False
+    escaped = False
+    for ch in text:
+        if escaped:
+            result.append(ch)
+            escaped = False
+            continue
+        if ch == '\\':
+            result.append(ch)
+            escaped = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            result.append(ch)
+            continue
+        if in_string and ord(ch) < 0x20:
+            # Control character inside a JSON string — must be escaped
+            _ESC = {'\n': '\\n', '\r': '\\r', '\t': '\\t',
+                    '\x0b': '\\u000b', '\x0c': '\\f', '\x08': '\\b'}
+            result.append(_ESC.get(ch, f'\\u{ord(ch):04x}'))
+        else:
+            result.append(ch)
+    return ''.join(result)
 
 
 @curriculum_bp.route("/api/curriculum/generate", methods=["POST"])
@@ -117,7 +155,7 @@ def generate_curriculum():
             clean = text.replace("```json\n", "").replace("```\n", "").replace("```", "").strip()
             first = clean.index("{")
             last = clean.rindex("}")
-            return json.loads(clean[first:last + 1])
+            return json.loads(_sanitize_json(clean[first:last + 1]))
 
         def validate_structure(parsed, expected_count):
             modules = parsed.get("modules", [])
@@ -286,7 +324,7 @@ def generate_skeleton():
             clean = text.replace("```json\n", "").replace("```\n", "").replace("```", "").strip()
             first = clean.index("{")
             last = clean.rindex("}")
-            return json.loads(clean[first:last + 1])
+            return json.loads(_sanitize_json(clean[first:last + 1]))
 
         try:
             parsed = parse_skeleton(full_text)

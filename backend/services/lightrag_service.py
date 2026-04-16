@@ -36,28 +36,36 @@ def get_lightrag_instance(storage_dir: str = None):
     return rag
 
 
+# Subject alias map: normalise various slug forms to canonical storage directory names
+_SUBJECT_ALIASES: dict[str, str] = {
+    "call":                       "lightrag_storage_call",
+    "business-law":               "lightrag_storage",
+    # OB — multiple slug variants all point to the canonical directory
+    "organizational-behavior":    "lightrag_storage_organizational-behavior",
+    "organization-behavior":      "lightrag_storage_organizational-behavior",
+    "adms-2400":                  "lightrag_storage_organizational-behavior",
+    "mgmt-301":                   "lightrag_storage_organizational-behavior",
+}
+
+
 def get_graphml_path(subject: str = "all") -> str | None:
     """Return the path to the graphml file for a specific (non-all) subject."""
     backend_dir = os.path.dirname(os.path.abspath(__file__))
     base_data = os.path.normpath(os.path.join(backend_dir, "..", "..", "data"))
-    if subject == "call":
-        storage_dir = "lightrag_storage_call"
-    elif subject == "business-law":
-        storage_dir = "lightrag_storage"
-    else:
-        storage_dir = f"lightrag_storage_{subject}"
+    storage_dir = _SUBJECT_ALIASES.get(subject, f"lightrag_storage_{subject}")
     return os.path.normpath(
         os.path.join(base_data, storage_dir, "graph_chunk_entity_relation.graphml")
     )
 
 
 def get_all_graphml_paths() -> list:
-    """Return paths for both graph files used in the 'all' merged view."""
+    """Return paths for all known graph files used in the 'all' merged view."""
     backend_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.normpath(os.path.join(backend_dir, "..", "..", "data"))
     return [
         os.path.join(data_dir, "lightrag_storage", "graph_chunk_entity_relation.graphml"),
         os.path.join(data_dir, "lightrag_storage_call", "graph_chunk_entity_relation.graphml"),
+        os.path.join(data_dir, "lightrag_storage_organizational-behavior", "graph_chunk_entity_relation.graphml"),
     ]
 
 

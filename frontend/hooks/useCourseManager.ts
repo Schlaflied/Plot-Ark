@@ -36,7 +36,7 @@ const DEFAULT_COURSES: Record<number, CourseEntry[]> = {
   3: [
     { code: 'supply-301', label: 'Supply Chain 301', fullName: 'Supply Chain Management' },
     { code: 'employ-301', label: 'Employment Law 301', fullName: 'Employment Law' },
-    { code: 'mgmt-301', label: 'MGMT 301', fullName: 'Organizational Behavior' },
+    { code: 'organizational-behavior', label: 'MGMT 301', fullName: 'Organizational Behavior' },
   ],
   4: [
     { code: 'nego-401', label: 'Negotiation 401', fullName: 'Negotiation and Conflict Resolution' },
@@ -49,7 +49,11 @@ const DEFAULT_TABS = [
   { key: 'all', label: 'All' },
   { key: 'business-law', label: 'Business Law' },
   { key: 'call', label: 'CALL' },
+  { key: 'organizational-behavior', label: 'Organizational Behavior' },
 ];
+
+// Bump this when DEFAULT_COURSES or DEFAULT_TABS change to clear stale localStorage
+const SCHEMA_VERSION = 2;
 
 export function useCourseManager({
   initialCourseCode,
@@ -57,6 +61,16 @@ export function useCourseManager({
   setSelectedYear,
   setActiveSubject,
 }: UseCourseManagerOptions) {
+  // ---- Invalidate stale localStorage when schema version bumps ----
+  if (typeof window !== 'undefined') {
+    const storedVersion = Number(localStorage.getItem('plot_ark_schema_version') || '0');
+    if (storedVersion < SCHEMA_VERSION) {
+      localStorage.removeItem('plot_ark_undergraduate_courses');
+      localStorage.removeItem('plot_ark_subject_tabs');
+      localStorage.setItem('plot_ark_schema_version', String(SCHEMA_VERSION));
+    }
+  }
+
   // ---- Undergraduate course data ----
   const [undergraduateCourses, setUndergraduateCourses] = useState<Record<number, CourseEntry[]>>(() => {
     try {
