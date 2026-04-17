@@ -17,6 +17,7 @@ export function useIngest({ onComplete }: UseIngestOptions) {
   const [ingestSubject, setIngestSubject] = useState('');
   const [ingestCourseCode, setIngestCourseCode] = useState('');
   const [ingestYear, setIngestYear] = useState<number | null>(null);
+  const [ingestLayer, setIngestLayer] = useState('hot');
   const [ingestSubjectError, setIngestSubjectError] = useState(false);
   const [ingestYearError, setIngestYearError] = useState(false);
   const [ingestRunning, setIngestRunning] = useState(false);
@@ -40,6 +41,7 @@ export function useIngest({ onComplete }: UseIngestOptions) {
     try {
       const formData = new FormData();
       formData.append('subject', ingestSubject.trim());
+      formData.append('layer', ingestLayer);
       ingestFileObjects.current.forEach(file => formData.append('files[]', file));
 
       const startRes = await fetch('/api/materials/ingest', {
@@ -101,6 +103,7 @@ export function useIngest({ onComplete }: UseIngestOptions) {
     ingestSubject, setIngestSubject,
     ingestCourseCode, setIngestCourseCode,
     ingestYear, setIngestYear,
+    ingestLayer, setIngestLayer,
     ingestSubjectError, setIngestSubjectError,
     ingestYearError, setIngestYearError,
     ingestRunning,

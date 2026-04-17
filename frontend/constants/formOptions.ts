@@ -63,3 +63,9 @@ export const SESSION_DURATIONS = [
 ];
 
 export const MODULE_PRESETS = [4, 6, 8, 10, 12];
+
+export const SEMESTER_TERMS = [
+  { value: 'Fall', label: 'Fall' },
+  { value: 'Winter', label: 'Winter' },
+  { value: 'Summer', label: 'Summer' },
+];

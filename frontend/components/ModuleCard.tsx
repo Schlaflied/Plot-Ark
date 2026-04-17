@@ -11,11 +11,28 @@ const stripModulePrefix = (title: string): string =>
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type TabKey = 'objectives' | 'resources' | 'assessment' | 'ai-suggestion';
+type TabKey = 'objectives' | 'resources' | 'assessment' | 'ai-suggestion' | 'knowledge-map';
 
 interface ModuleHint {
   message: string;
   tips: string[];
+}
+
+interface KgConceptMatch {
+  label: string;
+  id: string;
+  definition?: string;
+  source?: string;
+  source_text?: string;
+  objective_text?: string;  // legacy compat
+}
+
+interface KgDependency {
+  from_module: number;
+  to_module: number;
+  from_concept: string;
+  to_concept: string;
+  relation: string;
 }
 
 interface ModuleCardProps {
@@ -26,6 +43,9 @@ interface ModuleCardProps {
   autoSaveStatus: 'idle' | 'saving' | 'saved';
   showEditHint: boolean;
   moduleHint?: ModuleHint | null;
+  kgConcepts?: KgConceptMatch[];
+  kgDependencies?: KgDependency[];
+  kgLoading?: boolean;
   onTabChange: (tab: TabKey) => void;
   onEditField: (field: string, value: any) => void;
   onDismissHint: () => void;
@@ -41,6 +61,9 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
   autoSaveStatus,
   showEditHint,
   moduleHint,
+  kgConcepts = [],
+  kgDependencies = [],
+  kgLoading = false,
   onTabChange,
   onEditField,
   onDismissHint,
@@ -114,17 +137,22 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
 
         {/* Tabs */}
         <div className="flex border-b border-stone-200 mb-6">
-          {(['objectives', 'resources', 'assessment', 'ai-suggestion'] as const).map(tab => (
+          {(['objectives', 'resources', 'assessment', 'ai-suggestion', 'knowledge-map'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => onTabChange(tab)}
-              className={`px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors ${
+              className={`px-4 py-2 text-sm font-bold uppercase tracking-widest transition-colors whitespace-nowrap ${
                 activeTab === tab
                   ? 'border-b-2 border-amber-500 text-stone-900'
                   : 'text-stone-400 hover:text-stone-700'
               }`}
             >
-              {tab === 'ai-suggestion' ? 'AI Suggestion' : tab}
+              {tab === 'objectives' ? '🎯 Objectives'
+               : tab === 'resources' ? '📚 Resources'
+               : tab === 'assessment' ? '✏️ Assessment'
+               : tab === 'ai-suggestion' ? '🤖 AI Suggestion'
+               : tab === 'knowledge-map' ? '📊 Knowledge Map'
+               : tab}
             </button>
           ))}
         </div>
@@ -147,6 +175,16 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
         {/* Tab: AI Suggestion */}
         {activeTab === 'ai-suggestion' && (
           <AISuggestionTab module={currentModule} isStudent={isStudent} />
+        )}
+
+        {/* Tab: Knowledge Map */}
+        {activeTab === 'knowledge-map' && (
+          <KnowledgeMapTab
+            moduleIndex={moduleIndex}
+            concepts={kgConcepts}
+            dependencies={kgDependencies}
+            loading={kgLoading}
+          />
         )}
       </div>
     </>
@@ -574,6 +612,141 @@ const AISuggestionTab: React.FC<{
         <div className="text-center py-8 text-stone-400">
           <span className="text-2xl block mb-2">🤖</span>
           <p className="text-sm">{emptyMsg}</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Knowledge Map Tab ────────────────────────────────────────────────────────
+
+const SOURCE_LABELS: Record<string, { text: string; color: string }> = {
+  objective:  { text: 'from objective',  color: 'bg-amber-50 text-amber-600 border-amber-200' },
+  title:      { text: 'from title',      color: 'bg-blue-50 text-blue-600 border-blue-200' },
+  narrative:  { text: 'from narrative',  color: 'bg-purple-50 text-purple-600 border-purple-200' },
+  reading:    { text: 'from reading',    color: 'bg-green-50 text-green-600 border-green-200' },
+  assignment: { text: 'from assignment', color: 'bg-red-50 text-red-600 border-red-200' },
+  suggestion: { text: 'from suggestion', color: 'bg-stone-100 text-stone-500 border-stone-200' },
+};
+
+const KnowledgeMapTab: React.FC<{
+  moduleIndex: number;
+  concepts: KgConceptMatch[];
+  dependencies: KgDependency[];
+  loading: boolean;
+}> = ({ moduleIndex, concepts, dependencies, loading }) => {
+  const modNum = moduleIndex + 1;
+
+  // Filter dependencies related to this module
+  const relatedDeps = dependencies.filter(
+    d => d.from_module === modNum || d.to_module === modNum
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-3 py-12 justify-center text-stone-400">
+        <div className="w-5 h-5 border-2 border-stone-200 border-t-amber-500 rounded-full animate-spin" />
+        <span className="text-sm">Mapping concepts to knowledge graph…</span>
+      </div>
+    );
+  }
+
+  if (concepts.length === 0 && relatedDeps.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <span className="text-3xl block mb-3">📊</span>
+        <p className="text-sm text-stone-400 mb-1">No knowledge graph concepts mapped to this module.</p>
+        <p className="text-xs text-stone-300">This module's content may not overlap with available KG topics.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Concepts matched */}
+      {concepts.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-lg">🔗</span>
+            <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest">
+              Matched Concepts
+            </h4>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold">
+              {concepts.length}
+            </span>
+          </div>
+          <div className="grid gap-3">
+            {concepts.map((c, i) => {
+              const src = SOURCE_LABELS[c.source || 'objective'] || SOURCE_LABELS.objective;
+              const definition = c.definition || c.objective_text || c.source_text || '';
+              return (
+                <div
+                  key={i}
+                  className="bg-stone-50 rounded-xl p-4 border border-stone-200 hover:border-amber-200 transition-colors"
+                >
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="text-amber-500 text-sm">⚡</span>
+                    <span className="font-bold text-stone-900 text-sm">{c.label}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${src.color}`}>
+                      {src.text}
+                    </span>
+                  </div>
+                  {definition && (
+                    <p className="text-xs text-stone-600 leading-relaxed pl-6 line-clamp-3">
+                      {definition}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Cross-module dependencies */}
+      {relatedDeps.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-lg">🔀</span>
+            <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest">
+              Cross-Module Dependencies
+            </h4>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-stone-200 text-stone-600 font-bold">
+              {relatedDeps.length}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {relatedDeps.map((dep, i) => {
+              const isOutgoing = dep.from_module === modNum;
+              return (
+                <div
+                  key={i}
+                  className={`flex items-center gap-3 p-3 rounded-xl border text-sm ${
+                    isOutgoing
+                      ? 'bg-amber-50/50 border-amber-100'
+                      : 'bg-blue-50/50 border-blue-100'
+                  }`}
+                >
+                  <span className={`font-bold text-xs px-2 py-0.5 rounded ${
+                    isOutgoing ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    M{dep.from_module}
+                  </span>
+                  <span className="text-stone-400 text-xs">→</span>
+                  <span className={`font-bold text-xs px-2 py-0.5 rounded ${
+                    !isOutgoing ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    M{dep.to_module}
+                  </span>
+                  <span className="text-stone-500 text-xs flex-1 truncate">
+                    <span className="font-medium text-stone-700">{dep.from_concept}</span>
+                    {' → '}
+                    <span className="font-medium text-stone-700">{dep.to_concept}</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

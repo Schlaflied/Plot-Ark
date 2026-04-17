@@ -8,12 +8,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Sparkles, BookOpen, GraduationCap, Users,
   Hash, Clock, Layers, FileText, Loader2, CheckCircle2,
-  AlertTriangle,
+  AlertTriangle, Calendar,
 } from 'lucide-react';
 
 // ─── Extracted modules ────────────────────────────────────────────────────────
 
-import { LEVELS, COURSE_TYPES, DESIGN_APPROACHES, SESSION_DURATIONS, MODULE_PRESETS } from '../constants/formOptions';
+import { LEVELS, COURSE_TYPES, DESIGN_APPROACHES, SESSION_DURATIONS, MODULE_PRESETS, SEMESTER_TERMS } from '../constants/formOptions';
 import { Select } from '../components/ui/Select';
 import { Input } from '../components/ui/Input';
 import { SyllabusUpload } from '../components/generate/SyllabusUpload';
@@ -47,6 +47,8 @@ const GeneratePage: React.FC = () => {
   const [customMinutes, setCustomMinutes] = useState('');
   const [customModules, setCustomModules] = useState('');
   const [customLevel, setCustomLevel] = useState('');
+  const [semesterYear, setSemesterYear] = useState(String(new Date().getFullYear()));
+  const [semesterTerm, setSemesterTerm] = useState('Fall');
 
   // Source review state
   const [sourcesLoading, setSourcesLoading] = useState(false);
@@ -127,6 +129,7 @@ const GeneratePage: React.FC = () => {
           module_count: moduleCount,
           design_approach: designApproach,
           accreditation_context: accreditationContext.trim(),
+          semester: `${semesterTerm} ${semesterYear}`.trim(),
         }),
       });
 
@@ -271,6 +274,7 @@ const GeneratePage: React.FC = () => {
           modules: fullModules,
           sources: sourcesForSave,
           course_narrative: narrative,
+          semester: `${semesterTerm} ${semesterYear}`.trim(),
         }),
       });
 
@@ -351,6 +355,32 @@ const GeneratePage: React.FC = () => {
                     value={courseCode}
                     onChange={setCourseCode}
                     placeholder="e.g. CS 301"
+                  />
+                </div>
+
+                {/* Semester: Year input + Term dropdown */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="gen-semester-year" className="flex items-center gap-2 text-sm font-semibold text-stone-700 mb-1.5">
+                      <Calendar size={15} /> Year
+                    </label>
+                    <input
+                      id="gen-semester-year"
+                      type="text"
+                      inputMode="numeric"
+                      value={semesterYear}
+                      onChange={e => setSemesterYear(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                      placeholder="e.g. 2025"
+                      className="w-full bg-white border border-stone-200 rounded-xl px-4 py-2.5 text-sm text-stone-800 placeholder:text-stone-400 outline-none focus:ring-2 focus:ring-amber-300 focus:border-amber-400 transition"
+                    />
+                  </div>
+                  <Select
+                    id="gen-semester-term"
+                    label="Term"
+                    icon={<Calendar size={15} />}
+                    value={semesterTerm}
+                    onChange={setSemesterTerm}
+                    options={SEMESTER_TERMS}
                   />
                 </div>
 

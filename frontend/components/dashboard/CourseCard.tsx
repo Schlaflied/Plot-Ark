@@ -19,6 +19,7 @@ export interface HistoryEntry {
   course_type: string;
   module_count: number;
   is_favorite: boolean;
+  semester?: string;
 }
 
 function formatDate(iso: string): string {
@@ -73,8 +74,13 @@ export const CourseCard: React.FC<CourseCardProps> = ({ entry, onDelete, onToggl
         <p className="text-xs text-stone-400 mb-0.5">
           {entry.level}{entry.course_type ? ` · ${entry.course_type}` : ''}{entry.module_count ? ` · ${entry.module_count} modules` : ''}
         </p>
-        <p className="text-xs text-stone-400 mb-3">
+        <p className="text-xs text-stone-400 mb-3 flex items-center gap-2">
           {formatDate(entry.created_at)}
+          {entry.semester && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+              {entry.semester}
+            </span>
+          )}
         </p>
         <div className="flex justify-end">
           <span className="text-xs font-semibold text-amber-700 group-hover:underline">

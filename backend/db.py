@@ -1,9 +1,18 @@
 """Database operations: connection, init, and curriculum save."""
 
 import json
+import re
 import time
 import psycopg2
 from config import DATABASE_URL
+
+
+def normalize_semester(raw: str) -> str:
+    """'fall 2025' → 'Fall 2025'. Ensures consistent casing."""
+    parts = raw.strip().split()
+    if len(parts) == 2:
+        return f"{parts[0].capitalize()} {parts[1]}"
+    return raw.strip().title()
 
 
 def get_db():
@@ -157,6 +166,7 @@ def init_db():
                 cur.execute("ALTER TABLE xapi_statements ADD COLUMN IF NOT EXISTS course_id INTEGER")
                 cur.execute("ALTER TABLE xapi_statements ADD COLUMN IF NOT EXISTS response TEXT")
                 cur.execute("ALTER TABLE course_analysis_snapshots ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE")
+                cur.execute("ALTER TABLE curricula ADD COLUMN IF NOT EXISTS semester TEXT DEFAULT ''")
                 conn.commit()
                 cur.close()
                 conn.close()
@@ -171,19 +181,21 @@ def init_db():
     print("Could not connect to DB after 10 attempts. Continuing without DB.")
 
 
-def save_curriculum(topic, level, audience, course_code, course_type, module_count, data, design_approach="addie") -> int | None:
+def save_curriculum(topic, level, audience, course_code, course_type, module_count, data, design_approach="addie", semester="") -> int | None:
     """Save curriculum and return the new course id."""
     conn = get_db()
     if not conn:
         return None
     try:
+        normalized_semester = normalize_semester(semester) if semester else ""
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO curricula (topic, level, audience, course_code, course_type, module_count, modules, sources)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            """INSERT INTO curricula (topic, level, audience, course_code, course_type, module_count, modules, sources, semester)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
             (topic, level, audience, course_code, course_type, module_count,
              json.dumps(data.get("modules", [])),
-             json.dumps(data.get("sources", [])))
+             json.dumps(data.get("sources", [])),
+             normalized_semester)
         )
         new_id = cur.fetchone()[0]
         conn.commit()

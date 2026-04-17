@@ -24,6 +24,8 @@ export interface IngestPanelProps {
   setIngestCourseCode: (v: string) => void;
   ingestYear: number | null;
   setIngestYear: (v: number | null) => void;
+  ingestLayer: string;
+  setIngestLayer: (v: string) => void;
   // Validation errors
   ingestSubjectError: boolean;
   setIngestSubjectError: (v: boolean) => void;
@@ -53,6 +55,8 @@ const IngestPanel: React.FC<IngestPanelProps> = ({
   setIngestCourseCode,
   ingestYear,
   setIngestYear,
+  ingestLayer,
+  setIngestLayer,
   ingestSubjectError,
   setIngestSubjectError,
   ingestYearError,
@@ -249,6 +253,39 @@ const IngestPanel: React.FC<IngestPanelProps> = ({
           {ingestYearError && (
             <span style={{ color: '#f87171', fontSize: '0.7rem' }}>Year is required</span>
           )}
+        </div>
+
+        {/* Layer selector */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium" style={{ color: TEXT_MUTED }}>
+            Material Type
+          </label>
+          <select
+            value={ingestLayer}
+            onChange={e => setIngestLayer(e.target.value)}
+            disabled={ingestRunning}
+            style={{
+              background: DARK_BG,
+              border: `1px solid ${BORDER_COLOR}`,
+              color: TEXT_PRIMARY,
+              borderRadius: '0.5rem',
+              padding: '0.35rem 0.6rem',
+              fontSize: '0.8rem',
+              outline: 'none',
+              transition: 'border-color 0.15s',
+              opacity: ingestRunning ? 0.6 : 1,
+              cursor: ingestRunning ? 'not-allowed' : 'pointer',
+              appearance: 'none' as const,
+              WebkitAppearance: 'none' as const,
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236b6560' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E")`,
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 0.6rem center',
+              paddingRight: '1.8rem',
+            }}
+          >
+            <option value="hot">🔴 Core Material (PPT / Textbook)</option>
+            <option value="warm">🟢 Supplementary (Articles / Videos)</option>
+          </select>
         </div>
 
         {/* Drop zone */}

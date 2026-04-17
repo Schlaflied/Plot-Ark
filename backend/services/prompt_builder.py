@@ -253,7 +253,8 @@ Return ONLY valid JSON (no markdown, no explanation):
   ]
 }}
 
-CRITICAL: Generate exactly {module_count} modules. complexity_level must start at 1 and end at 5."""
+CRITICAL: Generate exactly {module_count} modules. complexity_level must start at 1 and end at 5.
+Every learning_objective MUST start with a capital letter (e.g. "Define", "Identify", "Analyze" — never "define", "identify")."""
 
 
 # ── Prompt 3: Single-module expansion ──────────────────────────────────────────

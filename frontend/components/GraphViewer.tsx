@@ -13,19 +13,19 @@ import IngestPanel from './IngestPanel';
 import GraphToolbar from './GraphToolbar';
 import CourseBanner from './CourseBanner';
 import NodeDetailPanel from './NodeDetailPanel';
-import { DARK_BG, PANEL_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_MUTED, ACCENT, degreeToColor } from '../constants/theme';
+import { DARK_BG, PANEL_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_MUTED, ACCENT, degreeToColor, layerDegreeToColor } from '../constants/theme';
 import { useIngest } from '../hooks/useIngest';
 import { useQuery } from '../hooks/useQuery';
 import { useCourseManager } from '../hooks/useCourseManager';
 
 // ---- Domain types ----
 
-interface GraphNode { id: string; label: string; description: string; }
+interface GraphNode { id: string; label: string; description: string; source_layer?: string; }
 interface GraphEdge { source: string; target: string; label: string; }
 interface GraphData { nodes: GraphNode[]; edges: GraphEdge[]; status?: string; }
 
 interface FGNode extends GraphNode {
-  val?: number; degree?: number; x?: number; y?: number;
+  val?: number; degree?: number; x?: number; y?: number; source_layer?: string;
 }
 type FGNodeObject = NodeObject<FGNode>;
 type FGLinkObject = LinkObject<FGNode, { label: string }>;
@@ -81,6 +81,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
     ingestSubject, setIngestSubject,
     ingestCourseCode, setIngestCourseCode,
     ingestYear, setIngestYear,
+    ingestLayer, setIngestLayer,
     ingestSubjectError, setIngestSubjectError,
     ingestYearError, setIngestYearError,
     ingestRunning, ingestOverflow, setIngestOverflow,
@@ -178,7 +179,8 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       const isSelected = selectedNode ? String((selectedNode as FGNode).id) === nodeId : false;
 
       ctx.beginPath(); ctx.arc(nx, ny, r, 0, 2 * Math.PI);
-      ctx.fillStyle = isFaded ? 'rgba(80,80,120,0.25)' : degreeToColor(degree, maxDegree); ctx.fill();
+      const nodeLayer = n.source_layer || 'hot';
+      ctx.fillStyle = isFaded ? 'rgba(80,80,120,0.25)' : layerDegreeToColor(nodeLayer, degree, maxDegree); ctx.fill();
 
       if (isSelected || isHighlighted) {
         ctx.beginPath(); ctx.arc(nx, ny, r + 3, 0, 2 * Math.PI);
@@ -219,6 +221,12 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
         <div><span style={{ color: TEXT_PRIMARY, fontWeight: 600 }}>🖱 Click a node</span> — see its full definition in the side panel</div>
         <div><span style={{ color: TEXT_PRIMARY, fontWeight: 600 }}>🔎 Zoom / pan</span> — scroll wheel to zoom, drag to move around</div>
         <div><span style={{ color: TEXT_PRIMARY, fontWeight: 600 }}>💬 Ask a question</span> — type below the graph to query the knowledge base</div>
+        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1.5rem', alignItems: 'center', marginTop: '2px', paddingTop: '6px', borderTop: `1px solid ${BORDER_COLOR}` }}>
+          <span style={{ color: TEXT_PRIMARY, fontWeight: 600, fontSize: '0.8rem' }}>Layers:</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#8B5E3C' }} /> Core</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#5eae9e' }} /> Supplementary</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#6ba0dc' }} /> Student Notes</span>
+        </div>
       </div>
 
       {/* Main horizontal layout */}
@@ -286,6 +294,11 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
         <div className="pointer-events-none fixed z-50 rounded-lg px-2.5 py-1.5 text-xs shadow-xl"
           style={{ left: mousePos.x + 14, top: mousePos.y - 10, background: PANEL_BG, border: `1px solid ${BORDER_COLOR}`, color: TEXT_PRIMARY, maxWidth: '220px' }}>
           <div className="font-semibold truncate">{(hoveredNode as FGNode).label}</div>
+          {(hoveredNode as FGNode).source_layer && (hoveredNode as FGNode).source_layer !== 'hot' && (
+            <div style={{ color: (hoveredNode as FGNode).source_layer === 'warm' ? '#2dd4bf' : '#60a5fa', fontSize: '0.65rem', fontWeight: 600 }}>
+              {(hoveredNode as FGNode).source_layer === 'warm' ? 'Supplementary' : 'Student Notes'}
+            </div>
+          )}
           {(hoveredNode as FGNode).degree !== undefined && (
             <div style={{ color: TEXT_MUTED }}>{(hoveredNode as FGNode).degree} connection{(hoveredNode as FGNode).degree !== 1 ? 's' : ''}</div>
           )}
@@ -302,6 +315,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       ingestSubject={ingestSubject} setIngestSubject={setIngestSubject}
       ingestCourseCode={ingestCourseCode} setIngestCourseCode={setIngestCourseCode}
       ingestYear={ingestYear} setIngestYear={setIngestYear}
+      ingestLayer={ingestLayer} setIngestLayer={setIngestLayer}
       ingestSubjectError={ingestSubjectError} setIngestSubjectError={setIngestSubjectError}
       ingestYearError={ingestYearError} setIngestYearError={setIngestYearError}
       ingestRunning={ingestRunning} ingestOverflow={ingestOverflow} setIngestOverflow={setIngestOverflow}

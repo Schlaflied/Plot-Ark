@@ -14,6 +14,20 @@ from services.lightrag_service import (
 graph_bp = Blueprint("graph", __name__)
 
 
+@graph_bp.route("/api/graph/kg-mapping/<int:course_id>", methods=["GET"])
+def get_kg_mapping(course_id):
+    """Return KG concept ↔ module objective mapping and cross-module dependencies."""
+    from services.kg_mapper import get_kg_mapping_for_course
+
+    result = get_kg_mapping_for_course(course_id)
+    if result is None:
+        return jsonify({
+            "status": "no_kg",
+            "message": "No knowledge graph available for this course.",
+        })
+    return jsonify({"status": "ok", **result})
+
+
 @graph_bp.route("/api/graph", methods=["GET"])
 def get_graph():
     """Return knowledge graph nodes and edges from the LightRAG graphml file(s)."""

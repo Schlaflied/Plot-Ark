@@ -121,11 +121,20 @@ def build_graph_response(graphs):
             filtered_node_ids.add(node_id)
             continue
 
+        # Detect source layer from description tags
+        source_layer = "hot"  # default for existing KG data
+        full_desc = attrs.get("description", "")
+        if "[layer: warm]" in full_desc:
+            source_layer = "warm"
+        elif "[layer: cold]" in full_desc:
+            source_layer = "cold"
+
         nodes.append({
             "id": node_id,
             "label": node_label,
             "entity_type": entity_type,
             "description": raw_desc,
+            "source_layer": source_layer,
         })
 
     edges = []

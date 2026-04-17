@@ -43,12 +43,12 @@ def start_ingest():
     _ingest_jobs[job_id] = {"status": "running", "progress": "Starting…", "message": ""}
 
     subject_slug = slug(subject)
-    if subject_slug == "business-law":
-        storage_subdir = "lightrag_storage"
-    elif subject_slug == "call":
-        storage_subdir = "lightrag_storage_call"
-    else:
-        storage_subdir = f"lightrag_storage_{subject_slug}"
+    layer = request.form.get("layer", "hot").strip().lower()
+    if layer not in ("hot", "warm"):
+        layer = "hot"
+
+    from services.lightrag_service import _SUBJECT_ALIASES
+    storage_subdir = _SUBJECT_ALIASES.get(subject_slug, f"lightrag_storage_{subject_slug}")
 
     backend_dir = os.path.dirname(os.path.abspath(__file__))
     storage_dir = os.path.normpath(os.path.join(backend_dir, "..", "data", storage_subdir))
@@ -68,7 +68,7 @@ def start_ingest():
                     if not text.strip():
                         continue
                     tagged_text = (
-                        f"[source: {subject_slug} / {fname}]\n\n{text}"
+                        f"[source: {subject_slug} / {fname}] [layer: {layer}]\n\n{text}"
                     )
                     try:
                         doc_id = f"doc-{subject_slug}__{os.path.splitext(fname)[0]}"

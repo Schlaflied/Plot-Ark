@@ -28,6 +28,7 @@ import ModuleCard from '../components/ModuleCard';
 
 
 import DraggableFab from '../components/ui/DraggableFab';
+import KgMappingPanel from '../components/analytics/KgMappingPanel';
 
 // ─── CoursePage ───────────────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ const CoursePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentModuleIndex, setCurrentModuleIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState<'objectives' | 'resources' | 'assessment' | 'ai-suggestion'>('objectives');
+  const [activeTab, setActiveTab] = useState<'objectives' | 'resources' | 'assessment' | 'ai-suggestion' | 'knowledge-map'>('objectives');
   const [search, setSearch] = useState('');
   const [citationFormat, setCitationFormat] = useState<'apa' | 'mla' | 'chicago'>('apa');
   const [copiedCitation, setCopiedCitation] = useState<number | null>(null);
@@ -148,6 +149,19 @@ const CoursePage: React.FC = () => {
       .then(data => setStudentHints(data.hints || {}))
       .catch(() => setStudentHints({}));
   }, [id, isStudent]);
+
+  // Fetch KG concept mapping
+  const [kgData, setKgData] = useState<any>(null);
+  const [kgLoading, setKgLoading] = useState(false);
+  useEffect(() => {
+    if (!id) return;
+    setKgLoading(true);
+    fetch(`/api/graph/kg-mapping/${id}`)
+      .then(r => r.json())
+      .then(d => setKgData(d.status === 'ok' ? d : null))
+      .catch(() => setKgData(null))
+      .finally(() => setKgLoading(false));
+  }, [id]);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
@@ -423,6 +437,9 @@ const CoursePage: React.FC = () => {
                 autoSaveStatus={autoSaveStatus}
                 showEditHint={showEditHint}
                 moduleHint={isStudent ? (studentHints[`module_${currentModuleIndex + 1}`] ?? null) : null}
+                kgConcepts={kgData?.module_concepts?.[String(currentModuleIndex + 1)] || []}
+                kgDependencies={kgData?.dependencies || []}
+                kgLoading={kgLoading}
                 onTabChange={setActiveTab}
                 onEditField={handleEditField}
                 onDismissHint={() => setShowEditHint(false)}
@@ -573,6 +590,8 @@ const CoursePage: React.FC = () => {
             </dl>
           </div>
 
+          {/* KG Concept Mapping */}
+          <KgMappingPanel courseId={id} />
 
           <div className="px-5 py-5 flex-1">
             <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3">

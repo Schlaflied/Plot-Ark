@@ -244,12 +244,13 @@ def save_curriculum_endpoint():
     course_type = data.get("course_type", "mixed")
     module_count = data.get("module_count", 0)
     design_approach = data.get("design_approach", "ADDIE")
+    semester = data.get("semester", "")
     modules = data.get("modules", [])
     sources = data.get("sources", [])
     course_narrative = data.get("course_narrative", "")
     parsed = {"modules": modules, "sources": sources, "course_narrative": course_narrative}
     try:
-        new_id = save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed, design_approach)
+        new_id = save_curriculum(topic, level, audience, course_code, course_type, module_count, parsed, design_approach, semester=semester)
         if new_id:
             t = threading.Thread(target=_run_structural_analysis, args=(new_id,), daemon=True)
             t.start()
@@ -332,6 +333,10 @@ def generate_skeleton():
             for i, m in enumerate(modules):
                 if "module_number" not in m:
                     m["module_number"] = i + 1
+                # Capitalize first letter of each objective (Bloom's verb)
+                m["learning_objectives"] = [
+                    o[0].upper() + o[1:] if o else o for o in (m.get("learning_objectives") or [])
+                ]
             if len(modules) != module_count:
                 print(f"Skeleton count mismatch: expected {module_count}, got {len(modules)}")
         except Exception as e:

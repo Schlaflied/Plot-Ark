@@ -16,7 +16,7 @@ def get_history():
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, created_at, topic, level, course_code, course_type, module_count, is_favorite "
+            "SELECT id, created_at, topic, level, course_code, course_type, module_count, is_favorite, semester "
             "FROM curricula ORDER BY is_favorite DESC, created_at DESC LIMIT 50"
         )
         rows = cur.fetchall()
@@ -32,6 +32,7 @@ def get_history():
                 "course_type": r[5] or "mixed",
                 "module_count": r[6],
                 "is_favorite": r[7] or False,
+                "semester": r[8] or "",
             }
             for r in rows
         ]}
@@ -47,7 +48,7 @@ def get_curriculum_by_id(curriculum_id):
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT topic, level, audience, course_code, course_type, modules, sources "
+            "SELECT topic, level, audience, course_code, course_type, modules, sources, semester "
             "FROM curricula WHERE id = %s",
             (curriculum_id,)
         )
@@ -80,6 +81,7 @@ def get_curriculum_by_id(curriculum_id):
             "course_type": row[4] or "mixed",
             "modules": modules,
             "sources": sources,
+            "semester": row[7] or "",
         }
     except Exception as e:
         return {"error": str(e)}, 500
