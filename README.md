@@ -221,7 +221,7 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 │  │  ├── analytics.py            A2A SSE + history API + export         │   │
 │  │  ├── xapi.py                 xAPI statements + mock data seed       │   │
 │  │  ├── feedback.py             Student sentiment + comments           │   │
-│  │  ├── graph.py                KG data + RAG query                    │   │
+│  │  ├── graph.py                KG data + RAG query + KG↔Module map    │   │
 │  │  ├── sources.py              Tavily source preview                  │   │
 │  │  ├── syllabus.py             PDF/DOCX parse + import                │   │
 │  │  └── materials.py            LightRAG ingest                        │   │
@@ -236,7 +236,8 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 │  │  ├── cohort_comparator.py   │  │  ├── chart_generator.py (+history) │   │
 │  │  └── curriculum_agent.py    │  │  ├── ltm_writer.py (Cold layer)    │   │
 │  │       SharedMemory          │  │  ├── threshold_checker.py           │   │
-│  └──────────┬──────────────────┘  │  └── export_{pdf,docx,excel}.py    │   │
+│  └──────────┬──────────────────┘  │  ├── kg_mapper.py (KG↔Module)       │   │
+│             │                     │  └── export_{pdf,docx,excel}.py    │   │
 │             │                     └─────────────┬──────────────────────┘   │
 └─────────────┼───────────────────────────────────┼──────────────────────────┘
               │                                   │
@@ -374,7 +375,7 @@ plot-ark/
 │   │   ├── curriculum_agent_routes.py   ← /api/curriculum/ flags, suggestions, apply, redo, references/search, references/apply, auto-analyze
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
 │   │   ├── sources.py                   ← Tavily source preview
-│   │   ├── graph.py                     ← KG data + RAG query
+│   │   ├── graph.py                     ← KG data + RAG query + /api/graph/kg-mapping
 │   │   ├── xapi.py                      ← xAPI statements + seed generator
 │   │   ├── analytics.py                 ← A2A SSE analysis + export endpoints
 │   │   ├── feedback.py                  ← Student sentiment collection
@@ -393,6 +394,7 @@ plot-ark/
 │   │   ├── file_parser.py               ← PDF/PPTX/DOCX text extraction
 │   │   ├── prompt_builder.py            ← Centralized AI prompt templates
 │   │   ├── lightrag_service.py          ← LightRAG instance management
+│   │   ├── kg_mapper.py                 ← KG ↔ Module concept mapping (3-layer: regex + abbrev + reverse)
 │   │   ├── xapi_generator.py            ← Mock xAPI data (⚡ curriculum-aware, queries change_log)
 │   │   ├── ltm_writer.py                ← LTM Cold layer (.md YAML snapshots)
 │   │   ├── threshold_checker.py         ← Multi-signal module flag detection
@@ -428,6 +430,7 @@ plot-ark/
 │   │   ├── analytics/
 │   │   │   ├── ReportSections.tsx       ← A2A analytics report viewer component
 │   │   │   ├── TrendChart.tsx           ← SVG trend chart (mini + full-view modal)
+│   │   │   ├── KgMappingPanel.tsx       ← KG ↔ Module coverage sidebar (progress bar + stats)
 │   │   │   ├── CurriculumApplyModal.tsx ← AI suggestion apply confirmation modal
 │   │   │   ├── CurriculumDrawer.tsx     ← Professor slide-out drawer (three-layer HITL: Apply / Search References / Alert)
 │   │   │   ├── StudentChangesDrawer.tsx ← Student slide-out drawer (Go to Module)
@@ -464,6 +467,12 @@ plot-ark/
 
 ## 🗺️ Roadmap
 
+- [x] KG ↔ Curriculum concept mapping — 3-layer matching (word-boundary + abbreviation + reverse lookup)
+- [x] Knowledge Map tab — per-module KG concepts with definitions + cross-module dependencies
+- [ ] KG → Agentic Loop — inject KG context into CurriculumAgent suggestions
+- [ ] Cohort Concept Mastery — per-concept pass/fail/struggle tracking
+- [ ] GraphViewer dual-view coloring — student (5 xAPI signals) + professor (cohort mastery)
+- [ ] PPT ↔ Module auto-mapping — filename regex + slide title + manual fallback
 - [ ] Assignment Timeline + Due Date calculator
 - [ ] A2A Phase 2 — LLM integration for BehaviorAnalyst, RiskDetector, ContentOptimizer, CohortComparator
 - [ ] Progressive summarization — semester-level LTM summaries for LLM context management

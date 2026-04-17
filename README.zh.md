@@ -221,7 +221,7 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 │  │  ├── analytics.py            A2A SSE 分析 + PDF/DOCX/Excel 导出     │   │
 │  │  ├── xapi.py                 xAPI 语句 + Mock 数据种子              │   │
 │  │  ├── feedback.py             学生情绪反馈 + 评论收集                │   │
-│  │  ├── graph.py                知识图谱 + RAG 查询                     │   │
+│  │  ├── graph.py                知识图谱 + RAG 查询 + KG↔Module 映射     │   │
 │  │  ├── sources.py              Tavily 源预览                           │   │
 │  │  ├── syllabus.py             PDF/DOCX 解析 + 导入                    │   │
 │  │  └── materials.py            LightRAG 材料摄入                      │   │
@@ -236,7 +236,8 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 │  │  ├── cohort_comparator.py   │  │  ├── chart_generator.py (+history) │   │
 │  │  └── curriculum_agent.py    │  │  ├── ltm_writer.py (Cold layer)    │   │
 │  │       SharedMemory          │  │  ├── threshold_checker.py           │   │
-│  └──────────┬──────────────────┘  │  └── export_{pdf,docx,excel}.py    │   │
+│  └──────────┬──────────────────┘  │  ├── kg_mapper.py (KG↔Module)       │   │
+│             │                     │  └── export_{pdf,docx,excel}.py    │   │
 │             │                     └─────────────┬──────────────────────┘   │
 └─────────────┼───────────────────────────────────┼──────────────────────────┘
               │                                   │
@@ -376,7 +377,7 @@ plot-ark/
 │   │   ├── curriculum_agent_routes.py   ← /api/curriculum/ 标记、建议、应用、撤销、references/search、references/apply、auto-analyze
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
 │   │   ├── sources.py                   ← Tavily 源预览
-│   │   ├── graph.py                     ← 知识图谱 + RAG 查询
+│   │   ├── graph.py                     ← 知识图谱 + RAG 查询 + /api/graph/kg-mapping
 │   │   ├── xapi.py                      ← xAPI 语句 + 种子生成器
 │   │   ├── analytics.py                 ← A2A SSE 分析 + 导出接口
 │   │   ├── feedback.py                  ← 学生情绪反馈收集
@@ -395,6 +396,7 @@ plot-ark/
 │   │   ├── file_parser.py               ← PDF/PPTX/DOCX 文本提取
 │   │   ├── prompt_builder.py            ← 集中组装的 AI Prompt 模板
 │   │   ├── lightrag_service.py          ← LightRAG 实例管理
+│   │   ├── kg_mapper.py                 ← KG ↔ Module 概念映射（三层匹配：词边界 + 缩写剥离 + 反向查找）
 │   │   ├── xapi_generator.py            ← Mock xAPI 数据 + 噪声注入
 │   │   ├── ltm_writer.py                ← LTM (course_analysis_snapshots) 存档读取/写入
 │   │   ├── threshold_checker.py         ← 解析 agent 评估多级门限值
@@ -430,6 +432,7 @@ plot-ark/
 │   │   ├── analytics/
 │   │   │   ├── ReportSections.tsx       ← A2A 分析报告的展示组件
 │   │   │   ├── TrendChart.tsx           ← SVG 趋势图（迷你 + 全屏 Modal）
+│   │   │   ├── KgMappingPanel.tsx       ← KG ↔ Module 覆盖率侧边栏（进度条 + 统计摘要）
 │   │   │   ├── CurriculumApplyModal.tsx ← AI 建议应用确认弹窗
 │   │   │   ├── CurriculumDrawer.tsx     ← 教授端滑出抽屉（三层 HITL：Apply / Search References / Alert）
 │   │   │   ├── StudentChangesDrawer.tsx ← 学生端滑出抽屉（Go to Module）
@@ -466,6 +469,12 @@ plot-ark/
 
 ## 🗺️ 路线图
 
+- [x] KG ↔ Curriculum 概念映射 — 三层匹配引擎（词边界正则 + 缩写剥离 + 反向查找）
+- [x] Knowledge Map 标签页 — 每模块显示 KG 概念定义 + 跨模块依赖关系
+- [ ] KG → Agentic Loop — 将 KG 上下文注入 CurriculumAgent 建议
+- [ ] Cohort Concept Mastery — 概念级别的通过/失败/困难追踪
+- [ ] GraphViewer 双视图着色 — 学生端（5 个 xAPI 信号）+ 教授端（群组掌握度）
+- [ ] PPT ↔ Module 自动映射 — 文件名正则 + 幻灯片标题 + 手动回退
 - [ ] 作业时间轴 + 截止日期计算器
 - [ ] A2A Phase 2 — 为四个专业 Agent 集成 LLM 分析能力
 - [ ] 渐进式摘要 — 学期级 LTM 摘要用于 LLM 上下文管理
