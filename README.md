@@ -272,25 +272,17 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 └──────────────────┴───────────────────┴──────────────────────────────────┘
 ```
 
-**Course Generation Pipeline**
+**Full Project Pipeline**
 
-<img src="docs/Course generation.png" alt="Course Generation Pipeline" width="800"/>
+<img src="docs/Full project pipeline.png" alt="Full Project Pipeline" width="800"/>
 
-**RAG & Knowledge Graph Ingestion**
+**LTM 3-Layer Architecture**
 
-<img src="docs/RAG flowchart.png" alt="RAG & Knowledge Graph Ingestion" width="800"/>
-
-**A2A Multi-Agent Analytics Architecture**
-
-<img src="docs/A2A%20agent%20Structure.png" alt="A2A Multi-Agent Analytics Architecture" width="800"/>
-
-**A2A Analytics Pipeline**
-
-![A2A Analytics Pipeline](docs/A2A%20Analytics%20Pipeline.png)
+<img src="docs/3-layer LTM.png" alt="LTM 3-Layer Architecture" width="800"/>
 
 **Active agentic loop:**
 ```
-xAPI events → A2A Assessment → LTM (Hot+Warm+Cold) → Curriculum Agent → Professor HITL → Apply → ⚡ Curriculum-aware re-seed → A2A re-assessment (improved data) → updated LTM
+xAPI events → A2A Assessment + Mastery Sync → LTM (Hot+Warm+Cold) → Curriculum Agent → Professor HITL → Apply → ⚡ Curriculum-aware re-seed → A2A re-assessment (improved data) → updated LTM + KG Mastery Overlay
 ```
 
 ---

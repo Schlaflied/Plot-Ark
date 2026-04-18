@@ -272,25 +272,17 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 └──────────────────┴───────────────────┴──────────────────────────────────┘
 ```
 
-**课程生成流水线**
+**完整项目流水线**
 
-<img src="docs/Course generation.png" alt="Course Generation Pipeline" width="800"/>
+<img src="docs/Full project pipeline.png" alt="Full Project Pipeline" width="800"/>
 
-**RAG 与知识图谱导入**
+**LTM 三层架构**
 
-<img src="docs/RAG flowchart.png" alt="RAG & Knowledge Graph Ingestion" width="800"/>
-
-**A2A 多 Agent 分析架构**
-
-<img src="docs/A2A%20agent%20Structure.png" alt="A2A 多 Agent 分析架构" width="800"/>
-
-**A2A 分析流水线**
-
-![A2A Analytics Pipeline](docs/A2A%20Analytics%20Pipeline.png)
+<img src="docs/3-layer LTM.png" alt="LTM 3-Layer Architecture" width="800"/>
 
 **主动式循环：**
 ```
-xAPI 事件 → A2A 评估 → LTM（Hot+Warm+Cold）→ Curriculum Agent → 教授人在回路 → Apply → ⚡ 课程感知重新种子 → A2A 重新评估（改善后数据）→ 更新 LTM
+xAPI 事件 → A2A 评估 + Mastery 同步 → LTM（Hot+Warm+Cold）→ Curriculum Agent → 教授人在回路 → Apply → ⚡ 课程感知重新种子 → A2A 重新评估（改善后数据）→ 更新 LTM + KG 掌握度叠加
 ```
 
 ---
