@@ -252,25 +252,6 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 └───────────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
 ```
 
-**LTM (Long-Term Memory) Architecture**
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     LTM 3-Layer Architecture                            │
-├──────────────────┬───────────────────┬──────────────────────────────────┤
-│  🔴 Hot Layer     │  🟡 Warm Layer      │  🔵 Cold Layer                   │
-│  Redis            │  PostgreSQL         │  data/ltm/*.md                   │
-│                  │                     │                                  │
-│  • Pipeline       │  • course_analysis_ │  • YAML frontmatter              │
-│    runtime state  │    snapshots table  │    (course_code, topic,          │
-│  • SSE streaming  │  • Per-run metrics  │     curriculum_version)          │
-│  • Token usage    │  • at_risk_count    │  • Module performance table      │
-│  • TTL auto-      │  • completion rates │  • Applied changes log           │
-│    expire         │  • verb_distribution│  • 🤖 Agent vs 👤 Prof tracking   │
-│                  │  • Historical trend │  • Versioned: _v{N} per day      │
-│                  │    chart source     │  • Never deleted                 │
-└──────────────────┴───────────────────┴──────────────────────────────────┘
-```
 
 **Full Project Pipeline**
 
