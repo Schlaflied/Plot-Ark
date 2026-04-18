@@ -8,15 +8,43 @@ import {
 
 type SyllabusStatus = 'idle' | 'parsing' | 'done' | 'error';
 
-interface SyllabusUploadProps {
-  onFieldsParsed: (fields: Record<string, string>) => void;
+export interface SyllabusModule {
+  module_number: number;
+  title: string;
+  learning_objectives: string[];
+  complexity_level: number;
 }
 
-export const SyllabusUpload: React.FC<SyllabusUploadProps> = ({ onFieldsParsed }) => {
+export interface SyllabusReference {
+  title: string;
+  authors: string;
+  url: string;
+}
+
+export interface SyllabusAssignment {
+  title: string;
+  weight: string;
+  description: string;
+  due: string;
+}
+
+export interface SyllabusParseResult {
+  fields: Record<string, string>;
+  modules: SyllabusModule[];
+  references: SyllabusReference[];
+  assignments: SyllabusAssignment[];
+}
+
+interface SyllabusUploadProps {
+  onParsed: (result: SyllabusParseResult) => void;
+}
+
+export const SyllabusUpload: React.FC<SyllabusUploadProps> = ({ onParsed }) => {
   const [syllabusStatus, setSyllabusStatus] = useState<SyllabusStatus>('idle');
   const [syllabusFile, setSyllabusFile] = useState<File | null>(null);
   const [syllabusError, setSyllabusError] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
+  const [syllabusModuleCount, setSyllabusModuleCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
@@ -51,8 +79,14 @@ export const SyllabusUpload: React.FC<SyllabusUploadProps> = ({ onFieldsParsed }
       }
 
       if (data.fields) {
-        onFieldsParsed(data.fields);
+        onParsed({
+          fields: data.fields,
+          modules: data.modules || [],
+          references: data.references || [],
+          assignments: data.assignments || [],
+        });
         setSyllabusStatus('done');
+        setSyllabusModuleCount(data.modules?.length || 0);
       } else {
         setSyllabusError('No fields extracted');
         setSyllabusStatus('error');
@@ -61,7 +95,7 @@ export const SyllabusUpload: React.FC<SyllabusUploadProps> = ({ onFieldsParsed }
       setSyllabusError(err.message || 'Network error');
       setSyllabusStatus('error');
     }
-  }, [onFieldsParsed]);
+  }, [onParsed]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -89,6 +123,7 @@ export const SyllabusUpload: React.FC<SyllabusUploadProps> = ({ onFieldsParsed }
     setSyllabusFile(null);
     setSyllabusStatus('idle');
     setSyllabusError('');
+    setSyllabusModuleCount(0);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
@@ -137,6 +172,11 @@ export const SyllabusUpload: React.FC<SyllabusUploadProps> = ({ onFieldsParsed }
               <p className="text-sm text-green-700 font-medium mb-1">
                 Fields auto-filled from syllabus
               </p>
+              {syllabusModuleCount > 0 && (
+                <p className="text-xs text-amber-700 font-medium mb-1">
+                  {syllabusModuleCount} modules detected — you can use them directly below
+                </p>
+              )}
               <p className="text-xs text-stone-400">{syllabusFile.name}</p>
               <button
                 onClick={e => { e.stopPropagation(); handleClear(); }}

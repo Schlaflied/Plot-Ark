@@ -16,7 +16,7 @@ import {
 import { LEVELS, COURSE_TYPES, DESIGN_APPROACHES, SESSION_DURATIONS, MODULE_PRESETS, SEMESTER_TERMS } from '../constants/formOptions';
 import { Select } from '../components/ui/Select';
 import { Input } from '../components/ui/Input';
-import { SyllabusUpload } from '../components/generate/SyllabusUpload';
+import { SyllabusUpload, type SyllabusParseResult, type SyllabusAssignment } from '../components/generate/SyllabusUpload';
 import { SourceReview, type ReviewedSource } from '../components/generate/SourceReview';
 import { SkeletonReview, type SkeletonModule } from '../components/generate/SkeletonReview';
 
@@ -55,6 +55,9 @@ const GeneratePage: React.FC = () => {
   const [sources, setSources] = useState<ReviewedSource[]>([]);
   const [approvedSources, setApprovedSources] = useState<ReviewedSource[]>([]);
 
+  // Syllabus-extracted structure (bypass LLM generation)
+  const [syllabusAssignments, setSyllabusAssignments] = useState<SyllabusAssignment[]>([]);
+
   // Skeleton review state
   const [skeletonLoading, setSkeletonLoading] = useState(false);
   const [expandLoading, setExpandLoading] = useState(false);
@@ -67,16 +70,30 @@ const GeneratePage: React.FC = () => {
   const canSubmit = topic.trim() && audience.trim() && !sourcesLoading;
 
   // ── Syllabus parse callback ─────────────────────────────────────────────────
-  const handleSyllabusParsed = useCallback((fields: Record<string, string>) => {
+  const handleSyllabusParsed = useCallback((result: SyllabusParseResult) => {
+    const { fields, modules, assignments } = result;
     if (fields.topic) setTopic(fields.topic);
     if (fields.course_code) setCourseCode(fields.course_code);
     if (fields.audience) setAudience(fields.audience);
     if (fields.accreditation_context) setAccreditationContext(fields.accreditation_context);
-    if (fields.level && LEVELS.some(l => l.value === fields.level)) {
-      setLevel(fields.level);
-    }
-    if (fields.course_type && COURSE_TYPES.some(t => t.value === fields.course_type)) {
-      setCourseType(fields.course_type);
+    if (fields.level && LEVELS.some(l => l.value === fields.level)) setLevel(fields.level);
+    if (fields.course_type && COURSE_TYPES.some(t => t.value === fields.course_type)) setCourseType(fields.course_type);
+    if (assignments.length > 0) setSyllabusAssignments(assignments);
+
+    // If syllabus has modules, jump straight to skeleton review
+    if (modules.length > 0) {
+      const mapped: SkeletonModule[] = modules.map((m, i) => ({
+        module_number: m.module_number ?? i + 1,
+        title: m.title,
+        complexity_level: m.complexity_level ?? i + 1,
+        learning_objectives: m.learning_objectives.length > 0
+          ? m.learning_objectives
+          : [`Understand the key concepts of ${m.title}`],
+      }));
+      setSkeletonModules(mapped);
+      setCourseNarrative('');
+      setApprovedSources([]);
+      setStep('skeleton-review');
     }
   }, []);
 
@@ -436,7 +453,7 @@ const GeneratePage: React.FC = () => {
                 </div>
 
                 {/* ── Syllabus Upload ─────────────────────────────────────── */}
-                <SyllabusUpload onFieldsParsed={handleSyllabusParsed} />
+                <SyllabusUpload onParsed={handleSyllabusParsed} />
 
                 {/* Design Approach */}
                 <Select
@@ -600,15 +617,36 @@ const GeneratePage: React.FC = () => {
 
           {/* ── Step 3: SKELETON REVIEW ───────────────────────────────────── */}
           {step === 'skeleton-review' && (
-            <SkeletonReview
-              modules={skeletonModules}
-              courseNarrative={courseNarrative}
-              topic={topic}
-              loading={skeletonLoading}
-              isExpanding={expandLoading}
-              onAddToCourse={handleAddToCourse}
-              onBack={() => setStep('source-review')}
-            />
+            <>
+              {syllabusAssignments.length > 0 && (
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3">
+                  <p className="text-xs font-bold tracking-widest text-amber-700 uppercase mb-2">
+                    Course Assignments from Syllabus
+                  </p>
+                  <ul className="space-y-1">
+                    {syllabusAssignments.map((a, i) => (
+                      <li key={i} className="text-sm text-stone-700 flex gap-2">
+                        <span className="font-medium">{a.title}</span>
+                        {a.weight && <span className="text-stone-400">({a.weight})</span>}
+                        {a.due && <span className="text-stone-400">· {a.due}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-stone-400 mt-2">
+                    These are course-level assessments. AI will generate module-level tasks during expansion.
+                  </p>
+                </div>
+              )}
+              <SkeletonReview
+                modules={skeletonModules}
+                courseNarrative={courseNarrative}
+                topic={topic}
+                loading={skeletonLoading}
+                isExpanding={expandLoading}
+                onAddToCourse={handleAddToCourse}
+                onBack={() => setStep('source-review')}
+              />
+            </>
           )}
 
         </div>
