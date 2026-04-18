@@ -261,10 +261,9 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 
 <img src="docs/3-layer LTM.png" alt="LTM 3-Layer Architecture" width="800"/>
 
-**Active agentic loop:**
-```
-xAPI events → A2A Assessment + Mastery Sync → LTM (Hot+Warm+Cold) → Curriculum Agent → Professor HITL → Apply → ⚡ Curriculum-aware re-seed → A2A re-assessment (improved data) → updated LTM + KG Mastery Overlay
-```
+**Full Agentic Loop**
+
+<img src="docs/Full agentic loop.png" alt="Full Agentic Loop" width="800"/>
 
 ---
 

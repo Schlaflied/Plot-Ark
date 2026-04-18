@@ -261,10 +261,9 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 
 <img src="docs/3-layer LTM.png" alt="LTM 3-Layer Architecture" width="800"/>
 
-**主动式循环：**
-```
-xAPI 事件 → A2A 评估 + Mastery 同步 → LTM（Hot+Warm+Cold）→ Curriculum Agent → 教授人在回路 → Apply → ⚡ 课程感知重新种子 → A2A 重新评估（改善后数据）→ 更新 LTM + KG 掌握度叠加
-```
+**完整主动式循环**
+
+<img src="docs/Full agentic loop.png" alt="Full Agentic Loop" width="800"/>
 
 ---
 
