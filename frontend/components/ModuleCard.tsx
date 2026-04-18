@@ -4,6 +4,7 @@
 
 import React from 'react';
 import type { Module, Reading, Assignment } from '../utils/courseExport';
+import { MASTERY_COLORS } from '../constants/theme';
 
 /** Strip "Module N:" or "Module N —" prefix from titles (added during generation) */
 const stripModulePrefix = (title: string): string =>
@@ -47,6 +48,7 @@ interface ModuleCardProps {
   kgConcepts?: KgConceptMatch[];
   kgDependencies?: KgDependency[];
   kgLoading?: boolean;
+  masteryMap?: Record<string, string>;
   onTabChange: (tab: TabKey) => void;
   onEditField: (field: string, value: any) => void;
   onDismissHint: () => void;
@@ -65,6 +67,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
   kgConcepts = [],
   kgDependencies = [],
   kgLoading = false,
+  masteryMap,
   onTabChange,
   onEditField,
   onDismissHint,
@@ -185,6 +188,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
             concepts={kgConcepts}
             dependencies={kgDependencies}
             loading={kgLoading}
+            masteryMap={masteryMap}
           />
         )}
       </div>
@@ -647,7 +651,8 @@ const KnowledgeMapTab: React.FC<{
   concepts: KgConceptMatch[];
   dependencies: KgDependency[];
   loading: boolean;
-}> = ({ moduleIndex, concepts, dependencies, loading }) => {
+  masteryMap?: Record<string, string>;
+}> = ({ moduleIndex, concepts, dependencies, loading, masteryMap }) => {
   const modNum = moduleIndex + 1;
 
   // Filter dependencies related to this module
@@ -700,9 +705,14 @@ const KnowledgeMapTab: React.FC<{
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className="text-sm">
-                      {c.source_layer === 'warm' ? '🟣' : '🟤'}
-                    </span>
+                    {(() => {
+                      const masteryLevel = masteryMap?.[c.id] || masteryMap?.[c.label.toLowerCase()] || '';
+                      if (masteryLevel && masteryLevel !== 'not_started') {
+                        const emoji = masteryLevel === 'mastered' ? '🟢' : masteryLevel === 'learning' ? '🟡' : '🟠';
+                        return <span className="text-sm">{emoji}</span>;
+                      }
+                      return <span className="text-sm">{c.source_layer === 'warm' ? '🟣' : '🟤'}</span>;
+                    })()}
                     <span className="font-bold text-stone-900 text-sm">{c.label}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border ${src.color}`}>
                       {src.text}

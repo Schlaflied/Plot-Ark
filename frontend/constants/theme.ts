@@ -58,6 +58,27 @@ export const LAYER_LABELS: Record<string, string> = {
   cold: '🔵 Student Notes',
 };
 
+/** Mastery level → color mapping for KG node overlay */
+export const MASTERY_COLORS: Record<string, string> = {
+  mastered:    '#22c55e',  // green-500
+  learning:    '#eab308',  // yellow-500
+  struggling:  '#f97316',  // orange-500
+  not_started: '',         // empty = use default layer color
+};
+
+/** Mastery level labels for legend */
+export const MASTERY_LABELS: Record<string, string> = {
+  mastered:    '🟢 Mastered',
+  learning:    '🟡 Learning',
+  struggling:  '🟠 Needs Review',
+  not_started: '⚪ Not Started',
+};
+
+/** Get mastery overlay color (returns empty string if no overlay needed) */
+export function masteryToColor(level: string): string {
+  return MASTERY_COLORS[level] || '';
+}
+
 /** Strip markdown formatting for plain-text display */
 export function stripMarkdown(text: string): string {
   return text

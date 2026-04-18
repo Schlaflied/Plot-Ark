@@ -163,6 +163,16 @@ const CoursePage: React.FC = () => {
       .finally(() => setKgLoading(false));
   }, [id]);
 
+  // Fetch concept mastery map
+  const [masteryMap, setMasteryMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!id) return;
+    fetch(`/api/mastery/${id}`)
+      .then(r => r.json())
+      .then(d => setMasteryMap(d.mastery || {}))
+      .catch(() => setMasteryMap({}));
+  }, [id]);
+
   // ── Derived ─────────────────────────────────────────────────────────────────
 
   const modules = curriculum?.modules ?? [];
@@ -275,13 +285,15 @@ const CoursePage: React.FC = () => {
             <span className="font-semibold text-green-900 tracking-wide">Student View</span>
             <span className="text-xs text-green-600 font-normal">— read only</span>
           </div>
-          <button
-            onClick={() => navigate(`/course/${id}`)}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-green-300 bg-white hover:bg-green-100 transition-colors text-green-800 font-medium text-xs"
-          >
-            Back to Professor View
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
-          </button>
+          {auth?.role !== 'student' && (
+            <button
+              onClick={() => navigate(`/course/${id}`)}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-green-300 bg-white hover:bg-green-100 transition-colors text-green-800 font-medium text-xs"
+            >
+              Back to Professor View
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+            </button>
+          )}
         </div>
       )}
 
@@ -440,6 +452,7 @@ const CoursePage: React.FC = () => {
                 kgConcepts={kgData?.module_concepts?.[String(currentModuleIndex + 1)] || []}
                 kgDependencies={kgData?.dependencies || []}
                 kgLoading={kgLoading}
+                masteryMap={masteryMap}
                 onTabChange={setActiveTab}
                 onEditField={handleEditField}
                 onDismissHint={() => setShowEditHint(false)}

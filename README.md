@@ -133,7 +133,8 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 - **Undergraduate year sidebar** — Year 1–4 + All Courses navigation; courses organized by academic year
 - **Course management** — course banner with pill navigation per year; add/delete/rename/drag-reorder course pills; each course has an editable full name tag; changes auto-saved to localStorage
 - **Dynamic subject tabs** — add/delete/rename/drag-reorder subject tabs; tab state persists across sessions
-- **Force-directed visualization** — interactive 2D graph with warm brown palette; node size scales with connection count
+- **Force-directed visualization** — interactive 2D graph with dual-channel color encoding: **fill color = mastery level** (green/yellow/red/gray), **border color = knowledge layer** (amber=Core, purple=Supplementary, blue=Student Notes); node size scales with connection count
+- **Mastery overlay** — concept mastery derived from xAPI verbs + student feedback; synced automatically after every xAPI analysis run; all untracked concepts shown as unified gray ("Not Learned")
 - **Node detail panel** — click any concept to see its definition and connection count
 - **Fullscreen mode** — fullscreen toggle with ESC key support
 - **Course search** — search courses by name or code across all years; auto-navigates to correct year
@@ -376,6 +377,7 @@ plot-ark/
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
 │   │   ├── sources.py                   ← Tavily source preview
 │   │   ├── graph.py                     ← KG data + RAG query + /api/graph/kg-mapping
+│   │   ├── mastery.py                   ← /api/mastery/* concept mastery map + sync trigger
 │   │   ├── xapi.py                      ← xAPI statements + seed generator
 │   │   ├── analytics.py                 ← A2A SSE analysis + export endpoints
 │   │   ├── feedback.py                  ← Student sentiment collection
@@ -395,6 +397,7 @@ plot-ark/
 │   │   ├── prompt_builder.py            ← Centralized AI prompt templates
 │   │   ├── lightrag_service.py          ← LightRAG instance management
 │   │   ├── kg_mapper.py                 ← KG ↔ Module concept mapping (3-layer: regex + abbrev + reverse)
+│   │   ├── mastery_tracker.py           ← Per-concept mastery derived from xAPI verbs + student feedback
 │   │   ├── xapi_generator.py            ← Mock xAPI data (⚡ curriculum-aware, queries change_log)
 │   │   ├── ltm_writer.py                ← LTM Cold layer (.md YAML snapshots)
 │   │   ├── threshold_checker.py         ← Multi-signal module flag detection
@@ -469,9 +472,10 @@ plot-ark/
 
 - [x] KG ↔ Curriculum concept mapping — 3-layer matching (word-boundary + abbreviation + reverse lookup)
 - [x] Knowledge Map tab — per-module KG concepts with definitions + cross-module dependencies
+- [x] Concept mastery tracking — xAPI verb + feedback → `cohort_concept_mastery`; auto-sync after every analysis run
+- [x] GraphViewer mastery overlay (student) — fill = mastery level, border = knowledge layer; unified gray for untracked concepts
 - [ ] KG → Agentic Loop — inject KG context into CurriculumAgent suggestions
-- [ ] Cohort Concept Mastery — per-concept pass/fail/struggle tracking
-- [ ] GraphViewer dual-view coloring — student (5 xAPI signals) + professor (cohort mastery)
+- [ ] GraphViewer professor view — cohort aggregate mastery (% students mastered per concept)
 - [ ] PPT ↔ Module auto-mapping — filename regex + slide title + manual fallback
 - [ ] Assignment Timeline + Due Date calculator
 - [ ] A2A Phase 2 — LLM integration for BehaviorAnalyst, RiskDetector, ContentOptimizer, CohortComparator

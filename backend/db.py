@@ -143,6 +143,33 @@ def init_db():
                     ON module_flags(course_id, dismissed)
                 """)
                 cur.execute("""
+                    CREATE TABLE IF NOT EXISTS cohort_concept_mastery (
+                        id SERIAL PRIMARY KEY,
+                        course_id INTEGER NOT NULL,
+                        semester TEXT NOT NULL DEFAULT '',
+                        module_id TEXT NOT NULL,
+                        concept_id TEXT NOT NULL,
+                        concept_label TEXT,
+                        mastery_level TEXT NOT NULL DEFAULT 'not_started',
+                        completed_count INTEGER DEFAULT 0,
+                        passed_count INTEGER DEFAULT 0,
+                        failed_count INTEGER DEFAULT 0,
+                        struggled_count INTEGER DEFAULT 0,
+                        fb_got_it INTEGER DEFAULT 0,
+                        fb_mostly INTEGER DEFAULT 0,
+                        fb_confused INTEGER DEFAULT 0,
+                        fb_not_read INTEGER DEFAULT 0,
+                        valid_from TIMESTAMP DEFAULT now(),
+                        valid_to TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT now(),
+                        UNIQUE(course_id, semester, module_id, concept_id, valid_from)
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_mastery_course
+                    ON cohort_concept_mastery(course_id, semester)
+                """)
+                cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_xapi_actor
                     ON xapi_statements(actor_email)
                 """)

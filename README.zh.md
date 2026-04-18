@@ -133,7 +133,8 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 - **学年侧边栏** — Year 1–4 + All Courses 导航；课程按学年分类展示
 - **课程管理** — 每个学年有课程横幅与 pill 导航；支持增删/重命名/拖拽排序 course pill；每门课有可编辑的完整课程名标签；修改自动保存至 localStorage
 - **动态学科标签页** — 支持增删/重命名/拖拽排序学科标签；标签状态跨 session 持久化
-- **力导向可视化** — 交互式 2D 图谱，暖棕色调配色；节点大小随连接数缩放
+- **力导向可视化** — 交互式 2D 图谱，双通道颜色编码：**填充色 = 掌握度**（绿/黄/红/灰），**描边色 = 知识层级**（琥珀=Core、紫=Supplementary、蓝=Student Notes）；节点大小随连接数缩放
+- **掌握度叠加层** — 概念掌握度由 xAPI 动词 + 学生反馈推导；每次 xAPI 分析后自动同步；无数据概念统一显示为灰色（"Not Learned"）
 - **节点详情面板** — 点击任意概念节点查看其定义与连接数
 - **全屏模式** — 全屏切换，支持 ESC 键退出
 - **课程搜索** — 按名称或课程代码跨学年搜索；自动定位到对应学年
@@ -378,6 +379,7 @@ plot-ark/
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
 │   │   ├── sources.py                   ← Tavily 源预览
 │   │   ├── graph.py                     ← 知识图谱 + RAG 查询 + /api/graph/kg-mapping
+│   │   ├── mastery.py                   ← /api/mastery/* 概念掌握度图 + 同步触发
 │   │   ├── xapi.py                      ← xAPI 语句 + 种子生成器
 │   │   ├── analytics.py                 ← A2A SSE 分析 + 导出接口
 │   │   ├── feedback.py                  ← 学生情绪反馈收集
@@ -397,6 +399,7 @@ plot-ark/
 │   │   ├── prompt_builder.py            ← 集中组装的 AI Prompt 模板
 │   │   ├── lightrag_service.py          ← LightRAG 实例管理
 │   │   ├── kg_mapper.py                 ← KG ↔ Module 概念映射（三层匹配：词边界 + 缩写剥离 + 反向查找）
+│   │   ├── mastery_tracker.py           ← 由 xAPI 动词 + 学生反馈推导每个概念的掌握度
 │   │   ├── xapi_generator.py            ← Mock xAPI 数据 + 噪声注入
 │   │   ├── ltm_writer.py                ← LTM (course_analysis_snapshots) 存档读取/写入
 │   │   ├── threshold_checker.py         ← 解析 agent 评估多级门限值
@@ -471,10 +474,10 @@ plot-ark/
 
 - [x] KG ↔ Curriculum 概念映射 — 三层匹配引擎（词边界正则 + 缩写剥离 + 反向查找）
 - [x] Knowledge Map 标签页 — 每模块显示 KG 概念定义 + 跨模块依赖关系
+- [x] 概念掌握度追踪 — xAPI 动词 + 学生反馈 → `cohort_concept_mastery`；每次分析后自动同步
+- [x] GraphViewer 掌握度叠加层（学生端）— 填充色=掌握度，描边色=知识层级；无数据概念统一灰色
 - [ ] KG → Agentic Loop — 将 KG 上下文注入 CurriculumAgent 建议
-- [ ] Cohort Concept Mastery — 概念级别的通过/失败/困难追踪
-- [ ] GraphViewer 双视图着色 — 学生端（5 个 xAPI 信号）+ 教授端（群组掌握度）
-- [ ] PPT ↔ Module 自动映射 — 文件名正则 + 幻灯片标题 + 手动回退
+- [ ] GraphViewer 教授端视图 — 群组聚合掌握度（每个概念有多少学生掌握）
 - [ ] 作业时间轴 + 截止日期计算器
 - [ ] A2A Phase 2 — 为四个专业 Agent 集成 LLM 分析能力
 - [ ] 渐进式摘要 — 学期级 LTM 摘要用于 LLM 上下文管理

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import GraphViewer from '../components/GraphViewer';
 import { ArrowLeft } from 'lucide-react';
@@ -18,8 +18,23 @@ const GraphPage: React.FC = () => {
   const location = useLocation();
   const state = (location.state as GraphPageState) || {};
 
-  const backTo = state.fromCourse ? `/course/${state.fromCourse}` : '/courses';
-  const backLabel = state.fromCourse ? 'Back to course' : 'Back';
+  // Persist fromCourse to sessionStorage so it survives page refresh
+  // (location.state is in-memory only and is lost on hard refresh)
+  const SESSION_KEY = 'graph_page_course_id';
+  if (state.fromCourse) sessionStorage.setItem(SESSION_KEY, state.fromCourse);
+  const courseId = state.fromCourse || sessionStorage.getItem(SESSION_KEY) || null;
+
+  const [masteryMap, setMasteryMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!courseId) return;
+    fetch(`/api/mastery/${courseId}`)
+      .then(r => r.json())
+      .then(d => setMasteryMap(d.mastery || {}))
+      .catch(() => {});
+  }, [courseId]);
+
+  const backTo = courseId ? `/course/${courseId}` : '/courses';
+  const backLabel = courseId ? 'Back to course' : 'Back';
 
   return (
     <div className="min-h-screen bg-stone-900 flex flex-col">
@@ -42,6 +57,7 @@ const GraphPage: React.FC = () => {
         <GraphViewer
           initialCourseCode={state.courseCode}
           initialCourseTopic={state.courseTopic}
+          masteryMap={masteryMap}
         />
       </div>
     </div>

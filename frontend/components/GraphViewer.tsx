@@ -13,7 +13,7 @@ import IngestPanel from './IngestPanel';
 import GraphToolbar from './GraphToolbar';
 import CourseBanner from './CourseBanner';
 import NodeDetailPanel from './NodeDetailPanel';
-import { DARK_BG, PANEL_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_MUTED, ACCENT, degreeToColor, layerDegreeToColor } from '../constants/theme';
+import { DARK_BG, PANEL_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_MUTED, ACCENT, masteryToColor, MASTERY_COLORS } from '../constants/theme';
 import { useIngest } from '../hooks/useIngest';
 import { useQuery } from '../hooks/useQuery';
 import { useCourseManager } from '../hooks/useCourseManager';
@@ -37,9 +37,23 @@ type SubjectKey = string;
 interface GraphViewerProps {
   initialCourseCode?: string;
   initialCourseTopic?: string;
+  masteryMap?: Record<string, string>;  // concept_id | label_lower → mastery_level
 }
 
-const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCourseTopic }) => {
+const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCourseTopic, masteryMap: masteryMapProp }) => {
+  // ---- Mastery: use prop if provided, otherwise auto-fetch all ----
+  const [masteryMapFetched, setMasteryMapFetched] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (masteryMapProp && Object.keys(masteryMapProp).length > 0) return;
+    fetch('/api/mastery/all')
+      .then(r => r.json())
+      .then(d => setMasteryMapFetched(d.mastery || {}))
+      .catch(() => {});
+  }, [masteryMapProp]);
+  const masteryMap = (masteryMapProp && Object.keys(masteryMapProp).length > 0)
+    ? masteryMapProp
+    : masteryMapFetched;
+
   // ---- Core graph state ----
   const [activeSubject, setActiveSubject] = useState<SubjectKey>('all');
   const [selectedYear, setSelectedYear] = useState<number | null>(1);
@@ -47,7 +61,6 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notReady, setNotReady] = useState(false);
-  const [maxDegree, setMaxDegree] = useState(1);
   const [selectedNode, setSelectedNode] = useState<FGNodeObject | null>(null);
   const [hoveredNode, setHoveredNode] = useState<FGNodeObject | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -146,9 +159,6 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       const degreeMap: Record<string, number> = {};
       data.nodes.forEach(n => { degreeMap[n.id] = 0; });
       data.edges.forEach(e => { degreeMap[e.source] = (degreeMap[e.source] ?? 0) + 1; degreeMap[e.target] = (degreeMap[e.target] ?? 0) + 1; });
-      const max = Math.max(1, ...Object.values(degreeMap));
-      setMaxDegree(max);
-
       setGraphData({
         nodes: data.nodes.map(n => ({ ...n, degree: degreeMap[n.id] ?? 0, val: Math.max(1, (degreeMap[n.id] ?? 0) * 0.5 + 1) })),
         links: data.edges.map(e => ({ source: e.source, target: e.target, label: e.label })),
@@ -159,7 +169,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
 
   useEffect(() => { fetchGraph(); }, [fetchGraph]);
 
-  // ---- Canvas rendering (untouched) ----
+  // ---- Canvas rendering ----
 
   const highlightedIds: Set<string> | null = searchQuery.trim()
     ? new Set(graphData?.nodes.filter(n => { const node = n as FGNode; return node.label?.toLowerCase().includes(searchQuery.toLowerCase()) || String(node.id).toLowerCase().includes(searchQuery.toLowerCase()); }).map(n => String(n.id)) ?? [])
@@ -178,10 +188,29 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       const isFaded = isSearchActive && !isHighlighted;
       const isSelected = selectedNode ? String((selectedNode as FGNode).id) === nodeId : false;
 
-      ctx.beginPath(); ctx.arc(nx, ny, r, 0, 2 * Math.PI);
       const nodeLayer = n.source_layer || 'hot';
-      ctx.fillStyle = isFaded ? 'rgba(80,80,120,0.25)' : layerDegreeToColor(nodeLayer, degree, maxDegree); ctx.fill();
+      const nodeLabel = (n.label || '').toLowerCase();
+      const masteryLevel = masteryMap?.[nodeId] || masteryMap?.[nodeLabel] || '';
 
+      // Fill: mastery color, or gray if no data
+      ctx.beginPath(); ctx.arc(nx, ny, r, 0, 2 * Math.PI);
+      ctx.fillStyle = isFaded
+        ? 'rgba(80,80,120,0.25)'
+        : masteryLevel ? masteryToColor(masteryLevel) : '#9ca3af';
+      ctx.fill();
+
+      // Border: layer color
+      if (!isFaded) {
+        const layerBorderColor = nodeLayer === 'warm' ? '#c084fc'
+          : nodeLayer === 'hot' ? '#d97706'
+          : '#60a5fa';
+        ctx.beginPath(); ctx.arc(nx, ny, r, 0, 2 * Math.PI);
+        ctx.strokeStyle = layerBorderColor;
+        ctx.lineWidth = 1.5 / globalScale;
+        ctx.stroke();
+      }
+
+      // Selection / search highlight ring
       if (isSelected || isHighlighted) {
         ctx.beginPath(); ctx.arc(nx, ny, r + 3, 0, 2 * Math.PI);
         ctx.strokeStyle = isSelected ? '#f59e0b' : '#e879f9'; ctx.lineWidth = 2 / globalScale; ctx.stroke();
@@ -192,7 +221,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
         ctx.fillStyle = isFaded ? 'rgba(148,163,184,0.3)' : TEXT_PRIMARY;
         ctx.fillText(label, nx, ny + r + fontSize * 0.9);
       }
-    }, [highlightedIds, maxDegree, searchQuery, selectedNode]
+    }, [highlightedIds, searchQuery, selectedNode, masteryMap]
   );
 
   const nodePointerAreaPaint = useCallback((node: FGNodeObject, color: string, ctx: CanvasRenderingContext2D) => {
@@ -222,10 +251,17 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
         <div><span style={{ color: TEXT_PRIMARY, fontWeight: 600 }}>🔎 Zoom / pan</span> — scroll wheel to zoom, drag to move around</div>
         <div><span style={{ color: TEXT_PRIMARY, fontWeight: 600 }}>💬 Ask a question</span> — type below the graph to query the knowledge base</div>
         <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1.5rem', alignItems: 'center', marginTop: '2px', paddingTop: '6px', borderTop: `1px solid ${BORDER_COLOR}` }}>
-          <span style={{ color: TEXT_PRIMARY, fontWeight: 600, fontSize: '0.8rem' }}>Layers:</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#8B5E3C' }} /> Core</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#c084fc' }} /> Supplementary</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#6ba0dc' }} /> Student Notes</span>
+          <span style={{ color: TEXT_PRIMARY, fontWeight: 600, fontSize: '0.8rem' }}>Layer (border):</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'transparent', border: '2px solid #d97706' }} /> Core</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'transparent', border: '2px solid #c084fc' }} /> Supplementary</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'transparent', border: '2px solid #60a5fa' }} /> Student Notes</span>
+        </div>
+        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1.5rem', alignItems: 'center', marginTop: '2px', paddingTop: '6px', borderTop: `1px solid ${BORDER_COLOR}` }}>
+          <span style={{ color: TEXT_PRIMARY, fontWeight: 600, fontSize: '0.8rem' }}>Mastery (fill):</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: MASTERY_COLORS.mastered }} /> Mastered</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: MASTERY_COLORS.learning }} /> Learning</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: MASTERY_COLORS.struggling }} /> Needs Review</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#9ca3af' }} /> Not Learned</span>
         </div>
       </div>
 

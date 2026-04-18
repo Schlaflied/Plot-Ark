@@ -353,6 +353,20 @@ class OrchestratorNode(BaseNode):
             yield _sse_event("orchestrator", "ltm_error",
                 "⚠️ Failed to save analysis snapshot to long-term memory")
 
+        # ── Mastery Sync ───────────────────────────────────────────────────
+        try:
+            from services.mastery_tracker import sync_concept_mastery
+            from services.kg_mapper import get_kg_mapping_for_course
+            kg_mapping = get_kg_mapping_for_course(course_id)
+            if kg_mapping and kg_mapping.get("module_concepts"):
+                yield _sse_event("orchestrator", "mastery_syncing",
+                    "📊 Syncing concept mastery from xAPI + feedback data...")
+                sync_concept_mastery(course_id, kg_mapping, semester="")
+                yield _sse_event("orchestrator", "mastery_synced",
+                    "✅ Concept mastery updated")
+        except Exception as e:
+            print(f"[Orchestrator] Mastery sync error: {e}")
+
         # ── Threshold check ────────────────────────────────────────────────
         flags = []
         try:
@@ -475,6 +489,16 @@ class OrchestratorNode(BaseNode):
             flags = check_thresholds(report)
         except Exception as e:
             print(f"[Orchestrator] Threshold check error (non-fatal): {e}")
+
+        # Mastery Sync (sync path)
+        try:
+            from services.mastery_tracker import sync_concept_mastery
+            from services.kg_mapper import get_kg_mapping_for_course
+            kg_mapping = get_kg_mapping_for_course(course_id)
+            if kg_mapping and kg_mapping.get("module_concepts"):
+                sync_concept_mastery(course_id, kg_mapping, semester="")
+        except Exception as e:
+            print(f"[Orchestrator] Mastery sync error (non-fatal): {e}")
 
         # KG Context Analyst (sync path)
         kg_context_data = {}
