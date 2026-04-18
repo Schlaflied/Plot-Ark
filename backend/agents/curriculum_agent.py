@@ -26,6 +26,7 @@ class CurriculumAgentNode(BaseNode):
     def _run(self, sm: SharedMemory) -> dict:
         course_id = sm.get("course_id")
         flagged_modules = sm.get("flagged_modules", [])
+        kg_context = sm.get("kg_context", {})
 
         # ── 1. Read LTM Cold history ─────────────────────────────────────
         history = read_cold_history(course_id, max_files=10)
@@ -115,6 +116,87 @@ class CurriculumAgentNode(BaseNode):
                 "actions": ["Monitor in next run", "Review student feedback for this module"],
             })
 
+        # ── 5b. KG-aware recommendations (mapped to existing 3 layers) ────
+        kg_insights = []
+        if kg_context.get("available") and kg_context.get("flagged_with_concepts"):
+            for fc in kg_context["flagged_with_concepts"]:
+                mod_id = fc.get("module_id", "")
+                mod_name = fc.get("module_name", mod_id)
+                concepts = fc.get("concepts", [])
+                prereq_gaps = fc.get("prerequisite_gaps", [])
+
+                concept_names = [c["label"] for c in concepts[:3]]
+                concept_str = ", ".join(concept_names)
+
+                # Layer 1 — objective_update: prerequisite gaps need objective changes
+                if prereq_gaps:
+                    gap_strs = []
+                    for gap in prereq_gaps[:2]:
+                        gap_strs.append(
+                            f"{gap['from_concept']} (Module {gap['from_module']}) "
+                            f"→ {gap['to_concept']} (Module {gap['to_module']})"
+                        )
+                    rec_l1 = {
+                        "module_id": mod_id,
+                        "module_name": mod_name,
+                        "severity": "high",
+                        "classification": "kg_analysis",
+                        "change_type": "objective_update",
+                        "recommendation": (
+                            f"Knowledge Graph prerequisite gap detected: {'; '.join(gap_strs)}. "
+                            f"Consider adding a review objective for {concept_str} "
+                            f"at the beginning of this module to bridge the prerequisite gap."
+                        ),
+                        "actions": [
+                            f"KG prerequisite gap: {concept_str}",
+                            "Add bridging objective for prerequisite concepts",
+                        ],
+                    }
+                    kg_insights.append(rec_l1)
+                    recommendations.append(rec_l1)
+
+                # Layer 2 — reference_suggestion: concepts need supporting materials
+                if concepts:
+                    rec_l2 = {
+                        "module_id": mod_id,
+                        "module_name": mod_name,
+                        "severity": "medium",
+                        "classification": "kg_analysis",
+                        "change_type": "reference_suggestion",
+                        "recommendation": (
+                            f"Knowledge Graph shows this module covers: {concept_str}. "
+                            f"Search for supplementary readings on these concepts "
+                            f"to reinforce student understanding."
+                        ),
+                        "actions": [
+                            f"KG concepts: {concept_str}",
+                            "Search for concept-aligned references",
+                        ],
+                    }
+                    kg_insights.append(rec_l2)
+                    recommendations.append(rec_l2)
+
+                # Layer 3 — assignment_alert: if prereqs are weak, assignments may need review
+                if prereq_gaps:
+                    rec_l3 = {
+                        "module_id": mod_id,
+                        "module_name": mod_name,
+                        "severity": "medium",
+                        "classification": "kg_analysis",
+                        "change_type": "assignment_alert",
+                        "recommendation": (
+                            f"Prerequisite concepts ({concept_str}) have been identified as gaps. "
+                            f"Review assignments for this module to ensure they don't assume "
+                            f"mastery of prerequisite material that students may not have."
+                        ),
+                        "actions": [
+                            f"KG prerequisite review: {concept_str}",
+                            "Check assignment prerequisites alignment",
+                        ],
+                    }
+                    kg_insights.append(rec_l3)
+                    recommendations.append(rec_l3)
+
         # ── 6. Write change_log ──────────────────────────────────────────
         if recommendations:
             _write_change_log(course_id, recommendations)
@@ -129,6 +211,7 @@ class CurriculumAgentNode(BaseNode):
             },
             "structural_modules": structural_modules,
             "occasional_modules": occasional_modules,
+            "kg_insights_count": len(kg_insights),
         }
 
     def _fallback_sql(self, sm: SharedMemory) -> dict:
@@ -221,22 +304,54 @@ def _generate_assignment_alert(mod: dict) -> dict:
     }
 
 
+def _normalize_module_id(raw_id: str) -> str:
+    """Normalize module_id to 'module_N' (1-indexed) format.
+
+    Handles:
+      - 'course/27/module/0' → 'module_1'  (xAPI format, 0-indexed)
+      - 'module_1' → 'module_1'  (already correct)
+      - 'module/0' → 'module_1'  (partial xAPI format)
+    """
+    import re
+    # xAPI format: course/X/module/N or module/N
+    m = re.search(r'module/(\d+)', raw_id)
+    if m:
+        zero_idx = int(m.group(1))
+        return f"module_{zero_idx + 1}"
+    # Already in module_N format
+    if raw_id.startswith('module_'):
+        return raw_id
+    return raw_id
+
+
 def _write_change_log(course_id: int, recommendations: list[dict]) -> None:
-    """Append recommendations to the change_log table."""
+    """Write recommendations to the change_log table.
+
+    Uses replace strategy: DELETE old pending entries for this course,
+    then INSERT the fresh set. Each analysis run produces a complete
+    snapshot of suggestions — old pending entries are stale.
+    Applied entries are preserved.
+    """
     conn = get_db()
     if not conn:
         return
     try:
         cur = conn.cursor()
+        # Clear stale pending entries (applied entries are preserved)
+        cur.execute("""
+            DELETE FROM change_log
+            WHERE course_id = %s AND status = 'pending'
+        """, (course_id,))
         for rec in recommendations:
             flag_reasons = rec.get("actions", [])
             change_type = rec.get("change_type", "objective_update")
+            module_id = _normalize_module_id(rec.get("module_id", "unknown"))
             cur.execute("""
                 INSERT INTO change_log (course_id, module_id, flag_reason, recommendation, change_type)
                 VALUES (%s, %s, %s, %s, %s)
             """, (
                 course_id,
-                rec.get("module_id", "unknown"),
+                module_id,
                 flag_reasons,
                 rec.get("recommendation", ""),
                 change_type,
@@ -244,7 +359,7 @@ def _write_change_log(course_id: int, recommendations: list[dict]) -> None:
         conn.commit()
         cur.close()
         conn.close()
-        print(f"[CurriculumAgent] Wrote {len(recommendations)} entries to change_log")
+        print(f"[CurriculumAgent] Wrote {len(recommendations)} entries to change_log (replaced pending)")
     except Exception as e:
         print(f"[CurriculumAgent] change_log write error: {e}")
         try:

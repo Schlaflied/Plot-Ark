@@ -6,7 +6,7 @@
  * Layer 3 — assignment_alert: read-only reminder, professor acts manually
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
 
@@ -48,8 +48,51 @@ const CurriculumDrawer: React.FC<CurriculumDrawerProps> = ({
   onRedo,
   onNavigateAnalytics,
 }) => {
-  const pending = suggestions.filter(s => s.status !== 'applied');
-  const applied = suggestions.filter(s => s.status === 'applied');
+  const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [drawerWidth, setDrawerWidth] = useState(() => Math.min(Math.max(480, window.innerWidth * 0.35), window.innerWidth * 0.5));
+  const isResizing = useRef(false);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    const startX = e.clientX;
+    const startWidth = drawerWidth;
+    const onMove = (ev: MouseEvent) => {
+      if (!isResizing.current) return;
+      const newWidth = Math.min(
+        window.innerWidth * 0.8,
+        Math.max(380, startWidth - (ev.clientX - startX))
+      );
+      setDrawerWidth(newWidth);
+    };
+    const onUp = () => {
+      isResizing.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [drawerWidth]);
+
+  // Filter by change_type
+  const filterByType = (list: Suggestion[]) => {
+    if (activeFilter === 'all') return list;
+    return list.filter(s => s.change_type === activeFilter);
+  };
+
+  const visibleSuggestions = suggestions.filter(s => !dismissedIds.has(s.module_id + s.recommendation));
+  const pending = filterByType(visibleSuggestions.filter(s => s.status !== 'applied'));
+  const applied = filterByType(visibleSuggestions.filter(s => s.status === 'applied'));
+
+  // Counts for filter tabs (unfiltered)
+  const allPending = visibleSuggestions.filter(s => s.status !== 'applied');
+  const counts = {
+    all: allPending.length,
+    objective_update: allPending.filter(s => s.change_type === 'objective_update').length,
+    reference_suggestion: allPending.filter(s => s.change_type === 'reference_suggestion').length,
+    assignment_alert: allPending.filter(s => s.change_type === 'assignment_alert').length,
+  };
 
   return (
     <>
@@ -63,10 +106,16 @@ const CurriculumDrawer: React.FC<CurriculumDrawerProps> = ({
 
       {/* Drawer Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-[420px] max-w-[90vw] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${
+        style={{ width: drawerWidth }}
+        className={`fixed top-0 right-0 h-full max-w-[90vw] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
+        {/* Resize Handle */}
+        <div
+          onMouseDown={startResize}
+          className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize z-10 hover:bg-amber-400/30 active:bg-amber-400/50 transition-colors"
+        />
         {/* Header */}
         <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between shrink-0 bg-gradient-to-r from-amber-50 to-white">
           <div className="flex items-center gap-2.5">
@@ -87,6 +136,46 @@ const CurriculumDrawer: React.FC<CurriculumDrawerProps> = ({
             </svg>
           </button>
         </div>
+
+        {/* Filter Tabs */}
+        {suggestions.length > 0 && (
+          <div className="px-4 py-2 border-b border-stone-100 flex flex-wrap gap-1 shrink-0 bg-stone-50/50">
+            {[
+              { key: 'all', label: 'All', icon: '📋', count: counts.all },
+              { key: 'objective_update', label: 'Objectives', icon: '🎯', count: counts.objective_update },
+              { key: 'reference_suggestion', label: 'References', icon: '📚', count: counts.reference_suggestion },
+              { key: 'assignment_alert', label: 'Assignments', icon: '📝', count: counts.assignment_alert },
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveFilter(tab.key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                  activeFilter === tab.key
+                    ? tab.key === 'objective_update'
+                      ? 'bg-amber-100 text-amber-800 border border-amber-200 shadow-sm'
+                      : tab.key === 'reference_suggestion'
+                      ? 'bg-purple-100 text-purple-800 border border-purple-200 shadow-sm'
+                      : tab.key === 'assignment_alert'
+                      ? 'bg-blue-100 text-blue-800 border border-blue-200 shadow-sm'
+                      : 'bg-stone-200 text-stone-800 border border-stone-300 shadow-sm'
+                    : 'text-stone-500 hover:bg-stone-100 border border-transparent'
+                }`}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
+                {tab.count > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                    activeFilter === tab.key
+                      ? 'bg-white/60 text-inherit'
+                      : 'bg-stone-200 text-stone-600'
+                  }`}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Body — scrollable */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
@@ -112,6 +201,7 @@ const CurriculumDrawer: React.FC<CurriculumDrawerProps> = ({
                         courseId={courseId}
                         onApply={() => onApply(s)}
                         onRedo={() => onRedo(s)}
+                        onDismiss={() => setDismissedIds(prev => new Set(prev).add(s.module_id + s.recommendation))}
                       />
                     ))}
                   </div>
@@ -133,6 +223,7 @@ const CurriculumDrawer: React.FC<CurriculumDrawerProps> = ({
                         courseId={courseId}
                         onApply={() => onApply(s)}
                         onRedo={() => onRedo(s)}
+                        onDismiss={() => setDismissedIds(prev => new Set(prev).add(s.module_id + s.recommendation))}
                       />
                     ))}
                   </div>
@@ -181,6 +272,7 @@ interface SuggestionCardProps {
   courseId: string | undefined;
   onApply: () => void;
   onRedo: () => void;
+  onDismiss: () => void;
 }
 
 const SuggestionCard: React.FC<SuggestionCardProps> = ({
@@ -189,13 +281,14 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({
   courseId,
   onApply,
   onRedo,
+  onDismiss,
 }) => {
   const isPending = variant === 'pending';
   const changeType = suggestion.change_type ?? 'objective_update';
 
   return (
     <div
-      className={`rounded-xl p-4 hover:shadow-sm transition-shadow ${
+      className={`group rounded-xl p-4 hover:shadow-sm transition-shadow ${
         changeType === 'assignment_alert'
           ? 'bg-blue-50/60 border border-blue-200/60'
           : isPending
@@ -215,7 +308,18 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({
             {suggestion.module_name || suggestion.module_id}
           </p>
         </div>
-        <LayerBadge changeType={changeType} />
+        <div className="flex items-center gap-1.5">
+          <LayerBadge changeType={changeType} />
+          <button
+            onClick={onDismiss}
+            title="Dismiss suggestion"
+            className="w-5 h-5 flex items-center justify-center rounded text-stone-300 hover:text-stone-500 hover:bg-stone-100 transition-colors"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Recommendation text */}
@@ -258,20 +362,25 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({
       {/* Reason tags */}
       {suggestion.reasons && suggestion.reasons.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2.5">
-          {suggestion.reasons.map((r, j) => (
-            <span
-              key={j}
-              className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                changeType === 'assignment_alert'
-                  ? 'bg-white border border-blue-200 text-blue-700'
-                  : isPending
-                  ? 'bg-white border border-amber-200 text-amber-700'
-                  : 'bg-white border border-green-200 text-green-700'
-              }`}
-            >
-              {r.replace(/_/g, ' ')}
-            </span>
-          ))}
+          {suggestion.reasons.map((r, j) => {
+            const isKG = typeof r === 'string' && r.startsWith('KG ');
+            return (
+              <span
+                key={j}
+                className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                  isKG
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                    : changeType === 'assignment_alert'
+                    ? 'bg-white border border-blue-200 text-blue-700'
+                    : isPending
+                    ? 'bg-white border border-amber-200 text-amber-700'
+                    : 'bg-white border border-green-200 text-green-700'
+                }`}
+              >
+                {isKG ? `🔗 ${r}` : r.replace(/_/g, ' ')}
+              </span>
+            );
+          })}
         </div>
       )}
     </div>

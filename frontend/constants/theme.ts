@@ -24,7 +24,7 @@ export function degreeToColor(degree: number, maxDegree: number): string {
 /**
  * Map KG layer + degree to a color.
  * Hot  = warm brown (existing palette — core PPT material)
- * Warm = teal/green (supplementary material)
+ * Warm = purple (supplementary material)
  * Cold = soft blue  (student-uploaded material)
  */
 export function layerDegreeToColor(
@@ -34,10 +34,10 @@ export function layerDegreeToColor(
 ): string {
   const t = maxDegree > 0 ? Math.min(degree / maxDegree, 1) : 0;
   if (layer === 'warm') {
-    // Teal palette: light → saturated
-    const r = Math.round(140 - t * 70);
-    const g = Math.round(200 - t * 40);
-    const b = Math.round(180 - t * 50);
+    // Purple palette: light → saturated
+    const r = Math.round(180 - t * 60);
+    const g = Math.round(140 - t * 70);
+    const b = Math.round(220 - t * 40);
     return `rgb(${r},${g},${b})`;
   }
   if (layer === 'cold') {
@@ -53,8 +53,8 @@ export function layerDegreeToColor(
 
 /** Layer labels for UI display */
 export const LAYER_LABELS: Record<string, string> = {
-  hot:  '🔴 Core (PPT / Textbook)',
-  warm: '🟢 Supplementary',
+  hot:  '🟤 Core (PPT / Textbook)',
+  warm: '🟣 Supplementary',
   cold: '🔵 Student Notes',
 };
 

@@ -5,7 +5,7 @@
  * based on AI curriculum suggestions, along with the reason for each change.
  */
 
-import React from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 
 interface ModuleChange {
   module_id: string;
@@ -29,6 +29,32 @@ const StudentChangesDrawer: React.FC<StudentChangesDrawerProps> = ({
   onClose,
   onNavigateToModule,
 }) => {
+  const [drawerWidth, setDrawerWidth] = useState(() => Math.min(Math.max(480, window.innerWidth * 0.35), window.innerWidth * 0.5));
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const isResizing = useRef(false);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    const startX = e.clientX;
+    const startWidth = drawerWidth;
+    const onMove = (ev: MouseEvent) => {
+      if (!isResizing.current) return;
+      const newWidth = Math.min(
+        window.innerWidth * 0.8,
+        Math.max(380, startWidth - (ev.clientX - startX))
+      );
+      setDrawerWidth(newWidth);
+    };
+    const onUp = () => {
+      isResizing.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [drawerWidth]);
+
   return (
     <>
       {/* Backdrop */}
@@ -41,10 +67,16 @@ const StudentChangesDrawer: React.FC<StudentChangesDrawerProps> = ({
 
       {/* Drawer Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-[400px] max-w-[90vw] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${
+        style={{ width: drawerWidth }}
+        className={`fixed top-0 right-0 h-full max-w-[90vw] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
+        {/* Resize Handle */}
+        <div
+          onMouseDown={startResize}
+          className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize z-10 hover:bg-blue-400/30 active:bg-blue-400/50 transition-colors"
+        />
         {/* Header */}
         <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between shrink-0 bg-gradient-to-r from-blue-50 to-white">
           <div className="flex items-center gap-2.5">
@@ -68,16 +100,25 @@ const StudentChangesDrawer: React.FC<StudentChangesDrawerProps> = ({
 
         {/* Body — scrollable */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
-          {changes.length > 0 ? (
+          {changes.filter(c => !dismissedIds.has(c.module_id + c.recommendation)).length > 0 ? (
             <div className="space-y-3">
               <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">
-                Updated Modules ({changes.length})
+                Updated Modules ({changes.filter(c => !dismissedIds.has(c.module_id + c.recommendation)).length})
               </p>
-              {changes.map((c, i) => (
+              {changes.filter(c => !dismissedIds.has(c.module_id + c.recommendation)).map((c, i) => (
                 <div
                   key={i}
-                  className="rounded-xl p-4 bg-blue-50/70 border border-blue-200/60 hover:shadow-sm transition-shadow"
+                  className="group relative rounded-xl p-4 bg-blue-50/70 border border-blue-200/60 hover:shadow-sm transition-shadow"
                 >
+                  <button
+                    onClick={() => setDismissedIds(prev => new Set(prev).add(c.module_id + c.recommendation))}
+                    className="absolute right-3 top-3 w-5 h-5 flex items-center justify-center rounded text-stone-400 hover:text-stone-600 hover:bg-blue-100 transition-colors"
+                    title="Dismiss update"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
                   {/* Module name + Go to button */}
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">

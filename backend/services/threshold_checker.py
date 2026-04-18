@@ -14,6 +14,21 @@ import re
 from db import get_db
 
 
+def _normalize_module_id(raw_id: str) -> str:
+    """Normalize module_id to 'module_N' (1-indexed) format.
+
+    xAPI stores module IDs as 'course/X/module/N' (0-indexed).
+    Downstream consumers (flags, change_log, drawer) expect 'module_N' (1-indexed).
+    """
+    m = re.search(r'module/(\d+)', raw_id)
+    if m:
+        zero_idx = int(m.group(1))
+        return f"module_{zero_idx + 1}"
+    if raw_id.startswith('module_'):
+        return raw_id
+    return raw_id
+
+
 # ── Year-based need-help thresholds ──────────────────────────────────────────
 # Year 1-2 large-enrollment courses: human intervention when >50 students flag a module
 # Year 3-4 small-enrollment courses: review triggered at >10
@@ -74,8 +89,8 @@ def _get_need_help_counts(course_id: int) -> dict[str, int]:
         result = {}
         for row in cur.fetchall():
             obj_id, cnt = row
-            # object_id format: "module_{n}" or "module_1/Title"
-            mod_key = obj_id.split("/")[0] if "/" in obj_id else obj_id
+            # object_id format: "course/X/module/N" or "module_{n}" or "module_1/Title"
+            mod_key = _normalize_module_id(obj_id)
             result[mod_key] = result.get(mod_key, 0) + int(cnt)
         cur.close()
         conn.close()
@@ -106,9 +121,10 @@ def check_thresholds(report: dict) -> list[dict]:
 
     # Signal source 1: content_optimizer — underperforming modules
     for mod in co.get("underperforming_content", []):
-        mod_id = mod.get("module_id", "")
-        if not mod_id:
+        raw_id = mod.get("module_id", "")
+        if not raw_id:
             continue
+        mod_id = _normalize_module_id(raw_id)
         if mod_id not in module_signals:
             module_signals[mod_id] = []
         module_signals[mod_id].append({
@@ -121,9 +137,10 @@ def check_thresholds(report: dict) -> list[dict]:
 
     # Signal source 2: behavior_analyst — low completion rate modules
     for mod in ba.get("module_engagement", []):
-        mod_id = mod.get("module_id", "")
-        if not mod_id:
+        raw_id = mod.get("module_id", "")
+        if not raw_id:
             continue
+        mod_id = _normalize_module_id(raw_id)
         comp = mod.get("completion_rate", 1)
         if comp < 0.5:
             if mod_id not in module_signals:
@@ -174,7 +191,10 @@ def check_thresholds(report: dict) -> list[dict]:
     # ── Determine flag level ──────────────────────────────────────────────
     flags = []
     # Build module name lookup from behavior_analyst
-    mod_names = {m.get("module_id", ""): m.get("module_name", "") for m in ba.get("module_engagement", [])}
+    mod_names = {
+        _normalize_module_id(m.get("module_id", "")): m.get("module_name", "")
+        for m in ba.get("module_engagement", [])
+    }
 
     for mod_id, signals in module_signals.items():
         unique_sources = set(s["source"] for s in signals)

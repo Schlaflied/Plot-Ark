@@ -71,6 +71,14 @@ const STATUS_COLORS: Record<string, string> = {
   flags_detected: 'bg-orange-400',
   flags_clear: 'bg-green-400',
   threshold_error: 'bg-red-400',
+  report_ready: 'bg-green-400',
+  kg_context_running: 'bg-emerald-400 animate-pulse',
+  kg_context_done: 'bg-emerald-400',
+  kg_context_skipped: 'bg-stone-400',
+  kg_context_error: 'bg-red-400',
+  curriculum_running: 'bg-violet-400 animate-pulse',
+  curriculum_done: 'bg-violet-400',
+  curriculum_error: 'bg-red-400',
 };
 
 // Events that should visually stand out in the console
@@ -336,6 +344,11 @@ const StudentDataPage: React.FC = () => {
       try {
         const data = JSON.parse(event.data);
         setEvents(prev => [...prev, data]);
+        // report_ready = report data available, but pipeline continues
+        if (data.status === 'report_ready' && data.agent === 'report') {
+          if (data.result) setReport(data.result);
+        }
+        // done = entire pipeline finished (after KG + Curriculum)
         if (data.status === 'done' && data.agent === 'report') {
           evtSource.close();
           setLoading(false);

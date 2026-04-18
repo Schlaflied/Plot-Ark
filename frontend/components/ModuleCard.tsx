@@ -25,6 +25,7 @@ interface KgConceptMatch {
   source?: string;
   source_text?: string;
   objective_text?: string;  // legacy compat
+  source_layer?: string;
 }
 
 interface KgDependency {
@@ -174,7 +175,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
 
         {/* Tab: AI Suggestion */}
         {activeTab === 'ai-suggestion' && (
-          <AISuggestionTab module={currentModule} isStudent={isStudent} />
+          <AISuggestionTab module={currentModule} isStudent={isStudent} onEditField={onEditField} />
         )}
 
         {/* Tab: Knowledge Map */}
@@ -579,7 +580,8 @@ const AssessmentTab: React.FC<{
 const AISuggestionTab: React.FC<{
   module: Module;
   isStudent: boolean;
-}> = ({ module: m, isStudent }) => {
+  onEditField: (field: string, value: any) => void;
+}> = ({ module: m, isStudent, onEditField }) => {
   const suggestions = isStudent
     ? (m.learning_suggestions || [])
     : (m.teaching_suggestions || []);
@@ -602,9 +604,20 @@ const AISuggestionTab: React.FC<{
       {suggestions.length > 0 ? (
         <ul className="space-y-3">
           {suggestions.map((s, i) => (
-            <li key={i} className="flex items-start gap-3 text-stone-700 bg-amber-50/50 border border-amber-100 rounded-xl p-4">
-              <span className="text-amber-500 mt-0.5 text-sm font-bold">→</span>
+            <li key={i} className="group flex items-start gap-3 text-stone-700 bg-amber-50/50 border border-amber-100 rounded-xl p-4 relative pr-10 hover:border-amber-200 transition-colors">
+              <span className="text-amber-500 mt-0.5 text-sm font-bold shrink-0">→</span>
               <span className="leading-relaxed text-sm">{s}</span>
+              <button
+                onClick={() => {
+                  const newSuggestions = [...suggestions];
+                  newSuggestions.splice(i, 1);
+                  onEditField(isStudent ? 'learning_suggestions' : 'teaching_suggestions', newSuggestions);
+                }}
+                className="absolute right-4 top-4 text-stone-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all text-xs"
+                title="Dismiss suggestion"
+              >
+                ✕
+              </button>
             </li>
           ))}
         </ul>
@@ -682,10 +695,14 @@ const KnowledgeMapTab: React.FC<{
               return (
                 <div
                   key={i}
-                  className="bg-stone-50 rounded-xl p-4 border border-stone-200 hover:border-amber-200 transition-colors"
+                  className={`bg-stone-50 rounded-xl p-4 border border-stone-200 transition-colors ${
+                    c.source_layer === 'warm' ? 'hover:border-purple-300' : 'hover:border-amber-200'
+                  }`}
                 >
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className="text-amber-500 text-sm">⚡</span>
+                    <span className="text-sm">
+                      {c.source_layer === 'warm' ? '🟣' : '🟤'}
+                    </span>
                     <span className="font-bold text-stone-900 text-sm">{c.label}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border ${src.color}`}>
                       {src.text}

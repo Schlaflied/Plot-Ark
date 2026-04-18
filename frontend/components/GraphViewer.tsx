@@ -224,7 +224,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
         <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1.5rem', alignItems: 'center', marginTop: '2px', paddingTop: '6px', borderTop: `1px solid ${BORDER_COLOR}` }}>
           <span style={{ color: TEXT_PRIMARY, fontWeight: 600, fontSize: '0.8rem' }}>Layers:</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#8B5E3C' }} /> Core</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#5eae9e' }} /> Supplementary</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#c084fc' }} /> Supplementary</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#6ba0dc' }} /> Student Notes</span>
         </div>
       </div>
@@ -295,7 +295,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
           style={{ left: mousePos.x + 14, top: mousePos.y - 10, background: PANEL_BG, border: `1px solid ${BORDER_COLOR}`, color: TEXT_PRIMARY, maxWidth: '220px' }}>
           <div className="font-semibold truncate">{(hoveredNode as FGNode).label}</div>
           {(hoveredNode as FGNode).source_layer && (hoveredNode as FGNode).source_layer !== 'hot' && (
-            <div style={{ color: (hoveredNode as FGNode).source_layer === 'warm' ? '#2dd4bf' : '#60a5fa', fontSize: '0.65rem', fontWeight: 600 }}>
+            <div style={{ color: (hoveredNode as FGNode).source_layer === 'warm' ? '#c084fc' : '#60a5fa', fontSize: '0.65rem', fontWeight: 600 }}>
               {(hoveredNode as FGNode).source_layer === 'warm' ? 'Supplementary' : 'Student Notes'}
             </div>
           )}

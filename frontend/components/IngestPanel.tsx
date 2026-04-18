@@ -283,8 +283,8 @@ const IngestPanel: React.FC<IngestPanelProps> = ({
               paddingRight: '1.8rem',
             }}
           >
-            <option value="hot">🔴 Core Material (PPT / Textbook)</option>
-            <option value="warm">🟢 Supplementary (Articles / Videos)</option>
+            <option value="hot">🟤 Core Material (PPT / Textbook)</option>
+            <option value="warm">🟣 Supplementary (Articles / Videos)</option>
           </select>
         </div>
 

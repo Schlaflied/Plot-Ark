@@ -95,6 +95,13 @@ def _load_kg_nodes_edges(graphml_path: str):
         if len(label) < _MIN_LABEL_LEN:
             continue
 
+        # Detect source layer from description tags
+        source_layer = "hot"  # default for existing KG data
+        if "[layer: warm]" in desc:
+            source_layer = "warm"
+        elif "[layer: cold]" in desc:
+            source_layer = "cold"
+
         id_to_label[str(nid)] = label
         label_lower = label.lower().strip()
         nodes[label_lower] = {
@@ -102,6 +109,7 @@ def _load_kg_nodes_edges(graphml_path: str):
             "label": label,
             "description": desc.split("<SEP>")[0].strip() if "<SEP>" in desc else desc,
             "entity_type": entity_type,
+            "source_layer": source_layer,
         }
 
     edges = []
@@ -238,6 +246,7 @@ def map_objectives_to_kg(modules: list, graphml_path: str, min_label_len: int = 
                         "definition": node["description"],
                         "source": category,
                         "source_text": text,
+                        "source_layer": node.get("source_layer", "hot"),
                     })
 
         module_concepts[mod_num] = matched

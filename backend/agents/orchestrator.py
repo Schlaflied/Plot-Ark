@@ -16,6 +16,7 @@ from agents.behavior_analyst import BehaviorAnalystNode
 from agents.risk_detector import RiskDetectorNode
 from agents.content_optimizer import ContentOptimizerNode
 from agents.cohort_comparator import CohortComparatorNode
+from agents.kg_context_analyst import KGContextAnalystNode
 from extensions import redis_client
 from services.ltm_writer import write_cold_snapshot
 from services.threshold_checker import check_thresholds
@@ -336,7 +337,7 @@ class OrchestratorNode(BaseNode):
         # Cache in shared memory
         sm.set("final_report", report)
 
-        yield _sse_event("report", "done", f"Analysis complete in {total_ms}ms", report)
+        yield _sse_event("report", "report_ready", f"Report aggregated in {total_ms}ms", report)
 
         # ── LTM Cold write ─────────────────────────────────────────────────
         try:
@@ -370,7 +371,36 @@ class OrchestratorNode(BaseNode):
             yield _sse_event("orchestrator", "threshold_error",
                 "⚠️ Threshold check failed — flags may be incomplete")
 
-        # ── Curriculum Agent — auto-run after flags ────────────────────────
+        # ── KG Context Analyst — enrich flags with KG data ─────────────────
+        kg_context_data = {}
+        try:
+            yield _sse_event("orchestrator", "kg_context_running",
+                "🧠 Analyzing Knowledge Graph context for flagged modules...")
+            kg_sm = SharedMemory(f"kg-{course_id}-auto", redis_client)
+            kg_sm.set("course_id", course_id)
+            kg_sm.set("flagged_modules", flags)
+            kg_agent = KGContextAnalystNode()
+            kg_result = kg_agent.execute(kg_sm)
+            kg_context_data = (kg_result.data or {}).get("kg_context", {})
+            has_kg = kg_context_data.get("available", False)
+            flagged_count = len(kg_context_data.get("flagged_with_concepts", []))
+            if has_kg and flagged_count > 0:
+                yield _sse_event("orchestrator", "kg_context_done",
+                    f"✅ KG Context: {flagged_count} flagged module(s) enriched with concept data",
+                    kg_context_data)
+            elif has_kg:
+                yield _sse_event("orchestrator", "kg_context_done",
+                    "✅ KG available but no flagged modules have concept matches",
+                    kg_context_data)
+            else:
+                yield _sse_event("orchestrator", "kg_context_skipped",
+                    "ℹ️ No Knowledge Graph available for this course — skipping KG enrichment")
+        except Exception as e:
+            print(f"[Orchestrator] KG Context Analyst error: {e}")
+            yield _sse_event("orchestrator", "kg_context_error",
+                "⚠️ KG Context Analyst failed — proceeding without KG data")
+
+        # ── Curriculum Agent — auto-run after flags + KG context ───────────
         try:
             from agents.curriculum_agent import CurriculumAgentNode
             yield _sse_event("orchestrator", "curriculum_running",
@@ -378,6 +408,7 @@ class OrchestratorNode(BaseNode):
             ca_sm = SharedMemory(f"curriculum-{course_id}-auto", redis_client)
             ca_sm.set("course_id", course_id)
             ca_sm.set("flagged_modules", flags)
+            ca_sm.set("kg_context", kg_context_data)
             ca_agent = CurriculumAgentNode()
             ca_result = ca_agent.execute(ca_sm)
             rec_count = len((ca_result.data or {}).get("recommendations", []))
@@ -388,6 +419,10 @@ class OrchestratorNode(BaseNode):
             print(f"[Orchestrator] Curriculum Agent error: {e}")
             yield _sse_event("orchestrator", "curriculum_error",
                 "⚠️ Curriculum Agent failed — suggestions may be unavailable")
+
+        # ── Pipeline complete — frontend closes EventSource here ──────────
+        pipeline_ms = int((time.time() - start_total) * 1000)
+        yield _sse_event("report", "done", f"Pipeline complete in {pipeline_ms}ms", report)
 
     def run_analysis_sync(self, course_id: int) -> dict:
         """Non-streaming version — returns complete report dict."""
@@ -441,11 +476,24 @@ class OrchestratorNode(BaseNode):
         except Exception as e:
             print(f"[Orchestrator] Threshold check error (non-fatal): {e}")
 
+        # KG Context Analyst (sync path)
+        kg_context_data = {}
+        try:
+            kg_sm = SharedMemory(f"kg-{course_id}-sync", redis_client)
+            kg_sm.set("course_id", course_id)
+            kg_sm.set("flagged_modules", flags)
+            kg_agent = KGContextAnalystNode()
+            kg_result = kg_agent.execute(kg_sm)
+            kg_context_data = (kg_result.data or {}).get("kg_context", {})
+        except Exception as e:
+            print(f"[Orchestrator] KG Context Analyst error (non-fatal): {e}")
+
         try:
             from agents.curriculum_agent import CurriculumAgentNode
             ca_sm = SharedMemory(f"curriculum-{course_id}-sync", redis_client)
             ca_sm.set("course_id", course_id)
             ca_sm.set("flagged_modules", flags)
+            ca_sm.set("kg_context", kg_context_data)
             ca_agent = CurriculumAgentNode()
             ca_agent.execute(ca_sm)
         except Exception as e:
