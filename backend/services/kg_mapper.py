@@ -301,7 +301,71 @@ def map_objectives_to_kg(modules: list, graphml_path: str, min_label_len: int = 
 
         module_concepts[mod_num] = matched
 
-    print(f"[KG Mapper] Total matches: {sum(len(v) for v in module_concepts.values())} across {sum(1 for v in module_concepts.values() if v)}/{len(modules)} modules")
+    # ── Step 1b: Graph traversal expansion (1-2 hops from seed concepts) ──────
+    # For each module that has seed concepts, traverse KG neighbours and
+    # attribute them to the same module — as long as the neighbour isn't
+    # already attributed to a *different* module.
+    already_attributed: dict[str, int] = {}  # node_id_lower → first module that claimed it
+    for mod_num, concepts in module_concepts.items():
+        for c in concepts:
+            already_attributed[c["id"].lower()] = mod_num
+
+    G = None
+    try:
+        G = nx.read_graphml(graphml_path)
+    except Exception:
+        pass
+
+    if G is not None:
+        MAX_HOPS = 2
+        MAX_EXPAND_PER_MODULE = 8  # cap so one module doesn't swallow the whole graph
+
+        for mod_num, seed_concepts in list(module_concepts.items()):
+            if not seed_concepts:
+                continue
+
+            seed_ids = {c["id"] for c in seed_concepts}
+            visited: set[str] = set(seed_ids)
+            frontier: set[str] = set(seed_ids)
+            expanded: list[dict] = []
+
+            for _hop in range(MAX_HOPS):
+                next_frontier: set[str] = set()
+                for node_id in frontier:
+                    if node_id not in G:
+                        continue
+                    for neighbor_id in list(G.neighbors(node_id)) + list(G.predecessors(node_id) if G.is_directed() else []):
+                        if neighbor_id in visited:
+                            continue
+                        visited.add(neighbor_id)
+                        nid_lower = neighbor_id.lower()
+                        # Skip if already firmly attributed to a different module
+                        if nid_lower in already_attributed and already_attributed[nid_lower] != mod_num:
+                            continue
+                        attrs = G.nodes[neighbor_id]
+                        n_label = attrs.get("label", neighbor_id)
+                        if len(n_label) < _MIN_LABEL_LEN or n_label.lower() in _NOISE_LABELS:
+                            continue
+                        expanded.append({
+                            "label": n_label,
+                            "id": neighbor_id,
+                            "definition": attrs.get("description", ""),
+                            "source": f"graph_hop_{_hop + 1}",
+                            "source_text": "",
+                        })
+                        already_attributed[nid_lower] = mod_num
+                        next_frontier.add(neighbor_id)
+                        if len(expanded) >= MAX_EXPAND_PER_MODULE:
+                            break
+                    if len(expanded) >= MAX_EXPAND_PER_MODULE:
+                        break
+                frontier = next_frontier
+                if not frontier or len(expanded) >= MAX_EXPAND_PER_MODULE:
+                    break
+
+            module_concepts[mod_num] = seed_concepts + expanded
+
+    print(f"[KG Mapper] Total matches (after expansion): {sum(len(v) for v in module_concepts.values())} across {sum(1 for v in module_concepts.values() if v)}/{len(modules)} modules")
 
     # ── Step 2: Infer cross-module dependencies via KG edges ───────────────
     # Build reverse lookup: concept_label_lower → [module_numbers]

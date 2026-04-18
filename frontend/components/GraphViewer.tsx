@@ -13,7 +13,7 @@ import IngestPanel from './IngestPanel';
 import GraphToolbar from './GraphToolbar';
 import CourseBanner from './CourseBanner';
 import NodeDetailPanel from './NodeDetailPanel';
-import { DARK_BG, PANEL_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_MUTED, ACCENT, masteryToColor, MASTERY_COLORS } from '../constants/theme';
+import { DARK_BG, PANEL_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_MUTED, ACCENT, masteryToColor } from '../constants/theme';
 import { useIngest } from '../hooks/useIngest';
 import { useQuery } from '../hooks/useQuery';
 import { useCourseManager } from '../hooks/useCourseManager';
@@ -34,13 +34,22 @@ type FGLinkObject = LinkObject<FGNode, { label: string }>;
 
 type SubjectKey = string;
 
+interface AnnotationData {
+  confusion_counts: Record<string, { count: number; pct: number; label: string }>;
+  exam_focus: string[];
+  important_counts: Record<string, number>;
+  total_students: number;
+}
+
 interface GraphViewerProps {
   initialCourseCode?: string;
   initialCourseTopic?: string;
   masteryMap?: Record<string, string>;  // concept_id | label_lower → mastery_level
+  role?: 'student' | 'professor';
+  courseId?: number;
 }
 
-const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCourseTopic, masteryMap: masteryMapProp }) => {
+const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCourseTopic, masteryMap: masteryMapProp, role = 'student', courseId }) => {
   // ---- Mastery: use prop if provided, otherwise auto-fetch all ----
   const [masteryMapFetched, setMasteryMapFetched] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -53,6 +62,66 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
   const masteryMap = (masteryMapProp && Object.keys(masteryMapProp).length > 0)
     ? masteryMapProp
     : masteryMapFetched;
+
+  // ---- Annotations ----
+  const [sessionId] = useState<string>(() => {
+    let id = localStorage.getItem('plot_ark_session_id');
+    if (!id) { id = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('plot_ark_session_id', id); }
+    return id;
+  });
+  const [annotationData, setAnnotationData] = useState<AnnotationData>({ confusion_counts: {}, exam_focus: [], important_counts: {}, total_students: 1 });
+  // myAnnotations: Set of "conceptId:type" this session has marked
+  const [myAnnotations, setMyAnnotations] = useState<Set<string>>(new Set());
+
+  const fetchAnnotations = useCallback(() => {
+    const url = courseId ? `/api/kg/annotations/${courseId}` : '/api/kg/annotations/global';
+    fetch(url).then(r => r.json()).then(setAnnotationData).catch(() => {});
+  }, [courseId]);
+
+  useEffect(() => { fetchAnnotations(); }, [fetchAnnotations]);
+
+  const handleAnnotate = useCallback(async (conceptId: string, conceptLabel: string, type: 'confused' | 'important' | 'exam_focus') => {
+    try {
+      const res = await fetch('/api/kg/annotate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ course_id: courseId, concept_id: conceptId, concept_label: conceptLabel, role, annotation_type: type, session_id: sessionId }),
+      });
+      const data = await res.json();
+      const key = `${conceptId}:${type}`;
+      setMyAnnotations(prev => {
+        const next = new Set(prev);
+        data.action === 'added' ? next.add(key) : next.delete(key);
+        return next;
+      });
+      fetchAnnotations();
+    } catch { /* non-fatal */ }
+  }, [courseId, role, sessionId, fetchAnnotations]);
+
+  // ---- Module color map (curriculum coverage coloring) ----
+  // conceptId → hex color based on module number
+  const [moduleColorMap, setModuleColorMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!courseId) return;
+    fetch(`/api/graph/kg-mapping/${courseId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.status !== 'ok') return;
+        const palette = ['#818cf8','#60a5fa','#34d399','#a3e635','#fbbf24','#fb923c','#f87171','#c084fc','#38bdf8','#4ade80','#facc15','#f97316'];
+        const moduleConceptsMap: Record<string, string[]> = data.module_concepts || {};
+        const colorMap: Record<string, string> = {};
+        Object.entries(moduleConceptsMap).forEach(([modNum, concepts]) => {
+          const idx = Math.max(0, parseInt(modNum, 10) - 1);
+          const color = palette[idx % palette.length];
+          (concepts as any[]).forEach((c: any) => {
+            const cid = typeof c === 'string' ? c : (c.id || c.label || '');
+            if (cid) colorMap[cid.toLowerCase()] = color;
+          });
+        });
+        setModuleColorMap(colorMap);
+      })
+      .catch(() => {});
+  }, [courseId]);
 
   // ---- Core graph state ----
   const [activeSubject, setActiveSubject] = useState<SubjectKey>('all');
@@ -192,11 +261,12 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       const nodeLabel = (n.label || '').toLowerCase();
       const masteryLevel = masteryMap?.[nodeId] || masteryMap?.[nodeLabel] || '';
 
-      // Fill: mastery color, or gray if no data
+      // Fill: curriculum coverage color > mastery color > gray
+      const coverageColor = moduleColorMap[nodeId.toLowerCase()] || moduleColorMap[nodeLabel];
       ctx.beginPath(); ctx.arc(nx, ny, r, 0, 2 * Math.PI);
       ctx.fillStyle = isFaded
         ? 'rgba(80,80,120,0.25)'
-        : masteryLevel ? masteryToColor(masteryLevel) : '#9ca3af';
+        : coverageColor ?? (masteryLevel ? masteryToColor(masteryLevel) : '#9ca3af');
       ctx.fill();
 
       // Border: layer color
@@ -210,18 +280,44 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
         ctx.stroke();
       }
 
+      // Exam focus ring (gold) — visible to both roles
+      const isExamFocus = annotationData.exam_focus.includes(nodeId);
+      if (isExamFocus && !isFaded) {
+        ctx.beginPath(); ctx.arc(nx, ny, r + 3, 0, 2 * Math.PI);
+        ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2 / globalScale; ctx.stroke();
+      }
+
       // Selection / search highlight ring
       if (isSelected || isHighlighted) {
-        ctx.beginPath(); ctx.arc(nx, ny, r + 3, 0, 2 * Math.PI);
-        ctx.strokeStyle = isSelected ? '#f59e0b' : '#e879f9'; ctx.lineWidth = 2 / globalScale; ctx.stroke();
+        ctx.beginPath(); ctx.arc(nx, ny, r + (isExamFocus ? 6 : 3), 0, 2 * Math.PI);
+        ctx.strokeStyle = isSelected ? '#e879f9' : '#e879f9'; ctx.lineWidth = 2 / globalScale; ctx.stroke();
       }
+
+      // Confusion badge — professor sees count, student sees own mark
+      const confusionInfo = annotationData.confusion_counts[nodeId];
+      const myConfused = myAnnotations.has(`${nodeId}:confused`);
+      const showBadge = !isFaded && (role === 'professor' ? (confusionInfo?.count ?? 0) > 0 : myConfused);
+      if (showBadge) {
+        const badgeR = Math.max(3, r * 0.45);
+        const bx = nx + r * 0.75, by = ny - r * 0.75;
+        ctx.beginPath(); ctx.arc(bx, by, badgeR, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ef4444'; ctx.fill();
+        if (role === 'professor' && confusionInfo) {
+          const badgeFontSize = Math.max(2.5, badgeR * 1.1);
+          ctx.font = `bold ${badgeFontSize}px Inter, sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#fff';
+          ctx.fillText(confusionInfo.count > 9 ? '9+' : String(confusionInfo.count), bx, by);
+        }
+      }
+
       if (globalScale > 0.8 || isHighlighted || isSelected) {
         const fontSize = Math.max(3, 10 / globalScale);
         ctx.font = `${fontSize}px Inter, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillStyle = isFaded ? 'rgba(148,163,184,0.3)' : TEXT_PRIMARY;
         ctx.fillText(label, nx, ny + r + fontSize * 0.9);
       }
-    }, [highlightedIds, searchQuery, selectedNode, masteryMap]
+    }, [highlightedIds, searchQuery, selectedNode, masteryMap, moduleColorMap, annotationData, myAnnotations, role]
   );
 
   const nodePointerAreaPaint = useCallback((node: FGNodeObject, color: string, ctx: CanvasRenderingContext2D) => {
@@ -257,11 +353,14 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'transparent', border: '2px solid #60a5fa' }} /> Student Notes</span>
         </div>
         <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1.5rem', alignItems: 'center', marginTop: '2px', paddingTop: '6px', borderTop: `1px solid ${BORDER_COLOR}` }}>
-          <span style={{ color: TEXT_PRIMARY, fontWeight: 600, fontSize: '0.8rem' }}>Mastery (fill):</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: MASTERY_COLORS.mastered }} /> Mastered</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: MASTERY_COLORS.learning }} /> Learning</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: MASTERY_COLORS.struggling }} /> Needs Review</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#9ca3af' }} /> Not Learned</span>
+          <span style={{ color: TEXT_PRIMARY, fontWeight: 600, fontSize: '0.8rem' }}>Fill:</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#818cf8' }} /> M1</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#34d399' }} /> M3</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#fbbf24' }} /> M5</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#f87171' }} /> M7+</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#9ca3af' }} /> Unmapped</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #f59e0b', background: 'transparent' }} /> Exam focus</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#ef4444' }} /> Confused</span>
         </div>
       </div>
 
@@ -322,7 +421,21 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
           )}
         </div>
 
-        {selectedFGNode && <NodeDetailPanel node={selectedFGNode} onClose={() => setSelectedNode(null)} />}
+        {selectedFGNode && (
+          <NodeDetailPanel
+            node={selectedFGNode}
+            onClose={() => setSelectedNode(null)}
+            role={role}
+            annotation={{
+              isConfused: myAnnotations.has(`${String(selectedFGNode.id)}:confused`),
+              isImportant: myAnnotations.has(`${String(selectedFGNode.id)}:important`),
+              isExamFocus: annotationData.exam_focus.includes(String(selectedFGNode.id)),
+              confusionCount: annotationData.confusion_counts[String(selectedFGNode.id)]?.count,
+              confusionPct: annotationData.confusion_counts[String(selectedFGNode.id)]?.pct,
+            }}
+            onAnnotate={(type) => handleAnnotate(String(selectedFGNode.id), selectedFGNode.label ?? '', type)}
+          />
+        )}
       </div>
 
       {/* Hover tooltip */}

@@ -18,6 +18,7 @@ from routes.analytics import analytics_bp
 from routes.settings import settings_bp
 from routes.demo import demo_bp
 from routes.mastery import mastery_bp
+from routes.annotations import annotations_bp
 
 app.register_blueprint(curriculum_bp)
 app.register_blueprint(curriculum_agent_bp)
@@ -32,6 +33,7 @@ app.register_blueprint(analytics_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(demo_bp)
 app.register_blueprint(mastery_bp)
+app.register_blueprint(annotations_bp)
 
 # Initialize database and seed mock data
 init_db()
