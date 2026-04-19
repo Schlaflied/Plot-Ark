@@ -161,6 +161,27 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
         return next;
       });
       fetchAnnotations();
+
+      // Mirror to xAPI when student adds (not removes) a confused/important mark
+      if (data.action === 'added' && role === 'student' && type !== 'exam_focus') {
+        const verbMap = {
+          confused: 'http://id.tincanapi.com/verb/flagged',
+          important: 'https://w3id.org/xapi/tla/verbs/noted',
+        } as const;
+        fetch('/api/xapi/statement', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            actor: { name: sessionId, mbox: `mailto:${sessionId}@plot-ark.local` },
+            verb: { id: verbMap[type], display: { 'en-US': type } },
+            object: {
+              id: `https://plot-ark.local/courses/${effectiveCourseId}/concept/${encodeURIComponent(conceptId)}`,
+              definition: { name: { 'en-US': conceptLabel }, type: 'http://adlnet.gov/expapi/activities/concept' },
+            },
+            context: { extensions: { course_id: effectiveCourseId, concept_id: conceptId } },
+          }),
+        }).catch(() => {});
+      }
     } catch { /* non-fatal */ }
   }, [effectiveCourseId, role, sessionId, fetchAnnotations]);
 
