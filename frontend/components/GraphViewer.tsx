@@ -80,9 +80,10 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       .then(r => r.json())
       .then((rows: { id: number; course_code: string; topic: string }[]) => {
         const m: Record<string, number> = {};
+        const toSlug = (s: string) => s.toLowerCase().replace(/\s+/g, '-');
         rows.forEach(r => {
-          if (r.course_code) m[r.course_code.toLowerCase()] = r.id;
-          if (r.topic) m[r.topic.toLowerCase()] = r.id;
+          if (r.course_code) { m[r.course_code.toLowerCase()] = r.id; m[toSlug(r.course_code)] = r.id; }
+          if (r.topic) { m[r.topic.toLowerCase()] = r.id; m[toSlug(r.topic)] = r.id; }
         });
         setSubjectCourseMap(m);
       })
@@ -122,15 +123,25 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
   }, []);
 
   const [activeSubject, setActiveSubject] = useState<SubjectKey>('all');
-  const effectiveCourseId = courseId ?? (
-    activeSubject && activeSubject !== 'all'
-      ? subjectCourseMap[activeSubject.toLowerCase()]
-      : undefined
-  );
+  const [effectiveCourseId, setEffectiveCourseId] = useState<number | undefined>(courseId);
+  useEffect(() => {
+    if (courseId) { setEffectiveCourseId(courseId); return; }
+    if (activeSubject && activeSubject !== 'all') {
+      const key = activeSubject.toLowerCase();
+      const asSpaced = key.replace(/-/g, ' ');
+      const resolved = subjectCourseMap[key]
+        ?? subjectCourseMap[asSpaced]
+        ?? Object.entries(subjectCourseMap).find(([k]) => k.startsWith(asSpaced))?.[1]
+        ?? Object.entries(subjectCourseMap).find(([k]) => k.includes(asSpaced))?.[1];
+      setEffectiveCourseId(resolved);
+    } else {
+      setEffectiveCourseId(undefined);
+    }
+  }, [courseId, activeSubject, subjectCourseMap]);
 
   const fetchAnnotations = useCallback(() => {
     const url = effectiveCourseId ? `/api/kg/annotations/${effectiveCourseId}` : '/api/kg/annotations/global';
-    fetch(url).then(r => r.json()).then(setAnnotationData).catch(() => {});
+    fetch(url).then(r => r.json()).then(d => setAnnotationData(d)).catch(() => {});
   }, [effectiveCourseId]);
 
   useEffect(() => { fetchAnnotations(); }, [fetchAnnotations]);
