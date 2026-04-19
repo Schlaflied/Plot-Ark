@@ -18,6 +18,7 @@ Design decisions (from implementation plan):
 
 from agents.base import BaseNode, SharedMemory
 from services.kg_mapper import get_kg_mapping_for_course
+from db import get_db
 
 
 class KGContextAnalystNode(BaseNode):
@@ -53,7 +54,30 @@ class KGContextAnalystNode(BaseNode):
             if mod_id:
                 flagged_ids.add(mod_id)
 
-        # ── 3. Build slim context: only flagged modules with KG matches ───
+        # ── 3. Fetch confusion signals from concept_annotations ──────────
+        confusion_map: dict[str, dict] = {}
+        try:
+            conn = get_db()
+            if conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT concept_id, concept_label, COUNT(DISTINCT session_id) as cnt,
+                           COUNT(DISTINCT session_id) * 100.0 /
+                               NULLIF((SELECT COUNT(DISTINCT session_id)
+                                       FROM concept_annotations
+                                       WHERE course_id = %s AND role = 'student'), 0) as pct
+                    FROM concept_annotations
+                    WHERE course_id = %s AND role = 'student' AND annotation_type = 'confused'
+                    GROUP BY concept_id, concept_label
+                """, (course_id, course_id))
+                for cid, clabel, cnt, pct in cur.fetchall():
+                    confusion_map[cid.lower()] = {"count": cnt, "pct": round(float(pct or 0))}
+                cur.close()
+                conn.close()
+        except Exception:
+            pass
+
+        # ── 4. Build slim context: only flagged modules with KG matches ───
         module_concepts = full_mapping.get("module_concepts", {})
         dependencies = full_mapping.get("dependencies", [])
 
@@ -92,9 +116,12 @@ class KGContextAnalystNode(BaseNode):
                 "concepts": [
                     {
                         "label": c["label"],
-                        "definition": c.get("definition", "")[:200],  # truncate to save tokens
+                        "definition": c.get("definition", "")[:200],
+                        **( {"confusion_pct": confusion_map[c["label"].lower()]["pct"],
+                             "confusion_count": confusion_map[c["label"].lower()]["count"]}
+                            if c["label"].lower() in confusion_map else {} ),
                     }
-                    for c in concepts[:5]  # cap at 5 concepts per module
+                    for c in concepts[:5]
                 ],
                 "prerequisite_gaps": [
                     {
@@ -107,12 +134,18 @@ class KGContextAnalystNode(BaseNode):
                 ],
             })
 
+        top_confused = sorted(
+            [{"concept": k, **v} for k, v in confusion_map.items() if v["pct"] > 30],
+            key=lambda x: x["pct"], reverse=True
+        )[:5]
+
         kg_context = {
             "available": True,
             "course_topic": full_mapping.get("topic", ""),
             "total_kg_concepts": full_mapping.get("total_concepts_matched", 0),
             "total_dependencies": len(dependencies),
             "flagged_with_concepts": flagged_with_concepts,
+            "top_confused_concepts": top_confused,
         }
 
         return {"kg_context": kg_context}
