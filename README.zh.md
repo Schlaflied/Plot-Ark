@@ -257,29 +257,6 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 └───────────────────────┘  └──────────┘  └──────────────┘  └──────────────┘
 ```
 
-**Agentic Loop 数据流**
-
-```
-学生在 KG 节点上点击"不理解"
-  ↓
-concept_annotations 表  +  xAPI statement（TinCan verb: flagged）同时写入
-  ↓
-教授触发 Analysis → Orchestrator 并行派出 4 个 Agent：
-  ├── BehaviorAnalyst    → 动词 / 模块参与度（纯 SQL）
-  ├── RiskDetector       → 阈值预警：orange ≥7，yellow ≥4（规则）
-  ├── ContentOptimizer   → 内容薄弱模块（纯 SQL）
-  └── CohortComparator   → 4 组学生交叉对比（纯 SQL）
-  ↓ 汇总 flagged modules
-KGContextAnalyst
-  → kg_mapper：模块 ↔ KG 概念 3 层匹配
-  → concept_annotations：每个概念的 confusion %
-  → 输出：flagged 模块 + 匹配 KG 概念 + 困惑证据
-  ↓
-CurriculumAgent（LLM：Sonnet 4.6）
-  → L1 目标更新 / L2 参考资料建议 / L3 作业预警
-  → 教授通过 HITL 抽屉审核 → 批准 / 忽略 / 重新运行
-```
-
 **完整项目流水线**
 
 <img src="docs/Full project pipeline.png" alt="Full Project Pipeline" width="800"/>

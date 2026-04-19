@@ -257,29 +257,6 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 └───────────────────────┘  └──────────┘  └──────────────┘  └──────────────┘
 ```
 
-**Agentic Loop Data Flow**
-
-```
-Student clicks "confused" on a KG concept
-  ↓
-concept_annotations table  +  xAPI statement (TinCan verb: flagged)
-  ↓
-Professor runs Analysis → Orchestrator dispatches 4 parallel agents:
-  ├── BehaviorAnalyst    → verb/module engagement (SQL)
-  ├── RiskDetector       → threshold flags: orange ≥7, yellow ≥4 (rules)
-  ├── ContentOptimizer   → underperforming modules (SQL)
-  └── CohortComparator   → 4 cohort groups cross-tab (SQL)
-  ↓ aggregated module flags
-KGContextAnalyst
-  → kg_mapper: module ↔ KG concept 3-layer match
-  → concept_annotations: confusion % per concept per course
-  → output: flagged modules + matched KG concepts + confusion evidence
-  ↓
-CurriculumAgent (LLM: Sonnet 4.6)
-  → L1 objective update / L2 reference suggestion / L3 assignment alert
-  → Professor reviews via HITL drawer → approve / dismiss / rerun
-```
-
 **Full Project Pipeline**
 
 <img src="docs/Full project pipeline.png" alt="Full Project Pipeline" width="800"/>
