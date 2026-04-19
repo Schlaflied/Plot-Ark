@@ -14,6 +14,24 @@ from services.lightrag_service import (
 graph_bp = Blueprint("graph", __name__)
 
 
+@graph_bp.route("/api/graph/courses", methods=["GET"])
+def list_graph_courses():
+    """Return [{id, course_code, topic}] for all curricula — used for subject→courseId lookup."""
+    from db import get_db
+    conn = get_db()
+    if not conn:
+        return jsonify([])
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, course_code, topic FROM curricula ORDER BY id")
+        rows = [{"id": r[0], "course_code": r[1] or "", "topic": r[2] or ""} for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify(rows)
+    except Exception as e:
+        return jsonify([])
+
+
 @graph_bp.route("/api/graph/kg-mapping/<int:course_id>", methods=["GET"])
 def get_kg_mapping(course_id):
     """Return KG concept ↔ module objective mapping and cross-module dependencies."""

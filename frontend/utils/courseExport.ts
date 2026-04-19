@@ -54,6 +54,7 @@ export interface CourseDetail {
   audience?: string;
   course_code: string;
   course_type: string;
+  semester?: string;
   modules: Module[];
   sources: Source[];
 }

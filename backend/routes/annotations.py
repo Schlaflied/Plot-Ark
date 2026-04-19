@@ -176,7 +176,7 @@ def get_annotations_global():
         cur = conn.cursor()
 
         cur.execute("SELECT COUNT(DISTINCT session_id) FROM concept_annotations WHERE role = 'student'")
-        total_students = cur.fetchone()[0] or 1
+        total_students = int(cur.fetchone()[0] or 1)
 
         cur.execute("""
             SELECT concept_id, concept_label, COUNT(DISTINCT session_id) as cnt
@@ -185,13 +185,14 @@ def get_annotations_global():
         """)
         confusion_counts = {}
         for row in cur.fetchall():
-            confusion_counts[row[0]] = {"count": row[1], "pct": round(row[1] / total_students * 100), "label": row[2] or row[0]}
+            concept_id, label, cnt = row[0], row[1], int(row[2])
+            confusion_counts[concept_id] = {"count": cnt, "pct": round(cnt / total_students * 100), "label": label or concept_id}
 
         cur.execute("""
             SELECT concept_id, COUNT(DISTINCT session_id) FROM concept_annotations
             WHERE role = 'student' AND annotation_type = 'important' GROUP BY concept_id
         """)
-        important_counts = {row[0]: row[1] for row in cur.fetchall()}
+        important_counts = {row[0]: int(row[1]) for row in cur.fetchall()}
 
         cur.execute("SELECT DISTINCT concept_id FROM concept_annotations WHERE role = 'professor' AND annotation_type = 'exam_focus'")
         exam_focus = [row[0] for row in cur.fetchall()]
@@ -201,4 +202,7 @@ def get_annotations_global():
         return jsonify({"confusion_counts": confusion_counts, "exam_focus": exam_focus, "important_counts": important_counts, "total_students": total_students})
 
     except Exception as e:
+        print(f"[annotations/global] error: {e}")
+        try: conn.close()
+        except Exception: pass
         return jsonify({"confusion_counts": {}, "exam_focus": [], "important_counts": {}, "total_students": 0})

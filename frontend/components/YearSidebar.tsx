@@ -6,11 +6,33 @@
 import React from 'react';
 import { DARK_BG, PANEL_BG, BORDER_COLOR, TEXT_MUTED, ACCENT } from '../constants/theme';
 
+const STUDENT_FILTERS = [
+  { key: 'mastered',        label: 'Mastered',        color: '#22c55e', bg: '#052e16' },
+  { key: 'learning',        label: 'Learning',        color: '#eab308', bg: '#1c1408' },
+  { key: 'struggling',      label: 'Struggling',      color: '#f97316', bg: '#1c0a00' },
+  { key: 'no_data',         label: 'No data',         color: '#9ca3af', bg: '#1c1917' },
+  { key: 'exam_focus',      label: 'Exam focus',      color: '#f59e0b', bg: '#1c1408' },
+  { key: 'confused',        label: 'Confused',        color: '#ef4444', bg: '#1c0000' },
+] as const;
+
+const PROFESSOR_FILTERS = [
+  { key: 'confused',        label: 'Confused',        color: '#ef4444', bg: '#1c0000' },
+  { key: 'high_confusion',  label: 'High confusion',  color: '#b91c1c', bg: '#2d0000' },
+  { key: 'exam_focus',      label: 'Exam focus',      color: '#f59e0b', bg: '#1c1408' },
+] as const;
+
+export type FilterKey =
+  typeof STUDENT_FILTERS[number]['key'] |
+  typeof PROFESSOR_FILTERS[number]['key'];
+
 export interface YearSidebarProps {
   selectedYear: number | null;
   onSelectYear: (year: number | null) => void;
   onSelectAll: () => void;
   undergraduateCourses: Record<number, { code: string; label: string; fullName: string }[]>;
+  activeFilters: Set<FilterKey>;
+  onToggleFilter: (key: FilterKey) => void;
+  role?: 'student' | 'professor';
 }
 
 const YearSidebar: React.FC<YearSidebarProps> = ({
@@ -18,12 +40,16 @@ const YearSidebar: React.FC<YearSidebarProps> = ({
   onSelectYear,
   onSelectAll,
   undergraduateCourses,
+  activeFilters,
+  onToggleFilter,
+  role = 'student',
 }) => {
+  const filterOptions = role === 'professor' ? PROFESSOR_FILTERS : STUDENT_FILTERS;
   return (
     <div
       className="flex flex-col p-3"
       style={{
-        width: '160px',
+        width: '170px',
         flexShrink: 0,
         background: PANEL_BG,
         borderRight: `1px solid ${BORDER_COLOR}`,
@@ -100,6 +126,67 @@ const YearSidebar: React.FC<YearSidebarProps> = ({
         onMouseLeave={e => { if (selectedYear !== null) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
       >
         All Courses
+      </div>
+
+      {/* Filter section */}
+      <div style={{ borderTop: `1px solid ${BORDER_COLOR}`, margin: '10px 0 6px' }} />
+      <div className="text-xs font-semibold tracking-widest uppercase mb-2" style={{ color: TEXT_MUTED }}>
+        Filter
+      </div>
+      <div className="flex flex-col gap-1">
+        {filterOptions.map(({ key, label, color, bg }) => {
+          const isActive = activeFilters.has(key);
+          return (
+            <button
+              key={key}
+              onClick={() => onToggleFilter(key)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '7px',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                border: `1px solid ${isActive ? color : 'transparent'}`,
+                background: isActive ? bg : 'transparent',
+                color: isActive ? color : TEXT_MUTED,
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.15s',
+                width: '100%',
+              }}
+            >
+              <span style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: key === 'exam_focus' ? 'transparent' : color,
+                border: key === 'exam_focus' ? `2px solid ${color}` : 'none',
+                flexShrink: 0,
+              }} />
+              {label}
+            </button>
+          );
+        })}
+        {activeFilters.size > 0 && (
+          <button
+            onClick={() => filterOptions.forEach(f => activeFilters.has(f.key) && onToggleFilter(f.key))}
+            style={{
+              marginTop: '4px',
+              padding: '3px 8px',
+              borderRadius: '6px',
+              border: `1px solid ${BORDER_COLOR}`,
+              background: 'transparent',
+              color: TEXT_MUTED,
+              fontSize: '0.7rem',
+              cursor: 'pointer',
+              width: '100%',
+            }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
     </div>
   );

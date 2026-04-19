@@ -163,15 +163,28 @@ const CoursePage: React.FC = () => {
       .finally(() => setKgLoading(false));
   }, [id]);
 
-  // Fetch concept mastery map
+  // Fetch Concept Mastery Mapping
   const [masteryMap, setMasteryMap] = useState<Record<string, string>>({});
-  useEffect(() => {
+  const fetchMastery = React.useCallback(async () => {
     if (!id) return;
-    fetch(`/api/mastery/${id}`)
-      .then(r => r.json())
-      .then(d => setMasteryMap(d.mastery || {}))
-      .catch(() => setMasteryMap({}));
-  }, [id]);
+    try {
+      const res = await fetch(`/api/mastery/${id}?semester=${encodeURIComponent(curriculum?.semester || '')}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.mastery) {
+          setMasteryMap(data.mastery);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching mastery data', e);
+    }
+  }, [id, curriculum?.semester]);
+
+  useEffect(() => {
+    fetchMastery();
+  }, [fetchMastery]);
+
+
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
@@ -503,6 +516,13 @@ const CoursePage: React.FC = () => {
                             body: JSON.stringify({ course_id: Number(id), module_index: currentModuleIndex, module_title: currentModule.title, sentiment, comment, student_id: 'anonymous' }),
                           });
                           setModuleFeedback(prev => ({ ...prev, [`${currentModuleIndex}-submitted`]: 'true' }));
+                          // Trigger mastery sync and then refresh mastery map
+                          await fetch(`/api/mastery/${id}/sync`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ semester: curriculum?.semester || '' })
+                          });
+                          await fetchMastery();
                         } catch (err) { console.error('Feedback submit error:', err); }
                       }}
                       disabled={!moduleFeedback[currentModuleIndex] || moduleFeedback[`${currentModuleIndex}-submitted`] === 'true'}

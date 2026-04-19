@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { X, HelpCircle, Star, BookOpen } from 'lucide-react';
+import { X, HelpCircle, Star, BookOpen, Users } from 'lucide-react';
 import { DARK_BG, PANEL_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_MUTED, ACCENT } from '../constants/theme';
 
 export interface AnnotationState {
@@ -24,11 +24,29 @@ export interface NodeDetailPanelProps {
   };
   onClose: () => void;
   role?: 'student' | 'professor';
+  moduleLabel?: string;
+  masteryLevel?: string;
   annotation?: AnnotationState;
   onAnnotate?: (type: 'confused' | 'important' | 'exam_focus') => void;
 }
 
-const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose, role, annotation, onAnnotate }) => {
+const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose, role, moduleLabel, masteryLevel, annotation, onAnnotate }) => {
+  const masteryColor = masteryLevel === 'mastered' ? '#22c55e'
+    : masteryLevel === 'learning' ? '#eab308'
+    : masteryLevel === 'struggling' ? '#f97316'
+    : '#9ca3af';
+  const masteryBg = masteryLevel === 'mastered' ? '#052e16'
+    : masteryLevel === 'learning' ? '#1c1408'
+    : masteryLevel === 'struggling' ? '#1c0a00'
+    : '#1c1917';
+  const masteryBorder = masteryLevel === 'mastered' ? 'rgba(34,197,94,0.3)'
+    : masteryLevel === 'learning' ? 'rgba(234,179,8,0.3)'
+    : masteryLevel === 'struggling' ? 'rgba(249,115,22,0.3)'
+    : BORDER_COLOR;
+  const masteryLabel = masteryLevel === 'mastered' ? 'Mastered'
+    : masteryLevel === 'learning' ? 'Learning'
+    : masteryLevel === 'struggling' ? 'Struggling'
+    : '';
   return (
     <div
       className="flex flex-col"
@@ -84,6 +102,23 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose, role, 
           <div className="text-sm" style={{ color: TEXT_PRIMARY }}>{node.degree ?? 0}</div>
         </div>
 
+        {moduleLabel && (
+          <div>
+            <div className="text-xs uppercase tracking-widest mb-1" style={{ color: TEXT_MUTED }}>Related module</div>
+            <div className="text-sm font-medium" style={{ color: TEXT_PRIMARY }}>{moduleLabel}</div>
+          </div>
+        )}
+
+        {masteryLevel && masteryLabel && (
+          <div className="rounded-lg px-3 py-2.5 flex items-center gap-2" style={{ background: masteryBg, border: `1px solid ${masteryBorder}` }}>
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: masteryColor, flexShrink: 0 }} />
+            <div>
+              <div className="text-xs font-semibold" style={{ color: masteryColor }}>Cohort: {masteryLabel}</div>
+              <div className="text-xs" style={{ color: TEXT_MUTED }}>Class average mastery for this concept</div>
+            </div>
+          </div>
+        )}
+
         {node.description && (
           <div>
             <div className="text-xs uppercase tracking-widest mb-1.5" style={{ color: TEXT_MUTED }}>Description</div>
@@ -126,6 +161,19 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose, role, 
                   <Star size={14} />
                   {annotation?.isImportant ? 'Marked as important' : 'This seems important'}
                 </button>
+
+                {/* Social signal — normalizes confusion, not a performance metric */}
+                {(annotation?.confusionPct ?? 0) > 0 && (
+                  <div className="rounded-lg px-3 py-2.5 flex flex-col gap-1" style={{ background: '#1c1408', border: '1px solid rgba(245,158,11,0.3)' }}>
+                    <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: '#fbbf24' }}>
+                      <Users size={12} />
+                      {annotation!.confusionPct}% of your classmates feel the same
+                    </div>
+                    <div className="text-xs" style={{ color: '#92400e' }}>
+                      You're not alone — this concept trips up a lot of people.
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -145,9 +193,18 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose, role, 
                   {annotation?.isExamFocus ? '★ Exam focus (marked)' : 'Mark as exam focus'}
                 </button>
 
-                {annotation?.confusionCount !== undefined && annotation.confusionCount > 0 && (
-                  <div className="text-xs rounded-lg px-3 py-2" style={{ background: '#450a0a', color: '#fca5a5', border: '1px solid #7f1d1d' }}>
-                    ⚠ {annotation.confusionCount} student{annotation.confusionCount > 1 ? 's' : ''} ({annotation.confusionPct}%) marked this as confusing
+                {(annotation?.confusionCount ?? 0) > 0 && (
+                  <div className="rounded-lg px-3 py-2.5 flex flex-col gap-2" style={{ background: '#450a0a', border: '1px solid #7f1d1d' }}>
+                    <div className="flex items-center justify-between text-xs" style={{ color: '#fca5a5' }}>
+                      <span className="flex items-center gap-1.5"><Users size={12} /> Class confusion</span>
+                      <span className="font-semibold">{annotation!.confusionPct}%</span>
+                    </div>
+                    <div className="rounded-full overflow-hidden" style={{ height: '4px', background: '#7f1d1d' }}>
+                      <div style={{ width: `${annotation!.confusionPct}%`, height: '100%', background: '#ef4444', borderRadius: '9999px' }} />
+                    </div>
+                    <div className="text-xs" style={{ color: '#f87171' }}>
+                      {annotation!.confusionCount} student{annotation!.confusionCount! > 1 ? 's' : ''} flagged this concept
+                    </div>
                   </div>
                 )}
               </div>

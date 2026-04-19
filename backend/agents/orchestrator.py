@@ -385,6 +385,19 @@ class OrchestratorNode(BaseNode):
             yield _sse_event("orchestrator", "threshold_error",
                 "⚠️ Threshold check failed — flags may be incomplete")
 
+        # ── Mastery Sync ───────────────────────────────────────────────────
+        try:
+            yield _sse_event("orchestrator", "mastery_running", "🔄 Syncing concept mastery tracking...")
+            from services.mastery_tracker import sync_concept_mastery
+            from services.kg_mapper import get_kg_mapping_for_course
+            kg_mapping = get_kg_mapping_for_course(course_id)
+            if kg_mapping and kg_mapping.get("module_concepts"):
+                sync_concept_mastery(course_id, kg_mapping, semester="")
+            yield _sse_event("orchestrator", "mastery_done", "✅ Concept mastery synced")
+        except Exception as e:
+            print(f"[Orchestrator] Mastery sync error: {e}")
+            yield _sse_event("orchestrator", "mastery_error", "⚠️ Mastery sync failed")
+
         # ── KG Context Analyst — enrich flags with KG data ─────────────────
         kg_context_data = {}
         try:

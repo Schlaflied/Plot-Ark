@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import type { NodeObject, LinkObject } from 'react-force-graph-2d';
 import { Network } from 'lucide-react';
-import YearSidebar from './YearSidebar';
+import YearSidebar, { type FilterKey } from './YearSidebar';
 import QueryPanel from './QueryPanel';
 import IngestPanel from './IngestPanel';
 import GraphToolbar from './GraphToolbar';
@@ -73,10 +73,65 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
   // myAnnotations: Set of "conceptId:type" this session has marked
   const [myAnnotations, setMyAnnotations] = useState<Set<string>>(new Set());
 
-  const fetchAnnotations = useCallback(() => {
-    const url = courseId ? `/api/kg/annotations/${courseId}` : '/api/kg/annotations/global';
-    fetch(url).then(r => r.json()).then(setAnnotationData).catch(() => {});
+  // ---- Subject → courseId lookup (for annotation fetching when courseId prop is absent) ----
+  const [subjectCourseMap, setSubjectCourseMap] = useState<Record<string, number>>({});
+  useEffect(() => {
+    fetch('/api/graph/courses')
+      .then(r => r.json())
+      .then((rows: { id: number; course_code: string; topic: string }[]) => {
+        const m: Record<string, number> = {};
+        rows.forEach(r => {
+          if (r.course_code) m[r.course_code.toLowerCase()] = r.id;
+          if (r.topic) m[r.topic.toLowerCase()] = r.id;
+        });
+        setSubjectCourseMap(m);
+      })
+      .catch(() => {});
+  }, []);
+
+  // ---- Module num map (for NodeDetailPanel "Related module" display) ----
+  // conceptId_lower → module number string e.g. "2"
+  const [moduleNumMap, setModuleNumMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!courseId) return;
+    fetch(`/api/graph/kg-mapping/${courseId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.status !== 'ok') return;
+        const moduleConceptsMap: Record<string, string[]> = data.module_concepts || {};
+        const numMap: Record<string, string> = {};
+        Object.entries(moduleConceptsMap).forEach(([modNum, concepts]) => {
+          (concepts as any[]).forEach((c: any) => {
+            const cid = typeof c === 'string' ? c : (c.id || c.label || '');
+            if (cid) numMap[cid.toLowerCase()] = modNum;
+          });
+        });
+        setModuleNumMap(numMap);
+      })
+      .catch(() => {});
   }, [courseId]);
+
+  // ---- Core graph state ----
+  const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(new Set());
+  const handleToggleFilter = useCallback((key: FilterKey) => {
+    setActiveFilters(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }, []);
+
+  const [activeSubject, setActiveSubject] = useState<SubjectKey>('all');
+  const effectiveCourseId = courseId ?? (
+    activeSubject && activeSubject !== 'all'
+      ? subjectCourseMap[activeSubject.toLowerCase()]
+      : undefined
+  );
+
+  const fetchAnnotations = useCallback(() => {
+    const url = effectiveCourseId ? `/api/kg/annotations/${effectiveCourseId}` : '/api/kg/annotations/global';
+    fetch(url).then(r => r.json()).then(setAnnotationData).catch(() => {});
+  }, [effectiveCourseId]);
 
   useEffect(() => { fetchAnnotations(); }, [fetchAnnotations]);
 
@@ -85,7 +140,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       const res = await fetch('/api/kg/annotate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ course_id: courseId, concept_id: conceptId, concept_label: conceptLabel, role, annotation_type: type, session_id: sessionId }),
+        body: JSON.stringify({ course_id: effectiveCourseId, concept_id: conceptId, concept_label: conceptLabel, role, annotation_type: type, session_id: sessionId }),
       });
       const data = await res.json();
       const key = `${conceptId}:${type}`;
@@ -96,35 +151,8 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       });
       fetchAnnotations();
     } catch { /* non-fatal */ }
-  }, [courseId, role, sessionId, fetchAnnotations]);
+  }, [effectiveCourseId, role, sessionId, fetchAnnotations]);
 
-  // ---- Module color map (curriculum coverage coloring) ----
-  // conceptId → hex color based on module number
-  const [moduleColorMap, setModuleColorMap] = useState<Record<string, string>>({});
-  useEffect(() => {
-    if (!courseId) return;
-    fetch(`/api/graph/kg-mapping/${courseId}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.status !== 'ok') return;
-        const palette = ['#818cf8','#60a5fa','#34d399','#a3e635','#fbbf24','#fb923c','#f87171','#c084fc','#38bdf8','#4ade80','#facc15','#f97316'];
-        const moduleConceptsMap: Record<string, string[]> = data.module_concepts || {};
-        const colorMap: Record<string, string> = {};
-        Object.entries(moduleConceptsMap).forEach(([modNum, concepts]) => {
-          const idx = Math.max(0, parseInt(modNum, 10) - 1);
-          const color = palette[idx % palette.length];
-          (concepts as any[]).forEach((c: any) => {
-            const cid = typeof c === 'string' ? c : (c.id || c.label || '');
-            if (cid) colorMap[cid.toLowerCase()] = color;
-          });
-        });
-        setModuleColorMap(colorMap);
-      })
-      .catch(() => {});
-  }, [courseId]);
-
-  // ---- Core graph state ----
-  const [activeSubject, setActiveSubject] = useState<SubjectKey>('all');
   const [selectedYear, setSelectedYear] = useState<number | null>(1);
   const [graphData, setGraphData] = useState<{ nodes: FGNodeObject[]; links: FGLinkObject[] } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -261,16 +289,32 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       const nodeLabel = (n.label || '').toLowerCase();
       const masteryLevel = masteryMap?.[nodeId] || masteryMap?.[nodeLabel] || '';
 
-      // Fill: curriculum coverage color > mastery color > gray
-      const coverageColor = moduleColorMap[nodeId.toLowerCase()] || moduleColorMap[nodeLabel];
+      // Filter fading: if any filter is active, fade nodes that don't match
+      const isFilterActive = activeFilters.size > 0;
+      const nodeConfusionInfo = annotationData.confusion_counts[nodeId] || annotationData.confusion_counts[nodeLabel];
+      const nodeIsExamFocus = annotationData.exam_focus.includes(nodeId);
+      const nodeMatchesFilter = !isFilterActive || (
+        (activeFilters.has('mastered')       && masteryLevel === 'mastered') ||
+        (activeFilters.has('learning')       && masteryLevel === 'learning') ||
+        (activeFilters.has('struggling')     && masteryLevel === 'struggling') ||
+        (activeFilters.has('no_data')        && !masteryLevel) ||
+        (activeFilters.has('exam_focus')     && nodeIsExamFocus) ||
+        (activeFilters.has('confused')       && (nodeConfusionInfo?.count ?? 0) > 0) ||
+        (activeFilters.has('high_confusion') && (nodeConfusionInfo?.pct ?? 0) > 50)
+      );
+      const isFilterFaded = isFilterActive && !nodeMatchesFilter;
+
+      // Fill: mastery color > gray
+      const effectiveFaded = isFaded || isFilterFaded;
       ctx.beginPath(); ctx.arc(nx, ny, r, 0, 2 * Math.PI);
-      ctx.fillStyle = isFaded
+      const masteryColor = masteryLevel ? masteryToColor(masteryLevel) : '';
+      ctx.fillStyle = effectiveFaded
         ? 'rgba(80,80,120,0.25)'
-        : coverageColor ?? (masteryLevel ? masteryToColor(masteryLevel) : '#9ca3af');
+        : (masteryColor || '#9ca3af');
       ctx.fill();
 
       // Border: layer color
-      if (!isFaded) {
+      if (!effectiveFaded) {
         const layerBorderColor = nodeLayer === 'warm' ? '#c084fc'
           : nodeLayer === 'hot' ? '#d97706'
           : '#60a5fa';
@@ -282,22 +326,27 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
 
       // Exam focus ring (gold) — visible to both roles
       const isExamFocus = annotationData.exam_focus.includes(nodeId);
-      if (isExamFocus && !isFaded) {
+      if (isExamFocus && !effectiveFaded) {
         ctx.beginPath(); ctx.arc(nx, ny, r + 3, 0, 2 * Math.PI);
         ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2 / globalScale; ctx.stroke();
       }
 
-      // Selection / search highlight ring
+      // Selection / search highlight ring — white for visibility on dark canvas
       if (isSelected || isHighlighted) {
         ctx.beginPath(); ctx.arc(nx, ny, r + (isExamFocus ? 6 : 3), 0, 2 * Math.PI);
-        ctx.strokeStyle = isSelected ? '#e879f9' : '#e879f9'; ctx.lineWidth = 2 / globalScale; ctx.stroke();
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 / globalScale; ctx.stroke();
       }
 
-      // Confusion badge — professor sees count, student sees own mark
-      const confusionInfo = annotationData.confusion_counts[nodeId];
+      // Confusion badge — professor sees count (top-right), student sees own-confused dot (top-right)
+      const confusionInfo = annotationData.confusion_counts[nodeId] || annotationData.confusion_counts[nodeLabel];
       const myConfused = myAnnotations.has(`${nodeId}:confused`);
-      const showBadge = !isFaded && (role === 'professor' ? (confusionInfo?.count ?? 0) > 0 : myConfused);
-      if (showBadge) {
+      const hasClassConfusion = (confusionInfo?.count ?? 0) > 0;
+      const showConfusionBadge = !effectiveFaded && (
+        role === 'professor'
+          ? hasClassConfusion
+          : myConfused || (activeFilters.has('confused') && hasClassConfusion)
+      );
+      if (showConfusionBadge) {
         const badgeR = Math.max(3, r * 0.45);
         const bx = nx + r * 0.75, by = ny - r * 0.75;
         ctx.beginPath(); ctx.arc(bx, by, badgeR, 0, 2 * Math.PI);
@@ -314,10 +363,10 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       if (globalScale > 0.8 || isHighlighted || isSelected) {
         const fontSize = Math.max(3, 10 / globalScale);
         ctx.font = `${fontSize}px Inter, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillStyle = isFaded ? 'rgba(148,163,184,0.3)' : TEXT_PRIMARY;
+        ctx.fillStyle = effectiveFaded ? 'rgba(148,163,184,0.3)' : TEXT_PRIMARY;
         ctx.fillText(label, nx, ny + r + fontSize * 0.9);
       }
-    }, [highlightedIds, searchQuery, selectedNode, masteryMap, moduleColorMap, annotationData, myAnnotations, role]
+    }, [highlightedIds, searchQuery, selectedNode, masteryMap, annotationData, myAnnotations, role, activeFilters]
   );
 
   const nodePointerAreaPaint = useCallback((node: FGNodeObject, color: string, ctx: CanvasRenderingContext2D) => {
@@ -340,34 +389,24 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       className={isFullscreen ? undefined : 'w-full flex flex-col gap-4'}
       style={isFullscreen ? { position: 'fixed', inset: 0, zIndex: 50, background: DARK_BG, display: 'flex', flexDirection: 'column', overflow: 'hidden', gap: '1rem', padding: '1rem' } : undefined}
     >
-      {/* How to use */}
-      <div className="rounded-xl px-5 py-4 text-sm grid grid-cols-2 gap-x-8 gap-y-2" style={{ background: PANEL_BG, border: `1px solid ${BORDER_COLOR}`, color: TEXT_MUTED }}>
+      {/* How to use + layer legend */}
+      <div className="rounded-xl px-5 py-3 text-sm grid grid-cols-2 gap-x-8 gap-y-1.5" style={{ background: PANEL_BG, border: `1px solid ${BORDER_COLOR}`, color: TEXT_MUTED }}>
         <div><span style={{ color: TEXT_PRIMARY, fontWeight: 600 }}>🔍 Search</span> — type a concept name to highlight matching nodes</div>
         <div><span style={{ color: TEXT_PRIMARY, fontWeight: 600 }}>🖱 Click a node</span> — see its full definition in the side panel</div>
         <div><span style={{ color: TEXT_PRIMARY, fontWeight: 600 }}>🔎 Zoom / pan</span> — scroll wheel to zoom, drag to move around</div>
         <div><span style={{ color: TEXT_PRIMARY, fontWeight: 600 }}>💬 Ask a question</span> — type below the graph to query the knowledge base</div>
-        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1.5rem', alignItems: 'center', marginTop: '2px', paddingTop: '6px', borderTop: `1px solid ${BORDER_COLOR}` }}>
+        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1.5rem', alignItems: 'center', paddingTop: '6px', borderTop: `1px solid ${BORDER_COLOR}` }}>
           <span style={{ color: TEXT_PRIMARY, fontWeight: 600, fontSize: '0.8rem' }}>Layer (border):</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'transparent', border: '2px solid #d97706' }} /> Core</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'transparent', border: '2px solid #c084fc' }} /> Supplementary</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'transparent', border: '2px solid #60a5fa' }} /> Student Notes</span>
-        </div>
-        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1.5rem', alignItems: 'center', marginTop: '2px', paddingTop: '6px', borderTop: `1px solid ${BORDER_COLOR}` }}>
-          <span style={{ color: TEXT_PRIMARY, fontWeight: 600, fontSize: '0.8rem' }}>Fill:</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#818cf8' }} /> M1</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#34d399' }} /> M3</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#fbbf24' }} /> M5</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#f87171' }} /> M7+</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#9ca3af' }} /> Unmapped</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #f59e0b', background: 'transparent' }} /> Exam focus</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#ef4444' }} /> Confused</span>
         </div>
       </div>
 
       {/* Main horizontal layout */}
       <div className="flex flex-row" style={{ gap: 0, alignItems: 'stretch', ...(isFullscreen ? { flex: '1 1 0', minHeight: 0 } : {}) }}>
 
-      <YearSidebar selectedYear={selectedYear} onSelectYear={year => setSelectedYear(prev => prev === year ? null : year)} onSelectAll={() => { setSelectedYear(null); setActiveSubject('all'); }} undergraduateCourses={undergraduateCourses} />
+      <YearSidebar selectedYear={selectedYear} onSelectYear={year => setSelectedYear(prev => prev === year ? null : year)} onSelectAll={() => { setSelectedYear(null); setActiveSubject('all'); }} undergraduateCourses={undergraduateCourses} activeFilters={activeFilters} onToggleFilter={handleToggleFilter} role={role} />
 
       {/* Middle: graph viewer */}
       <div className="flex flex-col overflow-hidden" style={{ flex: '1 1 0', minWidth: 0, background: DARK_BG, border: `1px solid ${BORDER_COLOR}`, borderLeft: 'none', borderRadius: '0 0.75rem 0.75rem 0' }}>
@@ -421,21 +460,29 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
           )}
         </div>
 
-        {selectedFGNode && (
-          <NodeDetailPanel
-            node={selectedFGNode}
-            onClose={() => setSelectedNode(null)}
-            role={role}
-            annotation={{
-              isConfused: myAnnotations.has(`${String(selectedFGNode.id)}:confused`),
-              isImportant: myAnnotations.has(`${String(selectedFGNode.id)}:important`),
-              isExamFocus: annotationData.exam_focus.includes(String(selectedFGNode.id)),
-              confusionCount: annotationData.confusion_counts[String(selectedFGNode.id)]?.count,
-              confusionPct: annotationData.confusion_counts[String(selectedFGNode.id)]?.pct,
-            }}
-            onAnnotate={(type) => handleAnnotate(String(selectedFGNode.id), selectedFGNode.label ?? '', type)}
-          />
-        )}
+        {selectedFGNode && (() => {
+          const selId = String(selectedFGNode.id);
+          const selLabel = (selectedFGNode.label ?? '').toLowerCase();
+          const selMasteryLevel = masteryMap?.[selId] || masteryMap?.[selLabel] || '';
+          const selModuleNum = moduleNumMap[selId.toLowerCase()] || moduleNumMap[selLabel];
+          return (
+            <NodeDetailPanel
+              node={selectedFGNode}
+              onClose={() => setSelectedNode(null)}
+              role={role}
+              moduleLabel={selModuleNum ? `Module ${selModuleNum}` : undefined}
+              masteryLevel={selMasteryLevel || undefined}
+              annotation={{
+                isConfused: myAnnotations.has(`${selId}:confused`),
+                isImportant: myAnnotations.has(`${selId}:important`),
+                isExamFocus: annotationData.exam_focus.includes(selId),
+                confusionCount: annotationData.confusion_counts[selId]?.count,
+                confusionPct: annotationData.confusion_counts[selId]?.pct,
+              }}
+              onAnnotate={(type) => handleAnnotate(selId, selectedFGNode.label ?? '', type)}
+            />
+          );
+        })()}
       </div>
 
       {/* Hover tooltip */}
