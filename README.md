@@ -206,6 +206,7 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 │       │            │            │              │              │           │
 │  components/ui/  components/generate/    components/analytics/           │
 │  (Select, Input)   (SyllabusUpload)   (TrendChart, ReportSections, ...)  │
+│                             GraphViewer (3D KG + annotation overlay)     │
 │                                              SSE streaming               │
 └───────┼────────────┼────────────┼──────────────┼──────────────┼──────────┘
         │            │            │              │              │
@@ -216,13 +217,15 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 │  ├── extensions.py (Global instances)    ├── async_loop.py (Event loop)    │
 │  ├─────────────────────────────────────────────────────────────────────┐   │
 │  │  routes/                                                            │   │
-│  │  ├── curriculum.py           generate / skeleton / expand / save     │   │
-│  │  ├── curriculum_agent_routes flags / suggestions / apply / redo      │   │
+│  │  ├── curriculum.py           generate / skeleton / expand / save    │   │
+│  │  ├── curriculum_agent_routes flags / suggestions / apply / redo     │   │
 │  │  ├── history.py              CRUD + favorite + DOCX export          │   │
 │  │  ├── analytics.py            A2A SSE + history API + export         │   │
 │  │  ├── xapi.py                 xAPI statements + mock data seed       │   │
 │  │  ├── feedback.py             Student sentiment + comments           │   │
-│  │  ├── graph.py                KG data + RAG query + KG↔Module map    │   │
+│  │  ├── graph.py                KG data + RAG query + /courses lookup  │   │
+│  │  ├── annotations.py          KG concept annotations (confused /     │   │
+│  │  │                           important / exam_focus) + aggregation  │   │
 │  │  ├── sources.py              Tavily source preview                  │   │
 │  │  ├── syllabus.py             PDF/DOCX parse + import                │   │
 │  │  └── materials.py            LightRAG ingest                        │   │
@@ -235,23 +238,47 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 │  │  ├── risk_detector.py       │  │  ├── xapi_generator.py (⚡ aware)  │   │
 │  │  ├── content_optimizer.py   │  │  ├── report_exporter.py (facade)   │   │
 │  │  ├── cohort_comparator.py   │  │  ├── chart_generator.py (+history) │   │
-│  │  └── curriculum_agent.py    │  │  ├── ltm_writer.py (Cold layer)    │   │
-│  │       SharedMemory          │  │  ├── threshold_checker.py           │   │
-│  └──────────┬──────────────────┘  │  ├── kg_mapper.py (KG↔Module)       │   │
-│             │                     │  └── export_{pdf,docx,excel}.py    │   │
+│  │  ├── kg_context_analyst.py  │  │  ├── ltm_writer.py (Cold layer)    │   │
+│  │  └── curriculum_agent.py    │  │  ├── threshold_checker.py          │   │
+│  │       SharedMemory (Redis)  │  │  ├── kg_mapper.py (3-layer match)  │   │
+│  └──────────┬──────────────────┘  │  └── export_{pdf,docx,excel}.py   │   │
 │             │                     └─────────────┬──────────────────────┘   │
 └─────────────┼───────────────────────────────────┼──────────────────────────┘
               │                                   │
               ▼                                   ▼
-┌───────────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  PostgreSQL       │  │    Redis     │  │   LightRAG   │  │  data/ltm/   │
-│  (curricula       │  │  (🔴 Hot:    │  │   (KG data)  │  │  (🔵 Cold:   │
-│  + xapi           │  │   pipeline   │  │              │  │   .md YAML   │
-│  + 🟡 Warm:       │  │   runtime)   │  │              │  │   snapshots) │
-│  snapshots)       │  │              │  │              │  │              │
-└───────────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
+┌───────────────────────┐  ┌──────────┐  ┌──────────────┐  ┌──────────────┐
+│  PostgreSQL            │  │  Redis   │  │   LightRAG   │  │  data/ltm/   │
+│  ├── curricula         │  │ (🔴 Hot: │  │  GraphML KG  │  │  (🔵 Cold:   │
+│  ├── xapi_statements   │  │  pipeline│  │  (Hot Layer) │  │   .md YAML   │
+│  ├── concept_          │  │  runtime)│  │              │  │   snapshots) │
+│  │   annotations       │  │          │  │              │  │              │
+│  └── 🟡 Warm:          │  │          │  │              │  │              │
+│      snapshots/mastery │  │          │  │              │  │              │
+└───────────────────────┘  └──────────┘  └──────────────┘  └──────────────┘
 ```
 
+**Agentic Loop Data Flow**
+
+```
+Student clicks "confused" on a KG concept
+  ↓
+concept_annotations table  +  xAPI statement (TinCan verb: flagged)
+  ↓
+Professor runs Analysis → Orchestrator dispatches 4 parallel agents:
+  ├── BehaviorAnalyst    → verb/module engagement (SQL)
+  ├── RiskDetector       → threshold flags: orange ≥7, yellow ≥4 (rules)
+  ├── ContentOptimizer   → underperforming modules (SQL)
+  └── CohortComparator   → 4 cohort groups cross-tab (SQL)
+  ↓ aggregated module flags
+KGContextAnalyst
+  → kg_mapper: module ↔ KG concept 3-layer match
+  → concept_annotations: confusion % per concept per course
+  → output: flagged modules + matched KG concepts + confusion evidence
+  ↓
+CurriculumAgent (LLM: Sonnet 4.6)
+  → L1 objective update / L2 reference suggestion / L3 assignment alert
+  → Professor reviews via HITL drawer → approve / dismiss / rerun
+```
 
 **Full Project Pipeline**
 

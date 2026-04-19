@@ -206,7 +206,8 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 │       │            │            │              │              │           │
 │  components/ui/  components/generate/    components/analytics/           │
 │  (Select, Input)   (SyllabusUpload)   (TrendChart, ReportSections, ...)  │
-│                                              SSE 流式传输               │
+│                         GraphViewer（3D 知识图谱 + 标注叠层）             │
+│                                              SSE 流式传输                │
 └───────┼────────────┼────────────┼──────────────┼──────────────┼──────────┘
         │            │            │              │              │
         ▼            ▼            ▼              ▼              ▼
@@ -216,16 +217,18 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 │  ├── extensions.py (单例：AI、Redis 等)  ├── async_loop.py (后台异步循环)  │
 │  ├─────────────────────────────────────────────────────────────────────┐   │
 │  │  routes/                                                            │   │
-│  │  ├── curriculum.py           生成 / 验架 / 展开 / 保存                 │   │
+│  │  ├── curriculum.py           生成 / 验架 / 展开 / 保存              │   │
 │  │  ├── curriculum_agent_routes 标记 / 建议 / 应用 / 撤销 / 变更      │   │
-│  │  ├── history.py              CRUD + 收藏 + DOCX 导出                 │   │
-│  │  ├── analytics.py            A2A SSE 分析 + PDF/DOCX/Excel 导出     │   │
-│  │  ├── xapi.py                 xAPI 语句 + Mock 数据种子              │   │
-│  │  ├── feedback.py             学生情绪反馈 + 评论收集                │   │
-│  │  ├── graph.py                知识图谱 + RAG 查询 + KG↔Module 映射     │   │
-│  │  ├── sources.py              Tavily 源预览                           │   │
-│  │  ├── syllabus.py             PDF/DOCX 解析 + 导入                    │   │
-│  │  └── materials.py            LightRAG 材料摄入                      │   │
+│  │  ├── history.py              CRUD + 收藏 + DOCX 导出                │   │
+│  │  ├── analytics.py            A2A SSE 分析 + PDF/DOCX/Excel 导出    │   │
+│  │  ├── xapi.py                 xAPI 语句 + Mock 数据种子             │   │
+│  │  ├── feedback.py             学生情绪反馈 + 评论收集               │   │
+│  │  ├── graph.py                知识图谱 + RAG 查询 + /courses 查询   │   │
+│  │  ├── annotations.py          KG 概念标注（confused / important /   │   │
+│  │  │                           exam_focus）+ 匿名聚合                │   │
+│  │  ├── sources.py              Tavily 源预览                          │   │
+│  │  ├── syllabus.py             PDF/DOCX 解析 + 导入                   │   │
+│  │  └── materials.py            LightRAG 材料摄入                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │  ┌─────────────────────────────┐  ┌────────────────────────────────────┐   │
 │  │  agents/ (Hive 风格 A2A)    │  │  services/                         │   │
@@ -235,23 +238,47 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 │  │  ├── risk_detector.py       │  │  ├── xapi_generator.py (⚡ aware)  │   │
 │  │  ├── content_optimizer.py   │  │  ├── report_exporter.py (facade)   │   │
 │  │  ├── cohort_comparator.py   │  │  ├── chart_generator.py (+history) │   │
-│  │  └── curriculum_agent.py    │  │  ├── ltm_writer.py (Cold layer)    │   │
-│  │       SharedMemory          │  │  ├── threshold_checker.py           │   │
-│  └──────────┬──────────────────┘  │  ├── kg_mapper.py (KG↔Module)       │   │
-│             │                     │  └── export_{pdf,docx,excel}.py    │   │
+│  │  ├── kg_context_analyst.py  │  │  ├── ltm_writer.py (Cold layer)    │   │
+│  │  └── curriculum_agent.py    │  │  ├── threshold_checker.py          │   │
+│  │       SharedMemory (Redis)  │  │  ├── kg_mapper.py（3 层匹配）      │   │
+│  └──────────┬──────────────────┘  │  └── export_{pdf,docx,excel}.py   │   │
 │             │                     └─────────────┬──────────────────────┘   │
 └─────────────┼───────────────────────────────────┼──────────────────────────┘
               │                                   │
               ▼                                   ▼
-┌───────────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  PostgreSQL       │  │    Redis     │  │   LightRAG   │  │  data/ltm/   │
-│  (curricula       │  │  (🔴 Hot:    │  │   (KG data)  │  │  (🔵 Cold:   │
-│  + xapi           │  │   pipeline   │  │              │  │   .md YAML   │
-│  + 🟡 Warm:       │  │   runtime)   │  │              │  │   snapshots) │
-│  snapshots)       │  │              │  │              │  │              │
-└───────────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
+┌───────────────────────┐  ┌──────────┐  ┌──────────────┐  ┌──────────────┐
+│  PostgreSQL            │  │  Redis   │  │   LightRAG   │  │  data/ltm/   │
+│  ├── curricula         │  │ (🔴 Hot: │  │  GraphML KG  │  │  (🔵 Cold:   │
+│  ├── xapi_statements   │  │  流水线  │  │  （Hot 层）  │  │   .md YAML   │
+│  ├── concept_          │  │  运行时) │  │              │  │   归档快照)  │
+│  │   annotations       │  │          │  │              │  │              │
+│  └── 🟡 Warm:          │  │          │  │              │  │              │
+│      快照 / mastery    │  │          │  │              │  │              │
+└───────────────────────┘  └──────────┘  └──────────────┘  └──────────────┘
 ```
 
+**Agentic Loop 数据流**
+
+```
+学生在 KG 节点上点击"不理解"
+  ↓
+concept_annotations 表  +  xAPI statement（TinCan verb: flagged）同时写入
+  ↓
+教授触发 Analysis → Orchestrator 并行派出 4 个 Agent：
+  ├── BehaviorAnalyst    → 动词 / 模块参与度（纯 SQL）
+  ├── RiskDetector       → 阈值预警：orange ≥7，yellow ≥4（规则）
+  ├── ContentOptimizer   → 内容薄弱模块（纯 SQL）
+  └── CohortComparator   → 4 组学生交叉对比（纯 SQL）
+  ↓ 汇总 flagged modules
+KGContextAnalyst
+  → kg_mapper：模块 ↔ KG 概念 3 层匹配
+  → concept_annotations：每个概念的 confusion %
+  → 输出：flagged 模块 + 匹配 KG 概念 + 困惑证据
+  ↓
+CurriculumAgent（LLM：Sonnet 4.6）
+  → L1 目标更新 / L2 参考资料建议 / L3 作业预警
+  → 教授通过 HITL 抽屉审核 → 批准 / 忽略 / 重新运行
+```
 
 **完整项目流水线**
 
