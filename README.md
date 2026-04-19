@@ -348,7 +348,8 @@ plot-ark/
 │   │   ├── curriculum_agent_routes.py   ← /api/curriculum/ flags, suggestions, apply, redo, references/search, references/apply, auto-analyze
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
 │   │   ├── sources.py                   ← Tavily source preview
-│   │   ├── graph.py                     ← KG data + RAG query + /api/graph/kg-mapping
+│   │   ├── graph.py                     ← KG data + RAG query + /api/graph/kg-mapping + /api/graph/courses
+│   │   ├── annotations.py               ← /api/kg/annotate + /api/kg/annotations/{course_id} (confusion · important · exam_focus)
 │   │   ├── mastery.py                   ← /api/mastery/* concept mastery map + sync trigger
 │   │   ├── xapi.py                      ← xAPI statements + seed generator
 │   │   ├── analytics.py                 ← A2A SSE analysis + export endpoints
@@ -362,6 +363,7 @@ plot-ark/
 │   │   ├── risk_detector.py             ← Multi-signal at-risk scoring
 │   │   ├── content_optimizer.py         ← Module performance cross-analysis
 │   │   ├── cohort_comparator.py         ← Student cohort grouping
+│   │   ├── kg_context_analyst.py        ← KG↔Module bridge: injects concept + confusion data into CurriculumAgent
 │   │   └── curriculum_agent.py          ← AI-driven curriculum optimization agent
 │   ├── services/
 │   │   ├── research.py                  ← Tavily search + credibility scoring
@@ -445,9 +447,11 @@ plot-ark/
 - [x] KG ↔ Curriculum concept mapping — 3-layer matching (word-boundary + abbreviation + reverse lookup)
 - [x] Knowledge Map tab — per-module KG concepts with definitions + cross-module dependencies
 - [x] Concept mastery tracking — xAPI verb + feedback → `cohort_concept_mastery`; auto-sync after every analysis run
-- [x] GraphViewer mastery overlay (student) — fill = mastery level, border = knowledge layer; unified gray for untracked concepts
-- [ ] KG → Agentic Loop — inject KG context into CurriculumAgent suggestions
-- [ ] GraphViewer professor view — cohort aggregate mastery (% students mastered per concept)
+- [x] GraphViewer mastery overlay — fill = mastery level, border = knowledge layer; unified gray for untracked concepts
+- [x] KG bidirectional annotation — students mark confused/important; professors mark exam focus; anonymous aggregation feeds confusion heatmap
+- [x] KG → Agentic Loop — `KGContextAnalystNode` injects per-concept confusion % + top confused concepts into CurriculumAgent context
+- [x] GraphViewer role-split — student view (mastery filters + confusion social signal) vs professor view (high confusion heatmap + exam focus)
+- [x] xAPI ↔ KG bridge — KG annotation events mirror to xAPI statements (verb: flagged / noted); full signal unification
 - [ ] PPT ↔ Module auto-mapping — filename regex + slide title + manual fallback
 - [ ] Assignment Timeline + Due Date calculator
 - [ ] A2A Phase 2 — LLM integration for BehaviorAnalyst, RiskDetector, ContentOptimizer, CohortComparator

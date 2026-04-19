@@ -350,7 +350,8 @@ plot-ark/
 │   │   ├── curriculum_agent_routes.py   ← /api/curriculum/ 标记、建议、应用、撤销、references/search、references/apply、auto-analyze
 │   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
 │   │   ├── sources.py                   ← Tavily 源预览
-│   │   ├── graph.py                     ← 知识图谱 + RAG 查询 + /api/graph/kg-mapping
+│   │   ├── graph.py                     ← 知识图谱 + RAG 查询 + /api/graph/kg-mapping + /api/graph/courses
+│   │   ├── annotations.py               ← /api/kg/annotate + /api/kg/annotations/{course_id}（困惑·重要·考试重点）
 │   │   ├── mastery.py                   ← /api/mastery/* 概念掌握度图 + 同步触发
 │   │   ├── xapi.py                      ← xAPI 语句 + 种子生成器
 │   │   ├── analytics.py                 ← A2A SSE 分析 + 导出接口
@@ -364,6 +365,7 @@ plot-ark/
 │   │   ├── risk_detector.py             ← 多信号风险评分
 │   │   ├── content_optimizer.py         ← 模块表现交叉分析
 │   │   ├── cohort_comparator.py         ← 学生群组对比
+│   │   ├── kg_context_analyst.py        ← KG↔Module 桥接：将概念 + 困惑度数据注入 CurriculumAgent
 │   │   └── curriculum_agent.py          ← AI 驱动的课程优化 Agent
 │   ├── services/
 │   │   ├── research.py                  ← Tavily 搜索 + 可信度评分
@@ -447,9 +449,11 @@ plot-ark/
 - [x] KG ↔ Curriculum 概念映射 — 三层匹配引擎（词边界正则 + 缩写剥离 + 反向查找）
 - [x] Knowledge Map 标签页 — 每模块显示 KG 概念定义 + 跨模块依赖关系
 - [x] 概念掌握度追踪 — xAPI 动词 + 学生反馈 → `cohort_concept_mastery`；每次分析后自动同步
-- [x] GraphViewer 掌握度叠加层（学生端）— 填充色=掌握度，描边色=知识层级；无数据概念统一灰色
-- [ ] KG → Agentic Loop — 将 KG 上下文注入 CurriculumAgent 建议
-- [ ] GraphViewer 教授端视图 — 群组聚合掌握度（每个概念有多少学生掌握）
+- [x] GraphViewer 掌握度叠加层 — 填充色=掌握度，描边色=知识层级；无数据概念统一灰色
+- [x] KG 双向标注 — 学生标记困惑/重要；教授标记考试重点；匿名聚合生成困惑热力图
+- [x] KG → Agentic Loop — `KGContextAnalystNode` 将逐概念困惑度% + 最困惑概念列表注入 CurriculumAgent 上下文
+- [x] GraphViewer 角色分流 — 学生端（掌握度过滤 + 困惑社交信号）vs 教授端（高困惑热力图 + 考试重点）
+- [x] xAPI ↔ KG 信号桥接 — KG 标注事件同步写入 xAPI statement（动词：flagged / noted）；信号完全统一
 - [ ] 作业时间轴 + 截止日期计算器
 - [ ] A2A Phase 2 — 为四个专业 Agent 集成 LLM 分析能力
 - [ ] 渐进式摘要 — 学期级 LTM 摘要用于 LLM 上下文管理
