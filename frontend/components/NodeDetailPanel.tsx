@@ -189,9 +189,9 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose, role, 
                     onClick={() => onAnnotate('exam_focus')}
                     className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg transition-colors"
                     style={{
-                      background: annotation?.isExamFocus ? '#1c1410' : DARK_BG,
-                      color: annotation?.isExamFocus ? '#fbbf24' : TEXT_MUTED,
-                      border: `1px solid ${annotation?.isExamFocus ? '#f59e0b' : BORDER_COLOR}`,
+                      background: annotation?.isExamFocus ? '#2d0a0b' : DARK_BG,
+                      color: annotation?.isExamFocus ? '#fca5a5' : TEXT_MUTED,
+                      border: `1px solid ${annotation?.isExamFocus ? '#F4737A' : BORDER_COLOR}`,
                       cursor: 'pointer',
                     }}
                   >

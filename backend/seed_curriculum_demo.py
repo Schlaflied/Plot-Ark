@@ -7,6 +7,7 @@ Run:  python seed_curriculum_demo.py
 """
 
 import json
+import os
 import random
 from db import get_db
 
@@ -166,10 +167,121 @@ def seed():
 
         print()
 
+    print("\nSeeding cohort concept mastery...")
+    seed_cohort_mastery(cur, all_courses)
+
     conn.commit()
     cur.close()
     conn.close()
     print("✅ Demo data seeded for ALL courses!")
+
+
+def seed_cohort_mastery(cur, all_courses):
+    """Seed cohort_concept_mastery with mixed mastery distribution.
+
+    Tries to read real KG node IDs/labels from graphml files so GraphViewer
+    node coloring works. Falls back to module-derived concept labels if no
+    graphml files exist.
+    """
+    try:
+        import networkx as nx
+        HAS_NX = True
+    except ImportError:
+        HAS_NX = False
+
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.normpath(os.path.join(backend_dir, "..", "data"))
+
+    GRAPHML_PATHS = {
+        "business-law":             os.path.join(data_dir, "lightrag_storage",                          "graph_chunk_entity_relation.graphml"),
+        "call":                     os.path.join(data_dir, "lightrag_storage_call",                     "graph_chunk_entity_relation.graphml"),
+        "organizational-behavior":  os.path.join(data_dir, "lightrag_storage_organizational-behavior",  "graph_chunk_entity_relation.graphml"),
+    }
+
+    SUBJECT_KEYWORDS = {
+        "business-law":            ["business law", "law", "legal", "contract"],
+        "call":                    ["call", "canadian", "administrative"],
+        "organizational-behavior": ["organizational", "ob", "behavior", "behaviour", "management"],
+    }
+
+    # ~30% mastered, ~35% learning, ~20% struggling, ~15% not_started
+    MASTERY_POOL = (["mastered"] * 30 + ["learning"] * 35
+                    + ["struggling"] * 20 + ["not_started"] * 15)
+    SEMESTER = "Fall 2025"
+
+    cur.execute("DELETE FROM cohort_concept_mastery")
+
+    for course_id, info in all_courses.items():
+        topic_lower = info["topic"].lower()
+        modules = info["modules"]
+
+        matched_subject = next(
+            (s for s, kws in SUBJECT_KEYWORDS.items() if any(k in topic_lower for k in kws)),
+            None,
+        )
+
+        kg_nodes = []
+        if matched_subject and HAS_NX:
+            gpath = GRAPHML_PATHS.get(matched_subject, "")
+            if gpath and os.path.exists(gpath):
+                try:
+                    G = nx.read_graphml(gpath)
+                    for node_id, attrs in G.nodes(data=True):
+                        if attrs.get("entity_type", "") in ("person", "PERSON"):
+                            continue
+                        label = attrs.get("label", str(node_id))
+                        kg_nodes.append({"id": str(node_id), "label": label})
+                except Exception as e:
+                    print(f"  [MASTERY] graphml read error ({matched_subject}): {e}")
+
+        if kg_nodes:
+            sample = random.sample(kg_nodes, min(60, len(kg_nodes)))
+            for i, node in enumerate(sample):
+                mod_id, _ = modules[i % len(modules)]
+                mastery = random.choice(MASTERY_POOL)
+                total = random.randint(20, 35)
+                if mastery == "mastered":
+                    passed = int(total * random.uniform(0.70, 0.90))
+                    struggled = random.randint(0, 3)
+                elif mastery == "learning":
+                    passed = int(total * random.uniform(0.40, 0.60))
+                    struggled = random.randint(2, 6)
+                elif mastery == "struggling":
+                    passed = int(total * random.uniform(0.10, 0.30))
+                    struggled = int(total * random.uniform(0.30, 0.50))
+                else:
+                    passed, struggled = 0, 0
+                failed = max(0, total - passed - struggled)
+                cur.execute("""
+                    INSERT INTO cohort_concept_mastery
+                        (course_id, semester, module_id, concept_id, concept_label,
+                         mastery_level, completed_count, passed_count, failed_count, struggled_count)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (course_id, SEMESTER, mod_id, node["id"], node["label"],
+                      mastery, total, passed, failed, struggled))
+            print(f"  [MASTERY] Course {course_id} ({info['topic']}): {len(sample)} KG nodes seeded")
+        else:
+            # Fallback: concept labels derived from module titles
+            for mod_id, mod_title in modules:
+                base = next((w for w in mod_title.split() if len(w) > 3), mod_title[:8])
+                fallback_concepts = [
+                    (f"{mod_id}_c1", f"{base} Principles"),
+                    (f"{mod_id}_c2", f"{base} Application"),
+                    (f"{mod_id}_c3", f"{base} Analysis"),
+                    (f"{mod_id}_c4", f"{base} Case Study"),
+                    (f"{mod_id}_c5", f"{base} Theory"),
+                ]
+                for concept_id, concept_label in fallback_concepts:
+                    mastery = random.choice(MASTERY_POOL)
+                    total = random.randint(18, 30)
+                    cur.execute("""
+                        INSERT INTO cohort_concept_mastery
+                            (course_id, semester, module_id, concept_id, concept_label,
+                             mastery_level, completed_count, passed_count, failed_count, struggled_count)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (course_id, SEMESTER, mod_id, concept_id, concept_label,
+                          mastery, total, int(total * 0.6), int(total * 0.2), int(total * 0.2)))
+            print(f"  [MASTERY] Course {course_id} ({info['topic']}): fallback module concepts seeded")
 
 
 if __name__ == "__main__":

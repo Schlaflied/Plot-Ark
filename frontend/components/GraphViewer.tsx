@@ -360,7 +360,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       const isExamFocus = annotationData.exam_focus.includes(nodeId);
       if (isExamFocus && !effectiveFaded) {
         ctx.beginPath(); ctx.arc(nx, ny, r + 3, 0, 2 * Math.PI);
-        ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2 / globalScale; ctx.stroke();
+        ctx.strokeStyle = '#F4737A'; ctx.lineWidth = 2 / globalScale; ctx.stroke();
       }
 
       // Selection / search highlight ring — white for visibility on dark canvas

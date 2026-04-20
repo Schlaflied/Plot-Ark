@@ -11,14 +11,14 @@ const STUDENT_FILTERS = [
   { key: 'learning',        label: 'Learning',        color: '#eab308', bg: '#1c1408' },
   { key: 'struggling',      label: 'Struggling',      color: '#f97316', bg: '#1c0a00' },
   { key: 'no_data',         label: 'No data',         color: '#9ca3af', bg: '#1c1917' },
-  { key: 'exam_focus',      label: 'Exam focus',      color: '#f59e0b', bg: '#1c1408' },
+  { key: 'exam_focus',      label: 'Exam focus',      color: '#F4737A', bg: '#2d0a0b' },
   { key: 'confused',        label: 'Confused',        color: '#ef4444', bg: '#1c0000' },
 ] as const;
 
 const PROFESSOR_FILTERS = [
   { key: 'confused',        label: 'Confused',        color: '#ef4444', bg: '#1c0000' },
   { key: 'high_confusion',  label: 'High confusion',  color: '#b91c1c', bg: '#2d0000' },
-  { key: 'exam_focus',      label: 'Exam focus',      color: '#f59e0b', bg: '#1c1408' },
+  { key: 'exam_focus',      label: 'Exam focus',      color: '#F4737A', bg: '#2d0a0b' },
 ] as const;
 
 export type FilterKey =
