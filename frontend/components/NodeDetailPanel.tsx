@@ -128,12 +128,13 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose, role, 
 
         {/* ── Annotation buttons ── */}
         {role && onAnnotate && (
-          <div style={{ borderTop: `1px solid ${BORDER_COLOR}`, paddingTop: '12px' }}>
-            <div className="text-xs uppercase tracking-widest mb-2" style={{ color: TEXT_MUTED }}>
-              {role === 'professor' ? 'Mark this concept' : 'How do you feel about this?'}
-            </div>
+          <div style={{ borderTop: `1px solid ${BORDER_COLOR}`, paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-            {role === 'student' && (
+            {/* Student annotation — shown to both roles (anonymous) */}
+            <div>
+              <div className="text-xs uppercase tracking-widest mb-2" style={{ color: TEXT_MUTED }}>
+                How do you feel about this?
+              </div>
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => onAnnotate('confused')}
@@ -175,38 +176,44 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose, role, 
                   </div>
                 )}
               </div>
-            )}
+            </div>
 
+            {/* Professor-only section */}
             {role === 'professor' && (
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => onAnnotate('exam_focus')}
-                  className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg transition-colors"
-                  style={{
-                    background: annotation?.isExamFocus ? '#1c1410' : DARK_BG,
-                    color: annotation?.isExamFocus ? '#fbbf24' : TEXT_MUTED,
-                    border: `1px solid ${annotation?.isExamFocus ? '#f59e0b' : BORDER_COLOR}`,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <BookOpen size={14} />
-                  {annotation?.isExamFocus ? '★ Exam focus (marked)' : 'Mark as exam focus'}
-                </button>
+              <div>
+                <div className="text-xs uppercase tracking-widest mb-2" style={{ color: TEXT_MUTED }}>
+                  Mark this concept
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => onAnnotate('exam_focus')}
+                    className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg transition-colors"
+                    style={{
+                      background: annotation?.isExamFocus ? '#1c1410' : DARK_BG,
+                      color: annotation?.isExamFocus ? '#fbbf24' : TEXT_MUTED,
+                      border: `1px solid ${annotation?.isExamFocus ? '#f59e0b' : BORDER_COLOR}`,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <BookOpen size={14} />
+                    {annotation?.isExamFocus ? '★ Exam focus (marked)' : 'Mark as exam focus'}
+                  </button>
 
-                {(annotation?.confusionCount ?? 0) > 0 && (
-                  <div className="rounded-lg px-3 py-2.5 flex flex-col gap-2" style={{ background: '#450a0a', border: '1px solid #7f1d1d' }}>
-                    <div className="flex items-center justify-between text-xs" style={{ color: '#fca5a5' }}>
-                      <span className="flex items-center gap-1.5"><Users size={12} /> Class confusion</span>
-                      <span className="font-semibold">{annotation!.confusionPct}%</span>
+                  {(annotation?.confusionCount ?? 0) > 0 && (
+                    <div className="rounded-lg px-3 py-2.5 flex flex-col gap-2" style={{ background: '#450a0a', border: '1px solid #7f1d1d' }}>
+                      <div className="flex items-center justify-between text-xs" style={{ color: '#fca5a5' }}>
+                        <span className="flex items-center gap-1.5"><Users size={12} /> Class confusion</span>
+                        <span className="font-semibold">{annotation!.confusionPct}%</span>
+                      </div>
+                      <div className="rounded-full overflow-hidden" style={{ height: '4px', background: '#7f1d1d' }}>
+                        <div style={{ width: `${annotation!.confusionPct}%`, height: '100%', background: '#ef4444', borderRadius: '9999px' }} />
+                      </div>
+                      <div className="text-xs" style={{ color: '#f87171' }}>
+                        {annotation!.confusionCount} student{annotation!.confusionCount! > 1 ? 's' : ''} flagged this concept
+                      </div>
                     </div>
-                    <div className="rounded-full overflow-hidden" style={{ height: '4px', background: '#7f1d1d' }}>
-                      <div style={{ width: `${annotation!.confusionPct}%`, height: '100%', background: '#ef4444', borderRadius: '9999px' }} />
-                    </div>
-                    <div className="text-xs" style={{ color: '#f87171' }}>
-                      {annotation!.confusionCount} student{annotation!.confusionCount! > 1 ? 's' : ''} flagged this concept
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
           </div>

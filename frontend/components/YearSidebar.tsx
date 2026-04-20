@@ -44,7 +44,9 @@ const YearSidebar: React.FC<YearSidebarProps> = ({
   onToggleFilter,
   role = 'student',
 }) => {
-  const filterOptions = role === 'professor' ? PROFESSOR_FILTERS : STUDENT_FILTERS;
+  const filterOptions = role === 'professor'
+    ? [...STUDENT_FILTERS, { key: 'high_confusion', label: 'High confusion', color: '#b91c1c', bg: '#2d0000' } as const]
+    : STUDENT_FILTERS;
   return (
     <div
       className="flex flex-col p-3"
