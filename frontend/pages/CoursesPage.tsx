@@ -315,7 +315,7 @@ const CoursesPage: React.FC = () => {
               title="Knowledge Graph"
               description="Visualise concept relationships across all your courses"
               icon={<Network size={18} />}
-              to="/graph"
+              to={isStudent ? '/graph?view=student' : '/graph'}
             />
             {!isStudent && (
               <SpecialCard

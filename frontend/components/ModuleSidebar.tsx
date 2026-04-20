@@ -211,7 +211,7 @@ const ModuleSidebar: React.FC<ModuleSidebarProps> = ({
       <div className="px-3 py-2 border-b border-stone-800 space-y-1.5">
         <button
           onClick={() =>
-            navigate('/graph', {
+            navigate(isStudent ? '/graph?view=student' : '/graph', {
               state: {
                 fromCourse: courseId,
                 courseCode: curriculum.course_code,

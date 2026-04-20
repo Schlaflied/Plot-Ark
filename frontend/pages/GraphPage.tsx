@@ -4,7 +4,7 @@
 */
 
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import GraphViewer from '../components/GraphViewer';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -18,7 +18,8 @@ interface GraphPageState {
 const GraphPage: React.FC = () => {
   const location = useLocation();
   const { auth } = useAuth();
-  const role = (auth?.role === 'professor' ? 'professor' : 'student') as 'professor' | 'student';
+  const [searchParams] = useSearchParams();
+  const role = (auth?.role === 'professor' && searchParams.get('view') !== 'student' ? 'professor' : 'student') as 'professor' | 'student';
   const state = (location.state as GraphPageState) || {};
 
   // Persist fromCourse to sessionStorage so it survives page refresh
