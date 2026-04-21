@@ -7,6 +7,12 @@ import { useState, useRef } from 'react';
 import type { IngestFile } from '../components/IngestPanel';
 import { slugify } from '../constants/theme';
 
+const detectModuleFromFilename = (filename: string): number | null => {
+  const name = filename.replace(/\.[^.]+$/, '');
+  const m = name.match(/(?:module|mod|week|lecture|lec|unit|m|w|l)[\s_-]?(\d+)/i);
+  return m ? parseInt(m[1], 10) : null;
+};
+
 interface UseIngestOptions {
   onComplete: (tabKey: string, tabLabel: string, tabYear: number, subjectName: string) => void;
 }
@@ -26,6 +32,10 @@ export function useIngest({ onComplete }: UseIngestOptions) {
   const [ingestSuccess, setIngestSuccess] = useState(false);
   const [dropZoneHovered, setDropZoneHovered] = useState(false);
 
+  const handleModuleChange = (idx: number, module: number | null) => {
+    setIngestFiles(prev => prev.map((f, i) => i === idx ? { ...f, moduleNumber: module } : f));
+  };
+
   const handleBuildGraph = async () => {
     const subjectMissing = ingestSubject.trim() === '';
     const yearMissing = ingestYear === null;
@@ -39,9 +49,24 @@ export function useIngest({ onComplete }: UseIngestOptions) {
     setIngestFiles(prev => prev.map(f => ({ ...f, status: 'waiting' as const })));
 
     try {
+      // Resolve module numbers: JS filename detection for unresolved PPTX files
+      const resolvedFiles = ingestFiles.map((f) => {
+        if (f.moduleNumber != null) return f;
+        return { ...f, moduleNumber: detectModuleFromFilename(f.name) };
+      });
+      setIngestFiles(resolvedFiles);
+
+      const moduleMap: Record<string, number> = {};
+      resolvedFiles.forEach(f => {
+        if (f.moduleNumber != null) moduleMap[f.name] = f.moduleNumber;
+      });
+
       const formData = new FormData();
       formData.append('subject', ingestSubject.trim());
       formData.append('layer', ingestLayer);
+      if (Object.keys(moduleMap).length > 0) {
+        formData.append('module_map', JSON.stringify(moduleMap));
+      }
       ingestFileObjects.current.forEach(file => formData.append('files[]', file));
 
       const startRes = await fetch('/api/materials/ingest', {
@@ -111,5 +136,6 @@ export function useIngest({ onComplete }: UseIngestOptions) {
     ingestError, ingestSuccess,
     dropZoneHovered, setDropZoneHovered,
     handleBuildGraph,
+    handleModuleChange,
   };
 }

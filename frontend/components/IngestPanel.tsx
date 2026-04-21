@@ -10,13 +10,14 @@ import { DARK_BG, PANEL_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_MUTED, ACCENT } fro
 export interface IngestFile {
   name: string;
   status: 'waiting' | 'processing' | 'done' | 'error';
+  moduleNumber?: number | null;
 }
 
 export interface IngestPanelProps {
   // File state
   ingestFiles: IngestFile[];
   setIngestFiles: React.Dispatch<React.SetStateAction<IngestFile[]>>;
-  ingestFileObjects: React.MutableRefObject<File[]>;
+  ingestFileObjects: { current: File[] };
   // Form fields
   ingestSubject: string;
   setIngestSubject: (v: string) => void;
@@ -42,7 +43,10 @@ export interface IngestPanelProps {
   setDropZoneHovered: (v: boolean) => void;
   // Callbacks
   onBuildGraph: () => void;
+  onModuleChange: (idx: number, module: number | null) => void;
+  onStartResize: (e: React.MouseEvent) => void;
   isFullscreen: boolean;
+  panelWidth?: number;
 }
 
 const IngestPanel: React.FC<IngestPanelProps> = ({
@@ -69,16 +73,29 @@ const IngestPanel: React.FC<IngestPanelProps> = ({
   dropZoneHovered,
   setDropZoneHovered,
   onBuildGraph,
+  onModuleChange,
+  onStartResize,
   isFullscreen,
+  panelWidth = 288,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const COURSE_CODE_RE = /([A-Z]{2,4}\s?\d{3,4})/;
 
+  const detectModuleFromFilename = (filename: string): number | null => {
+    const name = filename.replace(/\.[^.]+$/, '');
+    const m = name.match(/(?:module|mod|week|lecture|lec|unit|m|w|l)[\s_-]?(\d+)/i);
+    return m ? parseInt(m[1], 10) : null;
+  };
+
   const addFilesToIngest = (files: FileList | File[]) => {
     const fileArr = Array.from(files);
     setIngestFiles(prev => {
-      const newEntries = fileArr.map(f => ({ name: f.name, status: 'waiting' as const }));
+      const newEntries = fileArr.map(f => ({
+        name: f.name,
+        status: 'waiting' as const,
+        moduleNumber: detectModuleFromFilename(f.name),
+      }));
       const combined = [...prev, ...newEntries];
       const newFileObjects = [...ingestFileObjects.current, ...fileArr];
       if (combined.length > 15) {
@@ -120,7 +137,7 @@ const IngestPanel: React.FC<IngestPanelProps> = ({
     <div
       className="flex flex-col"
       style={{
-        width: '288px',
+        width: `${panelWidth}px`,
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
@@ -128,9 +145,21 @@ const IngestPanel: React.FC<IngestPanelProps> = ({
         border: `1px solid ${BORDER_COLOR}`,
         borderRadius: '0.75rem',
         margin: '0 0 0 8px',
+        position: 'relative',
         ...(isFullscreen ? { minHeight: 0, overflow: 'hidden' } : {}),
       }}
     >
+      {/* Resize handle */}
+      <div
+        onMouseDown={onStartResize}
+        style={{
+          position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px',
+          cursor: 'col-resize', zIndex: 10, borderRadius: '0.75rem 0 0 0.75rem',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(139,94,60,0.4)')}
+        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+      />
+
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -348,6 +377,32 @@ const IngestPanel: React.FC<IngestPanelProps> = ({
                 >
                   {file.name}
                 </span>
+                {!ingestRunning && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+                    <span style={{ fontSize: '0.65rem', color: TEXT_MUTED, fontWeight: 600 }}>Module</span>
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="?"
+                      value={file.moduleNumber ?? ''}
+                      onChange={e => onModuleChange(idx, e.target.value ? parseInt(e.target.value) : null)}
+                      title="Module number"
+                      style={{
+                        width: '36px',
+                        background: file.moduleNumber ? 'rgba(139,94,60,0.15)' : DARK_BG,
+                        border: `1px solid ${file.moduleNumber ? ACCENT : BORDER_COLOR}`,
+                        borderRadius: '4px',
+                        color: file.moduleNumber ? ACCENT : TEXT_MUTED,
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        padding: '2px 4px',
+                        outline: 'none',
+                        textAlign: 'center',
+                        flexShrink: 0,
+                      }}
+                    />
+                  </div>
+                )}
                 <span style={{ flexShrink: 0, fontSize: '0.8rem' }}>
                   {file.status === 'waiting' && '⏳'}
                   {file.status === 'processing' && (

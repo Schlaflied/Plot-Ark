@@ -11,7 +11,24 @@ from services.lightrag_service import (
     get_lightrag_instance, slug, _ingest_jobs, _initialized_instances,
 )
 
+import json
+from services.file_parser import detect_module_from_pptx
+
 materials_bp = Blueprint("materials", __name__)
+
+
+@materials_bp.route("/api/materials/detect-modules", methods=["POST"])
+def detect_modules():
+    """Return suggested module number for each uploaded PPTX file."""
+    uploaded = request.files.getlist("files[]")
+    result = {}
+    for f in uploaded:
+        name = f.filename or "unknown"
+        if not name.lower().endswith(".pptx"):
+            continue
+        content = f.read()
+        result[name] = detect_module_from_pptx(name, content)
+    return jsonify(result)
 
 
 @materials_bp.route("/api/materials/ingest", methods=["POST"])
@@ -38,6 +55,14 @@ def start_ingest():
 
     if not file_data:
         return jsonify({"error": "No valid PDF/PPTX/DOCX files found"}), 400
+
+    module_map: dict[str, int] = {}
+    raw_map = request.form.get("module_map", "")
+    if raw_map:
+        try:
+            module_map = json.loads(raw_map)
+        except Exception:
+            pass
 
     job_id = str(uuid.uuid4())
     _ingest_jobs[job_id] = {"status": "running", "progress": "Starting…", "message": ""}
@@ -67,8 +92,10 @@ def start_ingest():
                     text = extract_text_from_bytes(fname, content)
                     if not text.strip():
                         continue
+                    module_num = module_map.get(fname)
+                    module_tag = f" [module: {module_num}]" if module_num is not None else ""
                     tagged_text = (
-                        f"[source: {subject_slug} / {fname}] [layer: {layer}]\n\n{text}"
+                        f"[source: {subject_slug} / {fname}] [layer: {layer}]{module_tag}\n\n{text}"
                     )
                     try:
                         doc_id = f"doc-{subject_slug}__{os.path.splitext(fname)[0]}"

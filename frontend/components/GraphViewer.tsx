@@ -195,6 +195,27 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [searchQuery, setSearchQuery] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [ingestPanelWidth, setIngestPanelWidth] = useState(288);
+  const ingestResizing = useRef(false);
+
+  const handleIngestResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    ingestResizing.current = true;
+    const startX = e.clientX;
+    const startW = ingestPanelWidth;
+    const onMove = (ev: MouseEvent) => {
+      if (!ingestResizing.current) return;
+      const delta = startX - ev.clientX;
+      setIngestPanelWidth(Math.max(220, Math.min(520, startW + delta)));
+    };
+    const onUp = () => {
+      ingestResizing.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [ingestPanelWidth]);
   const [dimensions, setDimensions] = useState({ width: 1200, height: 600 });
   const containerRef = useRef<HTMLDivElement>(null);
   const fgRef = useRef<any>(null);
@@ -230,6 +251,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
     ingestError, ingestSuccess,
     dropZoneHovered, setDropZoneHovered,
     handleBuildGraph,
+    handleModuleChange,
   } = useIngest({
     onComplete: (tabKey, tabLabel, tabYear, subjectName) => {
       addCourse(tabKey, tabLabel, tabYear, subjectName);
@@ -549,7 +571,9 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       ingestRunning={ingestRunning} ingestOverflow={ingestOverflow} setIngestOverflow={setIngestOverflow}
       ingestError={ingestError} ingestSuccess={ingestSuccess}
       dropZoneHovered={dropZoneHovered} setDropZoneHovered={setDropZoneHovered}
-      onBuildGraph={handleBuildGraph} isFullscreen={isFullscreen}
+      onBuildGraph={handleBuildGraph} onModuleChange={handleModuleChange}
+      onStartResize={handleIngestResizeStart}
+      isFullscreen={isFullscreen} panelWidth={ingestPanelWidth}
     />
 
     </div>
