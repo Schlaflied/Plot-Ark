@@ -35,6 +35,8 @@
 
 > **优化（Optimize）** — 课程 Agent 将分析结果转化为具体的模块修改建议。教师通过修改前后对比预览逐一审阅并批准或拒绝每条 AI 建议。已批准的修改回流至下一轮学习数据周期——闭环完成。
 
+> **个性化（Personalize）** — 学生可以建立学习画像：学科偏好、CP/OC 叙事锚点、自定义 AI 指令。模板驱动的诊断引擎提供温和的一句话概念差距指引——无分数、无排名，只有"去哪里看"的地图。
+
 ---
 
 ## 🧭 设计理念
@@ -142,6 +144,21 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 - **知识查询** — 用自然语言对图谱提问；Redis 缓存答案（持久化缓存）
 - **查询历史** — 可收藏和删除的历史记录，附学科标签
 - **持久事件循环** — LightRAG 异步引擎运行于独立后台线程；首次查询后不再有冷启动延迟
+
+</details>
+
+<details>
+<summary><strong>👤 学生画像与 AI 设置</strong></summary>
+
+- **4 标签页画像** — Profile（头像 + 显示名）、Customized Learning、My Progress、AI Settings
+- **学科选择器** — 5 个学术领域（人文、社科、商科、STEM、健康科学），动态示例切换；STEM 自动突出推导类教学法
+- **CP/OC 叙事系统** — 学生定义角色对及关系类型（BL/BG/GL/自定义）+ 可选 fandom；LLM 使用这些作为概念解释的语义锚点
+- **My Progress** — 按课程显示颜色块掌握度（绿/黄/红/灰）；不显示任何数值（UX 红线）
+- **自定义 AI 指令** — 持久化 `custom_prompt` 文本框，学生可以为 LLM 提供学习偏好上下文
+- **Prompt 灵感库** — 可点击的示例 prompt，一键追加到文本框
+- **自动保存** — 800ms 防抖保存所有画像字段
+- **一句话诊断** — 模板驱动引擎（`student_diagnosis.py`）生成温和的概念差距指引；CoursePage 内琥珀/绿色诊断卡片 + "Jump to Module" 导航
+- **隐私红线** — 无数值分数、无班级对比、无排名；教授不可查看学生画像
 
 </details>
 
@@ -276,8 +293,8 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 | 层级 | 技术 | 职责 |
 |------|------|------|
 | **前端** | React + TypeScript + Vite | 模块编辑器、A2A 仪表板、SSE 客户端、拖拽排序 |
-| **后端** | Python + Flask Blueprints | 模块化路由 API（8 个 Blueprints + 6 个 Agents + 5 个 Services） |
-| **AI** | OpenAI GPT-4o / Google Gemini | 内容生成与 A2A 分析（通过 `AI_PROVIDER` 可插拔） |
+| **后端** | Python + Flask Blueprints | 模块化路由 API（10 个 Blueprints + 6 个 Agents + 6 个 Services） |
+| **AI** | OpenAI GPT-4o / Google Gemini | 内容生成与 A2A 分析（通过 `AI_PROVIDER` 可插拔）；A2A agents 纯 SQL——**分析零 LLM 成本** |
 | **研究 Agent** | Tavily Search API | 生成前学术信源检索 |
 | **数据库** | PostgreSQL | 课程、xAPI 语句、学生反馈、`course_analysis_snapshots`（LTM） |
 | **缓存与内存**| Redis | 图谱查询缓存、学习者状态、A2A 共享内存（`a2a:{session}:{key}`） |
@@ -396,7 +413,8 @@ plot-ark/
 │   │   ├── CoursePage.tsx               ← 模块编辑器 + 导出
 │   │   ├── CoursesPage.tsx              ← 课程仪表板
 │   │   ├── GraphPage.tsx                ← 知识图谱查看器
-│   │   └── StudentDataPage.tsx          ← A2A 多 Agent 分析仪表板
+│   │   ├── StudentDataPage.tsx          ← A2A 多 Agent 分析仪表板
+│   │   └── StudentProfilePage.tsx       ← 学生画像（4 标签页：Profile / Learning / Progress / AI Settings）
 │   ├── components/
 │   │   ├── ui/
 │   │   │   ├── Select.tsx               ← 可复用下拉选择
@@ -458,10 +476,14 @@ plot-ark/
 - [x] KG → Agentic Loop — `KGContextAnalystNode` 将逐概念困惑度% + 最困惑概念列表注入 CurriculumAgent 上下文
 - [x] GraphViewer 角色分流 — 学生端（掌握度过滤 + 困惑社交信号）vs 教授端（高困惑热力图 + 考试重点）
 - [x] xAPI ↔ KG 信号桥接 — KG 标注事件同步写入 xAPI statement（动词：flagged / noted）；信号完全统一
+- [x] 学生画像 — 4 标签页画像：头像、学科选择器（5 大领域）、CP/OC 叙事锚点、进度颜色块
+- [x] 一句话诊断 — 模板驱动概念差距指引 + "Jump to Module" 导航
+- [x] AI 设置 — 自定义 Prompt 指令 + 可点击灵感库 + 自动保存
+- [ ] A2A 多角色模型选择 — 可配置 Agent 团队（Explainer / Checker / Adapter），按角色选模型
+- [ ] 教授 Prompt 模板编辑器 — 数据库驱动的 Prompt 管理 + 版本控制
 - [ ] 作业时间轴 + 截止日期计算器
-- [ ] A2A Phase 2 — 为四个专业 Agent 集成 LLM 分析能力
+- [ ] A2A Phase 2 — CurriculumAgent 接入 LLM（必须 dense 模型）；其余 Agent 保持 sql-only
 - [ ] 渐进式摘要 — 学期级 LTM 摘要用于 LLM 上下文管理
-- [ ] Professor LTM — 从编辑历史学习偏好
 - [ ] LTI 1.3 — 推送至 Canvas / Moodle
 
 ---

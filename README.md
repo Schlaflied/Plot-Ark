@@ -35,6 +35,8 @@
 
 > **Optimize** — The Curriculum Agent translates analytics findings into targeted module edits. Instructors review each suggestion with a before/after preview and approve or reject changes individually. Approved edits feed back into the next xAPI data cycle — the loop closes.
 
+> **Personalize** — Students build learning profiles with discipline preferences, CP/OC narrative anchors, and custom AI instructions. A template-driven diagnosis engine provides gentle, one-sentence concept-gap guidance — no scores, no rankings, just a map of where to look next.
+
 ---
 
 ## 🧭 Design Philosophy
@@ -146,6 +148,21 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 </details>
 
 <details>
+<summary><strong>👤 Student Profile & AI Settings</strong></summary>
+
+- **4-tab profile** — Profile (avatar + display name), Customized Learning, My Progress, AI Settings
+- **Discipline selector** — 5 academic disciplines (Humanities, Social Science, Business, STEM, Health Science) with dynamic example switching; STEM surfaces derivation-focused pedagogy
+- **CP/OC narrative system** — students define character pairs with relationship types (BL/BG/GL/custom) and optional fandom; LLM uses these as semantic anchors for concept explanations
+- **My Progress** — color-block mastery overview per course (green/yellow/red/gray); zero numeric values displayed (UX red line)
+- **Custom AI instructions** — persistent `custom_prompt` field for students to provide context to the LLM ("I learn best with real-world examples")
+- **Prompt ideas library** — clickable example prompts that append directly to the textarea with one click
+- **Auto-save** — debounced 800ms save for all profile fields via `PUT /api/profile`
+- **One-sentence diagnosis** — template-driven engine (`student_diagnosis.py`) generates gentle concept-gap guidance per course; warm amber/green card on CoursePage with "Jump to Module" navigation
+- **Privacy red lines** — no numeric scores, no class comparisons, no rankings; professors cannot see student profiles
+
+</details>
+
+<details>
 <summary><strong>🤖 A2A Multi-Agent Analytics</strong></summary>
 
 - **5-node pipeline** — `Orchestrator → [BehaviorAnalyst ‖ RiskDetector ‖ ContentOptimizer ‖ CohortComparator] → aggregate → LTM snapshot`. All agents are currently sql-only (Phase 2 = LLM integration pending).
@@ -197,60 +214,63 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 **System Architecture**
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│  Frontend (React + TypeScript + Vite)                                      │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌───────────────┐  │
-│  │ Generate  │ │ Courses  │ │  Course  │ │ Knowledge │ │ Student Data  │  │
-│  │   Page    │ │   Page   │ │   Page   │ │   Graph   │ │    Page       │  │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └──────┬────────┘  │
-│       │            │            │              │              │           │
-│  components/ui/  components/generate/    components/analytics/           │
-│  (Select, Input)   (SyllabusUpload)   (TrendChart, ReportSections, ...)  │
-│                             GraphViewer (3D KG + annotation overlay)     │
-│                                              SSE streaming               │
-└───────┼────────────┼────────────┼──────────────┼──────────────┼──────────┘
-        │            │            │              │              │
-        ▼            ▼            ▼              ▼              ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│  Backend (Flask + Blueprints)                                              │
-│  ├── app.py (~30 lines, routing)         ├── config.py (Env constants)     │
-│  ├── extensions.py (Global instances)    ├── async_loop.py (Event loop)    │
-│  ├─────────────────────────────────────────────────────────────────────┐   │
-│  │  routes/                                                            │   │
-│  │  ├── curriculum.py           generate / skeleton / expand / save    │   │
-│  │  ├── curriculum_agent_routes flags / suggestions / apply / redo     │   │
-│  │  ├── history.py              CRUD + favorite + DOCX export          │   │
-│  │  ├── analytics.py            A2A SSE + history API + export         │   │
-│  │  ├── xapi.py                 xAPI statements + mock data seed       │   │
-│  │  ├── feedback.py             Student sentiment + comments           │   │
-│  │  ├── graph.py                KG data + RAG query + /courses lookup  │   │
-│  │  ├── annotations.py          KG concept annotations (confused /     │   │
-│  │  │                           important / exam_focus) + aggregation  │   │
-│  │  ├── sources.py              Tavily source preview                  │   │
-│  │  ├── syllabus.py             PDF/DOCX parse + import                │   │
-│  │  └── materials.py            LightRAG ingest                        │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────┐  ┌────────────────────────────────────┐   │
-│  │  agents/ (Hive-style A2A)   │  │  services/                         │   │
-│  │  ├── base.py (BaseNode)     │  │  ├── research.py (Tavily)          │   │
-│  │  ├── orchestrator.py        │  │  ├── file_parser.py                │   │
-│  │  ├── behavior_analyst.py    │  │  ├── prompt_builder.py             │   │
-│  │  ├── risk_detector.py       │  │  ├── xapi_generator.py (⚡ aware)  │   │
-│  │  ├── content_optimizer.py   │  │  ├── report_exporter.py (facade)   │   │
-│  │  ├── cohort_comparator.py   │  │  ├── chart_generator.py (+history) │   │
-│  │  ├── kg_context_analyst.py  │  │  ├── ltm_writer.py (Cold layer)    │   │
-│  │  └── curriculum_agent.py    │  │  ├── threshold_checker.py          │   │
-│  │       SharedMemory (Redis)  │  │  ├── kg_mapper.py (3-layer match)  │   │
-│  └──────────┬──────────────────┘  │  └── export_{pdf,docx,excel}.py   │   │
-│             │                     └─────────────┬──────────────────────┘   │
-└─────────────┼───────────────────────────────────┼──────────────────────────┘
-              │                                   │
-              ▼                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  Frontend (React + TypeScript + Vite)                                            │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌─────────┐ ┌──────────┐ │
+│  │ Generate  │ │ Courses  │ │  Course  │ │ Knowledge │ │ Student │ │ Student  │ │
+│  │   Page    │ │   Page   │ │   Page   │ │   Graph   │ │  Data   │ │ Profile  │ │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └────┬────┘ └────┬─────┘ │
+│       │            │            │              │            │           │        │
+│  components/ui/  components/generate/    components/analytics/                  │
+│  (Select, Input)   (SyllabusUpload)   (TrendChart, ReportSections, ...)         │
+│                             GraphViewer (2D KG + mastery overlay)               │
+│                                              SSE streaming                      │
+└───────┼────────────┼────────────┼──────────────┼────────────┼───────────┼────────┘
+        │            │            │              │            │           │
+        ▼            ▼            ▼              ▼            ▼           ▼
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  Backend (Flask + Blueprints)                                                    │
+│  ├── app.py (~30 lines, routing)         ├── config.py (Env constants)           │
+│  ├── extensions.py (Global instances)    ├── async_loop.py (Event loop)          │
+│  ├───────────────────────────────────────────────────────────────────────────┐   │
+│  │  routes/                                                                  │   │
+│  │  ├── curriculum.py           generate / skeleton / expand / save          │   │
+│  │  ├── curriculum_agent_routes flags / suggestions / apply / redo           │   │
+│  │  ├── history.py              CRUD + favorite + DOCX export                │   │
+│  │  ├── analytics.py            A2A SSE + history API + export               │   │
+│  │  ├── xapi.py                 xAPI statements + mock data seed             │   │
+│  │  ├── feedback.py             Student sentiment + comments                 │   │
+│  │  ├── profile.py              Student profile CRUD + custom_prompt         │   │
+│  │  ├── settings.py             Platform settings (API keys, models)         │   │
+│  │  ├── graph.py                KG data + RAG query + /courses lookup        │   │
+│  │  ├── annotations.py          KG concept annotations + aggregation         │   │
+│  │  ├── sources.py              Tavily source preview                        │   │
+│  │  ├── syllabus.py             PDF/DOCX parse + import                      │   │
+│  │  └── materials.py            LightRAG ingest                              │   │
+│  └───────────────────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────┐  ┌──────────────────────────────────────────┐   │
+│  │  agents/ (Hive-style A2A)   │  │  services/                               │   │
+│  │  ├── base.py (BaseNode)     │  │  ├── research.py (Tavily)                │   │
+│  │  ├── orchestrator.py        │  │  ├── file_parser.py                      │   │
+│  │  ├── behavior_analyst.py    │  │  ├── prompt_builder.py                   │   │
+│  │  ├── risk_detector.py       │  │  ├── xapi_generator.py (⚡ aware)        │   │
+│  │  ├── content_optimizer.py   │  │  ├── student_diagnosis.py (diagnosis)    │   │
+│  │  ├── cohort_comparator.py   │  │  ├── report_exporter.py (facade)         │   │
+│  │  ├── kg_context_analyst.py  │  │  ├── chart_generator.py (+history)       │   │
+│  │  └── curriculum_agent.py    │  │  ├── ltm_writer.py (Cold layer)          │   │
+│  │       SharedMemory (Redis)  │  │  ├── threshold_checker.py                │   │
+│  └──────────┬──────────────────┘  │  ├── kg_mapper.py (3-layer match)        │   │
+│             │                     │  └── export_{pdf,docx,excel}.py          │   │
+│             │                     └──────────────┬───────────────────────────┘   │
+└─────────────┼────────────────────────────────────┼──────────────────────────────┘
+              │                                    │
+              ▼                                    ▼
 ┌───────────────────────┐  ┌──────────┐  ┌──────────────┐  ┌──────────────┐
 │  PostgreSQL            │  │  Redis   │  │   LightRAG   │  │  data/ltm/   │
 │  ├── curricula         │  │ (🔴 Hot: │  │  GraphML KG  │  │  (🔵 Cold:   │
 │  ├── xapi_statements   │  │  pipeline│  │  (Hot Layer) │  │   .md YAML   │
-│  ├── concept_          │  │  runtime)│  │              │  │   snapshots) │
+│  ├── student_profiles  │  │  runtime)│  │              │  │   snapshots) │
+│  ├── concept_          │  │          │  │              │  │              │
 │  │   annotations       │  │          │  │              │  │              │
 │  └── 🟡 Warm:          │  │          │  │              │  │              │
 │      snapshots/mastery │  │          │  │              │  │              │
@@ -276,8 +296,8 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 | Layer | Technology | Role |
 |-------|-----------|------|
 | **Frontend** | React + TypeScript + Vite | Module editor, A2A dashboard, SSE client, drag-and-drop |
-| **Backend** | Python + Flask Blueprints | Modular route-based API (8 Blueprints + 6 Agents + 5 Services) |
-| **AI** | OpenAI GPT-4o / Google Gemini | Content generation & A2A analysis (via `AI_PROVIDER`) |
+| **Backend** | Python + Flask Blueprints | Modular route-based API (10 Blueprints + 6 Agents + 6 Services) |
+| **AI** | OpenAI GPT-4o / Google Gemini | Content generation & A2A analysis (via `AI_PROVIDER`); A2A agents are sql-only — **zero LLM cost** for analytics |
 | **Research Agent** | Tavily Search API | Pre-generation academic source retrieval |
 | **Database** | PostgreSQL | Curricula, xAPI statements, student feedback, `course_analysis_snapshots` (LTM) |
 | **Cache & Memory**| Redis | Graph query cache, learner state, A2A shared memory (`a2a:{session}:{key}`) |
@@ -394,7 +414,8 @@ plot-ark/
 │   │   ├── CoursePage.tsx               ← Module editor + export
 │   │   ├── CoursesPage.tsx              ← Course dashboard
 │   │   ├── GraphPage.tsx                ← Knowledge graph viewer
-│   │   └── StudentDataPage.tsx          ← A2A multi-agent analytics dashboard
+│   │   ├── StudentDataPage.tsx          ← A2A multi-agent analytics dashboard
+│   │   └── StudentProfilePage.tsx       ← Student profile (4 tabs: Profile, Learning, Progress, AI Settings)
 │   ├── components/
 │   │   ├── ui/
 │   │   │   ├── Select.tsx               ← Reusable dropdown
@@ -456,11 +477,14 @@ plot-ark/
 - [x] KG → Agentic Loop — `KGContextAnalystNode` injects per-concept confusion % + top confused concepts into CurriculumAgent context
 - [x] GraphViewer role-split — student view (mastery filters + confusion social signal) vs professor view (high confusion heatmap + exam focus)
 - [x] xAPI ↔ KG bridge — KG annotation events mirror to xAPI statements (verb: flagged / noted); full signal unification
-- [ ] PPT ↔ Module auto-mapping — filename regex + slide title + manual fallback
+- [x] Student Profile — 4-tab profile with avatar, discipline selector (5 disciplines), CP/OC narrative anchors, and progress color blocks
+- [x] One-sentence diagnosis — template-driven concept-gap guidance with "Jump to Module" navigation
+- [x] AI Settings — custom prompt instructions + clickable ideas library with auto-save
+- [ ] A2A multi-role model selection — configurable agent team (Explainer / Checker / Adapter) with per-role model choice
+- [ ] Professor prompt template editor — DB-backed prompt management with version control
 - [ ] Assignment Timeline + Due Date calculator
-- [ ] A2A Phase 2 — LLM integration for BehaviorAnalyst, RiskDetector, ContentOptimizer, CohortComparator
+- [ ] A2A Phase 2 — LLM integration for CurriculumAgent (dense model required); other agents remain sql-only
 - [ ] Progressive summarization — semester-level LTM summaries for LLM context management
-- [ ] Professor LTM — preference learning from edit history
 - [ ] LTI 1.3 — push into Canvas / Moodle
 
 ---
