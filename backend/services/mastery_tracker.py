@@ -12,6 +12,7 @@ Mastery levels:
 """
 
 import json
+import re
 from datetime import datetime
 from db import get_db
 
@@ -76,8 +77,7 @@ def compute_module_mastery(course_id: int, semester: str = "") -> dict:
         for row in cur.fetchall():
             obj_id, verb, cnt = row[0], row[1], row[2]
             # Normalize to "module_N" (1-based): xAPI stores "course/X/module/N" (0-indexed path)
-            import re as _re
-            m = _re.search(r'module/(\d+)', obj_id)
+            m = re.search(r'module/(\d+)', obj_id)
             if m:
                 obj_id = f"module_{int(m.group(1)) + 1}"
             elif not obj_id.startswith('module_'):

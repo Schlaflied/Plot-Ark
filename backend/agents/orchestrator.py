@@ -22,21 +22,20 @@ from services.ltm_writer import write_cold_snapshot
 from services.threshold_checker import check_thresholds
 
 
-def _build_anon_map(course_id: int) -> dict:
+def _build_anon_map(course_id: int) -> tuple[dict, dict, dict]:
     """
     Fetch all (actor_name, actor_email) pairs for the course, sorted by email
-    for deterministic ordering, and return a mapping:
+    for deterministic ordering, and return three mappings:
 
-        { "Student_001": {"name": "Real Name", "email": "real@email.com"}, ... }
-
-    Also returns a reverse lookup keyed by real email for fast substitution:
-        { "real@email.com": {"anon_name": "Student_001", "anon_email": "student_001@anon.local"} }
+        anon_map:         { "Student_001": {"name": "Real Name", "email": "real@email.com"}, ... }
+        reverse_map:      { "real@email.com": {"anon_name": "Student_001", "anon_email": ...} }
+        name_reverse_map: { "Real Name": "Student_001", ... }  — O(1) lookup by name
     """
     try:
         from db import get_db
         conn = get_db()
         if not conn:
-            return {}, {}
+            return {}, {}, {}
         cur = conn.cursor()
         prefix = f"course/{course_id}/%"
         cur.execute("""
@@ -50,26 +49,29 @@ def _build_anon_map(course_id: int) -> dict:
         conn.close()
     except Exception as e:
         print(f"[orchestrator] anon_map build error: {e}")
-        return {}, {}
+        return {}, {}, {}
 
-    anon_map = {}       # "Student_001" → {"name": ..., "email": ...}
-    reverse_map = {}    # "real@email.com" → {"anon_name": ..., "anon_email": ...}
+    anon_map = {}          # "Student_001" → {"name": ..., "email": ...}
+    reverse_map = {}       # "real@email.com" → {"anon_name": ..., "anon_email": ...}
+    name_reverse_map = {}  # "Real Name" → "Student_001" — for O(1) cohort substitution
 
     for idx, (real_name, real_email) in enumerate(rows, start=1):
         anon_id = f"Student_{idx:03d}"
         anon_email = f"student_{idx:03d}@anon.local"
         anon_map[anon_id] = {"name": real_name or "", "email": real_email or ""}
+        if real_name:
+            name_reverse_map[real_name] = anon_id
         if real_email:
             reverse_map[real_email] = {
                 "anon_name": anon_id,
                 "anon_email": anon_email,
-                "real_name": real_name or "",  # needed for cohort name-string substitution
+                "real_name": real_name or "",
             }
 
-    return anon_map, reverse_map
+    return anon_map, reverse_map, name_reverse_map
 
 
-def _anonymise_agent_data(data: dict, reverse_map: dict) -> dict:
+def _anonymise_agent_data(data: dict, reverse_map: dict, name_reverse_map: dict = None) -> dict:
     """
     Replace real names/emails with anon IDs in any agent output that carries PII.
 
@@ -78,8 +80,7 @@ def _anonymise_agent_data(data: dict, reverse_map: dict) -> dict:
       - cohort_comparator: data["groups"][group_name]["students"] list of name strings
 
     All other data is returned unchanged.
-    The reverse_map is keyed by real email; cohort student lists contain names,
-    so we also build a name-keyed lookup from reverse_map for cohort substitution.
+    name_reverse_map provides O(1) name→anon lookup for cohort substitution.
     """
     if not data or not reverse_map:
         return data
@@ -108,22 +109,18 @@ def _anonymise_agent_data(data: dict, reverse_map: dict) -> dict:
             if not isinstance(students_list, list):
                 continue
             group_data["students"] = [
-                _anon_name_from_name(name, reverse_map) for name in students_list
+                _anon_name_from_name(name, name_reverse_map or {}) for name in students_list
             ]
 
     return data
 
 
-def _anon_name_from_name(real_name: str, reverse_map: dict) -> str:
+def _anon_name_from_name(real_name: str, name_reverse_map: dict) -> str:
     """
-    Look up the anon ID for a real name by scanning reverse_map values.
-    reverse_map values carry "real_name" after the _build_anon_map fix below.
+    Look up the anon ID for a real name via O(1) dict lookup.
     Falls back to the original string if not found (safe default).
     """
-    for v in reverse_map.values():
-        if v.get("real_name") == real_name:
-            return v["anon_name"]
-    return real_name
+    return name_reverse_map.get(real_name, real_name)
 
 
 def _deanonymise_at_risk(at_risk_students: list, anon_map: dict) -> list:
@@ -273,7 +270,7 @@ class OrchestratorNode(BaseNode):
         # ── Step 2: Anonymise student data before dispatching ──────────────
         yield f"data: {json.dumps({'status': 'anonymising', 'message': '🔒 Anonymising student data before analysis...'})}\n\n"
 
-        anon_map, reverse_map = _build_anon_map(course_id)
+        anon_map, reverse_map, name_reverse_map = _build_anon_map(course_id)
         sm.set("_anon_map", anon_map)
 
         yield _sse_event("orchestrator", "dispatching", "Distributing analysis tasks...")
@@ -302,7 +299,7 @@ class OrchestratorNode(BaseNode):
             duration = int((time.time() - start) * 1000)
 
             # Anonymise PII in agent output before storing or streaming
-            safe_data = _anonymise_agent_data(result.data, reverse_map)
+            safe_data = _anonymise_agent_data(result.data, reverse_map, name_reverse_map)
 
             # Sanitise error message — never expose raw exception text to SSE
             safe_error = None
@@ -385,18 +382,6 @@ class OrchestratorNode(BaseNode):
             yield _sse_event("orchestrator", "threshold_error",
                 "⚠️ Threshold check failed — flags may be incomplete")
 
-        # ── Mastery Sync ───────────────────────────────────────────────────
-        try:
-            yield _sse_event("orchestrator", "mastery_running", "🔄 Syncing concept mastery tracking...")
-            from services.mastery_tracker import sync_concept_mastery
-            from services.kg_mapper import get_kg_mapping_for_course
-            kg_mapping = get_kg_mapping_for_course(course_id)
-            if kg_mapping and kg_mapping.get("module_concepts"):
-                sync_concept_mastery(course_id, kg_mapping, semester="")
-            yield _sse_event("orchestrator", "mastery_done", "✅ Concept mastery synced")
-        except Exception as e:
-            print(f"[Orchestrator] Mastery sync error: {e}")
-            yield _sse_event("orchestrator", "mastery_error", "⚠️ Mastery sync failed")
 
         # ── KG Context Analyst — enrich flags with KG data ─────────────────
         kg_context_data = {}
@@ -457,7 +442,7 @@ class OrchestratorNode(BaseNode):
         sm = SharedMemory(session_id, redis_client)
         sm.set("course_id", course_id)
 
-        anon_map, reverse_map = _build_anon_map(course_id)
+        anon_map, reverse_map, name_reverse_map = _build_anon_map(course_id)
         sm.set("_anon_map", anon_map)
 
         agent_results = {}
@@ -474,7 +459,7 @@ class OrchestratorNode(BaseNode):
                 }
                 continue
 
-            safe_data = _anonymise_agent_data(result.data, reverse_map)
+            safe_data = _anonymise_agent_data(result.data, reverse_map, name_reverse_map)
             safe_error = "Agent encountered an error processing course data" if result.error else None
 
             agent_results[agent.name] = {

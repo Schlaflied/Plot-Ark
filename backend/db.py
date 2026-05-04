@@ -4,7 +4,110 @@ import json
 import re
 import time
 import psycopg2
+import psycopg2.pool
 from config import DATABASE_URL
+
+# ── Connection Pool ──────────────────────────────────────────────────────────
+# Lazy-init: pool is created on first get_db() call after init_db() succeeds.
+_pool: psycopg2.pool.ThreadedConnectionPool | None = None
+
+
+def _ensure_pool():
+    """Create the connection pool if it doesn't exist yet."""
+    global _pool
+    if _pool is None:
+        try:
+            _pool = psycopg2.pool.ThreadedConnectionPool(
+                minconn=1, maxconn=10, dsn=DATABASE_URL
+            )
+        except Exception as e:
+            print(f"Failed to create connection pool: {e}")
+
+
+class PooledConnection:
+    """Wrapper around a psycopg2 connection that returns it to the pool on close().
+
+    Backward-compatible: works with both patterns:
+        # Old pattern (still works — close() returns to pool instead of destroying)
+        conn = get_db()
+        ...
+        conn.close()
+
+        # New pattern (preferred)
+        with get_db() as conn:
+            ...
+    """
+
+    def __init__(self, conn, pool):
+        self._conn = conn
+        self._pool = pool
+
+    # ── Proxy all connection methods ──────────────────────────────────────
+    def cursor(self, *args, **kwargs):
+        return self._conn.cursor(*args, **kwargs)
+
+    def commit(self):
+        return self._conn.commit()
+
+    def rollback(self):
+        return self._conn.rollback()
+
+    @property
+    def autocommit(self):
+        return self._conn.autocommit
+
+    @autocommit.setter
+    def autocommit(self, value):
+        self._conn.autocommit = value
+
+    def close(self):
+        """Return connection to the pool instead of closing it."""
+        if self._conn and self._pool:
+            try:
+                self._pool.putconn(self._conn)
+            except Exception:
+                pass
+            self._conn = None
+
+    # ── Context manager support ───────────────────────────────────────────
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
+    # ── Make truthiness checks work (if not conn: ...) ────────────────────
+    def __bool__(self):
+        return self._conn is not None
+
+
+def get_db():
+    """Return a pooled DB connection (backward-compatible).
+
+    The returned PooledConnection wraps a real psycopg2 connection and
+    returns it to the pool when close() is called.
+
+    Returns None if the pool cannot be created or is exhausted.
+    """
+    _ensure_pool()
+    if _pool is None:
+        return None
+    try:
+        conn = _pool.getconn()
+        return PooledConnection(conn, _pool)
+    except Exception as e:
+        print(f"DB pool connection error: {e}")
+        return None
+
+
+def get_db_raw():
+    """Non-pooled connection for init_db() bootstrap (before pool exists)."""
+    try:
+        return psycopg2.connect(DATABASE_URL)
+    except Exception as e:
+        print(f"DB connection error: {e}")
+        return None
 
 
 def normalize_semester(raw: str) -> str:
@@ -15,17 +118,9 @@ def normalize_semester(raw: str) -> str:
     return raw.strip().title()
 
 
-def get_db():
-    try:
-        return psycopg2.connect(DATABASE_URL)
-    except Exception as e:
-        print(f"DB connection error: {e}")
-        return None
-
-
 def init_db():
     for attempt in range(10):
-        conn = get_db()
+        conn = get_db_raw()
         if conn:
             try:
                 cur = conn.cursor()
@@ -189,6 +284,22 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS idx_xapi_timestamp
                     ON xapi_statements(timestamp)
                 """)
+                # ── concept_annotations (for KGContextAnalyst + annotation routes) ──
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS concept_annotations (
+                        id SERIAL PRIMARY KEY,
+                        course_id INTEGER NOT NULL,
+                        concept_id TEXT NOT NULL,
+                        student_id TEXT DEFAULT 'anonymous',
+                        annotation_type TEXT NOT NULL DEFAULT 'confused',
+                        content TEXT DEFAULT '',
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_annotations_course
+                    ON concept_annotations(course_id)
+                """)
                 # Safe migrations for columns added after initial deploy
                 cur.execute("ALTER TABLE xapi_statements ADD COLUMN IF NOT EXISTS course_id INTEGER")
                 cur.execute("ALTER TABLE xapi_statements ADD COLUMN IF NOT EXISTS response TEXT")
@@ -197,6 +308,8 @@ def init_db():
                 conn.commit()
                 cur.close()
                 conn.close()
+                # Now bootstrap the pool since DB is ready
+                _ensure_pool()
                 print("DB initialized.")
                 return
             except Exception as e:
@@ -210,25 +323,24 @@ def init_db():
 
 def save_curriculum(topic, level, audience, course_code, course_type, module_count, data, design_approach="addie", semester="") -> int | None:
     """Save curriculum and return the new course id."""
-    conn = get_db()
-    if not conn:
-        return None
-    try:
-        normalized_semester = normalize_semester(semester) if semester else ""
-        cur = conn.cursor()
-        cur.execute(
-            """INSERT INTO curricula (topic, level, audience, course_code, course_type, module_count, modules, sources, semester)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (topic, level, audience, course_code, course_type, module_count,
-             json.dumps(data.get("modules", [])),
-             json.dumps(data.get("sources", [])),
-             normalized_semester)
-        )
-        new_id = cur.fetchone()[0]
-        conn.commit()
-        cur.close()
-        conn.close()
-        return new_id
-    except Exception as e:
-        print(f"DB save error: {e}")
-        return None
+    with get_db() as conn:
+        if not conn:
+            return None
+        try:
+            normalized_semester = normalize_semester(semester) if semester else ""
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO curricula (topic, level, audience, course_code, course_type, module_count, modules, sources, semester)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                (topic, level, audience, course_code, course_type, module_count,
+                 json.dumps(data.get("modules", [])),
+                 json.dumps(data.get("sources", [])),
+                 normalized_semester)
+            )
+            new_id = cur.fetchone()[0]
+            conn.commit()
+            cur.close()
+            return new_id
+        except Exception as e:
+            print(f"DB save error: {e}")
+            return None
