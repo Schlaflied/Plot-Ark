@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, User, BarChart3, Check, Camera, Settings2, ChevronDown, Sparkles } from 'lucide-react';
+import { ChevronLeft, User, BarChart3, Check, Camera, Settings2, ChevronDown, Sparkles, Plus, Trash2, Star, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,13 +21,21 @@ interface StudentProfile {
   custom_prompt: string;
 }
 
+interface PersonaGroup {
+  name: string;
+  char_1: string;
+  char_1_desc: string;
+  char_2: string;
+  char_2_desc: string;
+  fandom: string;
+  relationship_tags: string[];
+  course_tags: string[];
+}
+
 interface PersonaSets {
   enabled: boolean;
-  fandom: string;
-  characters: {
-    description: string;
-    gender: string;
-  }[];
+  groups: PersonaGroup[];
+  default_group: number;
 }
 
 interface CourseProgress {
@@ -519,19 +527,203 @@ const GenderSelect: React.FC<{
   );
 };
 
+const RELATIONSHIP_TAG_PRESETS = [
+  { label: 'Trust', value: 'trust' },
+  { label: 'Protection', value: 'protection' },
+  { label: 'Power imbalance', value: 'power-imbalance' },
+  { label: 'Rivalry', value: 'rivalry' },
+  { label: 'Game theory', value: 'game-theory' },
+  { label: 'Collaboration', value: 'collaboration' },
+  { label: 'Commitment', value: 'commitment' },
+  { label: 'Dependency', value: 'dependency' },
+  { label: 'Mentorship', value: 'mentorship' },
+  { label: 'Sacrifice', value: 'sacrifice' },
+];
+
+const DEFAULT_GROUP: PersonaGroup = {
+  name: 'Main CP',
+  char_1: '',
+  char_1_desc: '',
+  char_2: '',
+  char_2_desc: '',
+  fandom: '',
+  relationship_tags: [],
+  course_tags: [],
+};
+
 const DEFAULT_PERSONA: PersonaSets = {
   enabled: true,
-  fandom: '',
-  characters: [
-    { description: '', gender: 'Male' },
-    { description: '', gender: 'Male' },
-  ],
+  groups: [{ ...DEFAULT_GROUP }],
+  default_group: 0,
+};
+
+/**
+ * Migrate old PersonaSets format (characters array) to new multi-group format.
+ */
+function migratePersonaSets(raw: any): PersonaSets {
+  if (!raw || typeof raw !== 'object') return DEFAULT_PERSONA;
+  // Already new format
+  if (Array.isArray(raw.groups)) return raw as PersonaSets;
+  // Old format: { enabled, fandom, characters: [{ description, gender }] }
+  if (Array.isArray(raw.characters)) {
+    return {
+      enabled: raw.enabled ?? true,
+      groups: [{
+        name: 'Main CP',
+        char_1: raw.characters[0]?.description || '',
+        char_1_desc: '',
+        char_2: raw.characters[1]?.description || '',
+        char_2_desc: '',
+        fandom: raw.fandom || '',
+        relationship_tags: [],
+        course_tags: [],
+      }],
+      default_group: 0,
+    };
+  }
+  return DEFAULT_PERSONA;
+}
+
+// ─── Linked Courses Multi-Select Dropdown ─────────────────────────────────────
+
+const LinkedCoursesSelect: React.FC<{
+  allCourses: { id: number; course_code: string; topic: string }[];
+  selected: string[];
+  onChange: (tags: string[]) => void;
+}> = ({ allCourses, selected, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const toggleCourse = (topic: string) => {
+    const next = selected.includes(topic)
+      ? selected.filter(t => t !== topic)
+      : [...selected, topic];
+    onChange(next);
+  };
+
+  const label = selected.length === 0
+    ? 'All Courses'
+    : selected.length === 1
+      ? selected[0]
+      : `${selected.length} courses selected`;
+
+  return (
+    <div className="space-y-2">
+      <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+        Linked Courses <span className="text-stone-300 font-normal">(optional)</span>
+      </label>
+      <p className="text-xs text-stone-400">
+        Which courses should use this group? Leave empty to use for all courses.
+      </p>
+
+      <div ref={wrapperRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className={`
+            w-full flex items-center justify-between gap-2
+            bg-white border rounded-xl px-4 py-2.5 text-sm text-left
+            outline-none transition-all cursor-pointer
+            ${open
+              ? 'border-amber-400 ring-2 ring-amber-200/60 shadow-sm'
+              : 'border-stone-200 hover:border-stone-300'
+            }
+          `}
+        >
+          <span className={selected.length === 0 ? 'text-stone-400' : 'text-stone-800'}>
+            {label}
+          </span>
+          <ChevronDown
+            size={16}
+            className={`text-stone-400 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
+
+        {open && (
+          <div className="
+            absolute z-50 left-0 right-0 mt-1.5
+            bg-white border border-stone-200 rounded-xl
+            shadow-lg shadow-stone-900/8
+            overflow-hidden py-1.5
+            max-h-56 overflow-y-auto
+          ">
+            {allCourses.length === 0 ? (
+              <p className="px-4 py-3 text-xs text-stone-400 text-center">No courses found</p>
+            ) : (
+              allCourses.map(course => {
+                const isSelected = selected.includes(course.topic);
+                return (
+                  <button
+                    key={course.id}
+                    type="button"
+                    onClick={() => toggleCourse(course.topic)}
+                    className={`
+                      w-full text-left px-4 py-2.5 text-sm transition-colors
+                      flex items-center gap-2.5
+                      ${isSelected
+                        ? 'bg-amber-50 text-amber-800'
+                        : 'text-stone-700 hover:bg-stone-50'
+                      }
+                    `}
+                  >
+                    <span className={`
+                      w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all
+                      ${isSelected
+                        ? 'bg-amber-500 border-amber-500'
+                        : 'border-stone-300'
+                      }
+                    `}>
+                      {isSelected && <Check size={10} className="text-white" />}
+                    </span>
+                    <span className="flex-1 truncate">{course.topic}</span>
+                    {course.course_code && (
+                      <span className="text-[10px] text-stone-400 shrink-0">{course.course_code}</span>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Selected course pills */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-1">
+          {selected.map((ct, ci) => (
+            <span key={ci} className="inline-flex items-center gap-1 text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-2.5 py-1">
+              {ct}
+              <button
+                type="button"
+                onClick={() => onChange(selected.filter((_, i) => i !== ci))}
+                className="text-amber-400 hover:text-amber-600 transition-colors"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
 const NarrativeSettingsSection: React.FC<{
   personaSets: PersonaSets;
   onSave: (ps: PersonaSets) => void;
-}> = ({ personaSets, onSave }) => {
+  allCourses: { id: number; course_code: string; topic: string }[];
+}> = ({ personaSets, onSave, allCourses }) => {
   const [data, setData] = useState<PersonaSets>(personaSets);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -557,12 +749,47 @@ const NarrativeSettingsSection: React.FC<{
     return () => clearTimeout(debounceRef.current);
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const updateChar = (idx: number, field: 'description' | 'gender', value: string) => {
+  const updateGroup = (idx: number, field: keyof PersonaGroup, value: any) => {
     setData(prev => {
-      const chars = [...prev.characters];
-      chars[idx] = { ...chars[idx], [field]: value };
-      return { ...prev, characters: chars };
+      const groups = [...prev.groups];
+      groups[idx] = { ...groups[idx], [field]: value };
+      return { ...prev, groups };
     });
+  };
+
+  const toggleTag = (groupIdx: number, tag: string) => {
+    setData(prev => {
+      const groups = [...prev.groups];
+      const tags = [...groups[groupIdx].relationship_tags];
+      const i = tags.indexOf(tag);
+      if (i >= 0) tags.splice(i, 1); else tags.push(tag);
+      groups[groupIdx] = { ...groups[groupIdx], relationship_tags: tags };
+      return { ...prev, groups };
+    });
+  };
+
+  const addGroup = () => {
+    setData(prev => ({
+      ...prev,
+      groups: [...prev.groups, { ...DEFAULT_GROUP, name: `Group ${prev.groups.length + 1}` }],
+    }));
+  };
+
+  const removeGroup = (idx: number) => {
+    if (data.groups.length <= 1) return;
+    setData(prev => {
+      const groups = prev.groups.filter((_, i) => i !== idx);
+      const newDefault = prev.default_group >= groups.length ? 0 :
+        prev.default_group > idx ? prev.default_group - 1 : prev.default_group;
+      return { ...prev, groups, default_group: newDefault };
+    });
+  };
+
+  const setDefault = (idx: number) => {
+    const updated = { ...data, default_group: idx };
+    setData(updated);
+    clearTimeout(debounceRef.current);
+    doSave(updated);
   };
 
   const handleToggle = () => {
@@ -578,7 +805,7 @@ const NarrativeSettingsSection: React.FC<{
         <div>
           <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">CP / OC Narrative</h2>
           <p className="text-sm text-stone-400">
-            Define your characters for narrative-style learning content.
+            Define character groups for narrative-style learning. Different groups can anchor different types of concepts.
           </p>
         </div>
         <span className={`text-xs font-medium transition-all duration-300 ${
@@ -595,7 +822,7 @@ const NarrativeSettingsSection: React.FC<{
           <div>
             <p className="text-sm font-semibold text-stone-800">Enable CP/OC Narrative Mode</p>
             <p className="text-xs text-stone-400 mt-0.5">
-              Learning content will be wrapped in your characters' story.
+              Learning content will use your characters as semantic anchors for concept explanations.
             </p>
           </div>
           <button
@@ -612,54 +839,168 @@ const NarrativeSettingsSection: React.FC<{
         </div>
       </div>
 
-      {/* Character fields — only shown when enabled */}
+      {/* Persona groups — only shown when enabled */}
       {data.enabled && (
-        <div className="space-y-6">
-          {/* Characters */}
-          <div className="grid grid-cols-2 gap-5">
-            {data.characters.map((char, i) => (
-              <div key={i} className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-4">
-                <h3 className="text-sm font-semibold text-stone-800">Character {i + 1}</h3>
-                <textarea
-                  value={char.description}
-                  onChange={e => updateChar(i, 'description', e.target.value)}
-                  placeholder={
-                    i === 0
-                      ? 'Example: Ash Lynx, a charismatic gang leader in New York with a traumatic past, extraordinary intelligence, and blonde hair...'
-                      : 'Example: Eiji Okumura, a kind-hearted Japanese photographer who becomes an unwavering light in Ash\'s life...'
-                  }
-                  rows={5}
-                  className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y"
-                />
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider block">
-                    Gender
-                  </label>
-                  <GenderSelect
-                    value={char.gender}
-                    onChange={v => updateChar(i, 'gender', v)}
+        <div className="space-y-5">
+          {data.groups.map((group, gi) => {
+            const isDefault = gi === data.default_group;
+            return (
+              <div
+                key={gi}
+                className={`bg-white border rounded-2xl shadow-sm transition-all ${
+                  isDefault ? 'border-amber-300 ring-1 ring-amber-200/50' : 'border-stone-200'
+                }`}
+              >
+                {/* Group header */}
+                <div className={`px-6 py-4 flex items-center gap-3 border-b rounded-t-2xl overflow-hidden ${
+                  isDefault ? 'bg-amber-50/50 border-amber-200' : 'bg-stone-50/50 border-stone-100'
+                }`}>
+                  <input
+                    type="text"
+                    value={group.name}
+                    onChange={e => updateGroup(gi, 'name', e.target.value)}
+                    className="text-sm font-semibold text-stone-800 bg-transparent border-none outline-none flex-1 min-w-0 placeholder:text-stone-300"
+                    placeholder="Group name..."
+                  />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setDefault(gi)}
+                      title={isDefault ? 'Default group' : 'Set as default'}
+                      className={`p-1.5 rounded-lg transition-all ${
+                        isDefault
+                          ? 'text-amber-500 bg-amber-100'
+                          : 'text-stone-300 hover:text-amber-400 hover:bg-stone-100'
+                      }`}
+                    >
+                      <Star size={14} fill={isDefault ? 'currentColor' : 'none'} />
+                    </button>
+                    {data.groups.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeGroup(gi)}
+                        title="Remove group"
+                        className="p-1.5 rounded-lg text-stone-300 hover:text-red-400 hover:bg-red-50 transition-all"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-5">
+                  {/* Characters side by side */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Character 1</label>
+                        <input
+                          type="text"
+                          value={group.char_1}
+                          onChange={e => updateGroup(gi, 'char_1', e.target.value)}
+                          placeholder="e.g. Ash Lynx"
+                          className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-medium text-stone-400 uppercase tracking-wider">Personality</label>
+                        <textarea
+                          value={group.char_1_desc}
+                          onChange={e => updateGroup(gi, 'char_1_desc', e.target.value)}
+                          placeholder="Brief personality so the AI stays in character, e.g. cold exterior, fiercely protective, genius-level IQ"
+                          rows={2}
+                          className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Character 2</label>
+                        <input
+                          type="text"
+                          value={group.char_2}
+                          onChange={e => updateGroup(gi, 'char_2', e.target.value)}
+                          placeholder="e.g. Eiji Okumura"
+                          className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-medium text-stone-400 uppercase tracking-wider">Personality</label>
+                        <textarea
+                          value={group.char_2_desc}
+                          onChange={e => updateGroup(gi, 'char_2_desc', e.target.value)}
+                          placeholder="e.g. gentle, emotionally steady, sees the best in people"
+                          rows={2}
+                          className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fandom */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+                      Fandom <span className="text-stone-300 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={group.fandom}
+                      onChange={e => updateGroup(gi, 'fandom', e.target.value)}
+                      placeholder="e.g. Banana Fish, Genshin Impact, Original"
+                      className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
+                    />
+                  </div>
+
+                  {/* Relationship tags */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+                      Relationship Tags
+                    </label>
+                    <p className="text-xs text-stone-400">
+                      How do these characters relate? The AI uses these tags to match concepts — click to toggle.
+                    </p>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {RELATIONSHIP_TAG_PRESETS.map(tag => {
+                        const active = group.relationship_tags.includes(tag.value);
+                        return (
+                          <button
+                            key={tag.value}
+                            type="button"
+                            onClick={() => toggleTag(gi, tag.value)}
+                            className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                              active
+                                ? 'bg-amber-100 border-amber-300 text-amber-800 font-medium shadow-sm'
+                                : 'bg-stone-50 border-stone-200 text-stone-500 hover:border-amber-200 hover:bg-amber-50'
+                            }`}
+                          >
+                            {active && <span className="mr-1">✓</span>}
+                            {tag.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Linked Courses dropdown */}
+                  <LinkedCoursesSelect
+                    allCourses={allCourses}
+                    selected={group.course_tags || []}
+                    onChange={tags => updateGroup(gi, 'course_tags', tags)}
                   />
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
 
-          {/* Fandom */}
-          <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-2">
-            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider block">
-              Fandom <span className="text-stone-300 font-normal">(optional)</span>
-            </label>
-            <p className="text-xs text-stone-400">
-              Specify the universe your characters belong to. Helps keep the narrative consistent.
-            </p>
-            <input
-              type="text"
-              value={data.fandom}
-              onChange={e => setData(prev => ({ ...prev, fandom: e.target.value }))}
-              placeholder="e.g. Banana Fish, Genshin Impact, Original"
-              className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
-            />
-          </div>
+          {/* Add group button */}
+          <button
+            type="button"
+            onClick={addGroup}
+            className="w-full flex items-center justify-center gap-2 py-3.5 border-2 border-dashed border-stone-300 rounded-2xl text-sm text-stone-400 hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50/50 transition-all"
+          >
+            <Plus size={16} />
+            Add another character group
+          </button>
         </div>
       )}
     </div>
@@ -794,6 +1135,7 @@ const StudentProfilePage: React.FC = () => {
   });
   const [personaSets, setPersonaSets] = useState<PersonaSets>(DEFAULT_PERSONA);
   const [courses, setCourses] = useState<CourseProgress[]>([]);
+  const [allCourses, setAllCourses] = useState<{ id: number; course_code: string; topic: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   // ── Fetch profile + courses ─────────────────────────────────────────────────
@@ -807,8 +1149,9 @@ const StudentProfilePage: React.FC = () => {
     Promise.all([
       fetch('/api/profile', { headers }).then(r => r.json()),
       fetch('/api/profile/courses', { headers }).then(r => r.json()),
+      fetch('/api/graph/courses').then(r => r.json()),
     ])
-      .then(([profileData, coursesData]) => {
+      .then(([profileData, coursesData, allCoursesData]) => {
         setProfile({
           email: profileData.email || email,
           display_name: profileData.display_name || '',
@@ -817,12 +1160,11 @@ const StudentProfilePage: React.FC = () => {
           avatar_url: profileData.avatar_url || '',
           custom_prompt: profileData.custom_prompt || '',
         });
-        // Load persona_sets from profile
+        // Load persona_sets from profile (with migration for old format)
         const ps = profileData.persona_sets;
-        if (ps && typeof ps === 'object' && 'enabled' in ps) {
-          setPersonaSets(ps);
-        }
+        setPersonaSets(migratePersonaSets(ps));
         setCourses(coursesData.courses || []);
+        setAllCourses(Array.isArray(allCoursesData) ? allCoursesData : []);
       })
       .catch(err => console.warn('Profile fetch error:', err))
       .finally(() => setLoading(false));
@@ -989,7 +1331,7 @@ const StudentProfilePage: React.FC = () => {
               <ProfileSection profile={profile} onSave={handleSave} />
             )}
             {activeSection === 'narrative' && (
-              <NarrativeSettingsSection personaSets={personaSets} onSave={handlePersonaSave} />
+              <NarrativeSettingsSection personaSets={personaSets} onSave={handlePersonaSave} allCourses={allCourses} />
             )}
             {activeSection === 'progress' && (
               <ProgressSection courses={courses} />
