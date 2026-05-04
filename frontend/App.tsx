@@ -12,6 +12,7 @@ import CoursePage from './pages/CoursePage';
 import GeneratePage from './pages/GeneratePage';
 import StudentDataPage from './pages/StudentDataPage';
 import SettingsPage from './pages/SettingsPage';
+import StudentProfilePage from './pages/StudentProfilePage';
 import LoginPage from './pages/LoginPage';
 
 // ─── Route guards ─────────────────────────────────────────────────────────────
@@ -20,10 +21,12 @@ import LoginPage from './pages/LoginPage';
 const ProtectedRoute: React.FC<{
   element: React.ReactElement;
   professorOnly?: boolean;
-}> = ({ element, professorOnly }) => {
+  studentOnly?: boolean;
+}> = ({ element, professorOnly, studentOnly }) => {
   const { auth } = useAuth();
   if (!auth) return <Navigate to="/login" replace />;
   if (professorOnly && auth.role === 'student') return <Navigate to="/courses" replace />;
+  if (studentOnly && auth.role === 'professor') return <Navigate to="/settings" replace />;
   return element;
 };
 
@@ -55,6 +58,9 @@ const AppRoutes: React.FC = () => {
       <Route path="/generate"     element={<ProtectedRoute element={<GeneratePage />}     professorOnly />} />
       <Route path="/student-data" element={<ProtectedRoute element={<StudentDataPage />}  professorOnly />} />
       <Route path="/settings"     element={<ProtectedRoute element={<SettingsPage />}     professorOnly />} />
+
+      {/* Student only */}
+      <Route path="/profile"      element={<ProtectedRoute element={<StudentProfilePage />} studentOnly />} />
     </Routes>
   );
 };

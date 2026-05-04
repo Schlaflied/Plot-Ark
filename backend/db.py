@@ -300,6 +300,22 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS idx_annotations_course
                     ON concept_annotations(course_id)
                 """)
+                # ── student_profiles (student-facing profile page) ──────────────
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS student_profiles (
+                        id SERIAL PRIMARY KEY,
+                        email TEXT UNIQUE NOT NULL,
+                        display_name TEXT DEFAULT '',
+                        preferred_style TEXT DEFAULT '',
+                        persona_sets JSONB DEFAULT '[]',
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_student_profiles_email
+                    ON student_profiles(email)
+                """)
                 # Safe migrations for columns added after initial deploy
                 cur.execute("ALTER TABLE xapi_statements ADD COLUMN IF NOT EXISTS course_id INTEGER")
                 cur.execute("ALTER TABLE xapi_statements ADD COLUMN IF NOT EXISTS response TEXT")

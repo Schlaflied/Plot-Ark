@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { Globe, Moon, Sun, Settings, Network, LogOut } from 'lucide-react';
+import { Globe, Moon, Sun, Settings, Network, LogOut, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // ─── Extracted components ─────────────────────────────────────────────────────
@@ -236,6 +236,15 @@ const CoursesPage: React.FC = () => {
               {darkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
             {!isStudent && <SettingsButton />}
+            {isStudent && (
+              <Link
+                to="/profile"
+                title="Profile"
+                className="p-1.5 rounded-lg text-stone-500 hover:text-stone-900 hover:bg-stone-100 transition-colors inline-flex items-center"
+              >
+                <User size={18} />
+              </Link>
+            )}
             <button
               onClick={handleLogout}
               title="Sign out"
