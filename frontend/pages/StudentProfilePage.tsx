@@ -71,21 +71,49 @@ const ProfileSection: React.FC<{
   const [displayName, setDisplayName] = useState(profile.display_name);
   const [selectedStyle, setSelectedStyle] = useState(profile.preferred_style);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const isInitialMount = useRef(true);
 
-  // Sync when profile prop changes
+  // Sync when profile prop changes (initial load)
   useEffect(() => {
     setDisplayName(profile.display_name);
     setSelectedStyle(profile.preferred_style);
     setAvatarUrl(profile.avatar_url);
+    isInitialMount.current = true;
   }, [profile]);
 
+  // ── Auto-save helper ──────────────────────────────────────────────────────
+  const doSave = useCallback(async (updates: Partial<StudentProfile>) => {
+    setSaveStatus('saving');
+    await onSave(updates);
+    setSaveStatus('saved');
+    setTimeout(() => setSaveStatus('idle'), 1500);
+  }, [onSave]);
+
+  // Debounced auto-save for display name (800ms after typing stops)
+  useEffect(() => {
+    if (isInitialMount.current) { isInitialMount.current = false; return; }
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      doSave({ display_name: displayName, preferred_style: selectedStyle, avatar_url: avatarUrl });
+    }, 800);
+    return () => clearTimeout(debounceRef.current);
+  }, [displayName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Immediate save for style selection
+  const handleStyleChange = (value: string) => {
+    const newStyle = selectedStyle === value ? '' : value;
+    setSelectedStyle(newStyle);
+    clearTimeout(debounceRef.current);
+    doSave({ display_name: displayName, preferred_style: newStyle, avatar_url: avatarUrl });
+  };
+
+  // Immediate save for avatar upload
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Limit to 2MB
     if (file.size > 2 * 1024 * 1024) {
       alert('Image must be under 2 MB');
       return;
@@ -94,30 +122,28 @@ const ProfileSection: React.FC<{
     reader.onload = () => {
       const dataUrl = reader.result as string;
       setAvatarUrl(dataUrl);
+      clearTimeout(debounceRef.current);
+      doSave({ display_name: displayName, preferred_style: selectedStyle, avatar_url: dataUrl });
     };
     reader.readAsDataURL(file);
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    await onSave({ display_name: displayName, preferred_style: selectedStyle, avatar_url: avatarUrl });
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
-  const hasChanges =
-    displayName !== profile.display_name ||
-    selectedStyle !== profile.preferred_style ||
-    avatarUrl !== profile.avatar_url;
-
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">Your Profile</h2>
-        <p className="text-sm text-stone-400">
-          Personalize your Plot Ark experience.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">Your Profile</h2>
+          <p className="text-sm text-stone-400">
+            Personalize your Plot Ark experience.
+          </p>
+        </div>
+        {/* Auto-save indicator */}
+        <span className={`text-xs font-medium transition-all duration-300 ${
+          saveStatus === 'saving' ? 'text-amber-500' :
+          saveStatus === 'saved' ? 'text-green-500' : 'text-transparent'
+        }`}>
+          {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : '·'}
+        </span>
       </div>
 
       {/* Identity card */}
@@ -139,7 +165,7 @@ const ProfileSection: React.FC<{
               />
             ) : (
               <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-2xl font-bold shadow-sm">
-                {(profile.display_name || profile.email || '?')[0].toUpperCase()}
+                {(displayName || profile.email || '?')[0].toUpperCase()}
               </div>
             )}
             {/* Camera overlay */}
@@ -156,7 +182,7 @@ const ProfileSection: React.FC<{
           </button>
           <div>
             <p className="text-base font-semibold text-stone-900">
-              {profile.display_name || 'Student'}
+              {displayName || 'Student'}
             </p>
             <p className="text-sm text-stone-400">{profile.email}</p>
           </div>
@@ -193,7 +219,7 @@ const ProfileSection: React.FC<{
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setSelectedStyle(active ? '' : opt.value)}
+                  onClick={() => handleStyleChange(opt.value)}
                   className={`relative flex flex-col items-center gap-2.5 p-5 rounded-xl border-2 transition-all text-center ${
                     active
                       ? 'border-amber-400 bg-amber-50 shadow-md'
@@ -220,23 +246,6 @@ const ProfileSection: React.FC<{
               );
             })}
           </div>
-        </div>
-
-        {/* Save button */}
-        <div className="flex justify-end pt-2">
-          <button
-            onClick={handleSave}
-            disabled={saving || (!hasChanges && !saving)}
-            className={`px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              saved
-                ? 'bg-green-500 text-white'
-                : hasChanges
-                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm'
-                  : 'bg-stone-100 text-stone-400 cursor-not-allowed'
-            }`}
-          >
-            {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save Profile'}
-          </button>
         </div>
       </div>
     </div>
