@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, User, BarChart3, Check } from 'lucide-react';
+import { ChevronLeft, User, BarChart3, Check, Camera } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -16,6 +16,7 @@ interface StudentProfile {
   email: string;
   display_name: string;
   preferred_style: string;
+  avatar_url: string;
 }
 
 interface CourseProgress {
@@ -43,18 +44,21 @@ const STYLE_OPTIONS = [
     label: 'Analogies',
     emoji: '🌉',
     desc: 'Learn through comparisons with familiar things',
+    example: '"A contract is like a promise you pinky-swear on — but with lawyers watching."',
   },
   {
     value: 'steps',
     label: 'Step-by-step',
     emoji: '📝',
     desc: 'Learn through structured, numbered breakdowns',
+    example: '"1. Offer → 2. Acceptance → 3. Consideration → 4. Binding contract."',
   },
   {
     value: 'narrative',
     label: 'Stories',
     emoji: '📖',
     desc: 'Learn through scenarios and narratives',
+    example: '"Alex offered to sell her car for $5k. Ben said yes and paid — now there\'s a contract."',
   },
 ];
 
@@ -66,52 +70,100 @@ const ProfileSection: React.FC<{
 }> = ({ profile, onSave }) => {
   const [displayName, setDisplayName] = useState(profile.display_name);
   const [selectedStyle, setSelectedStyle] = useState(profile.preferred_style);
+  const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync when profile prop changes
   useEffect(() => {
     setDisplayName(profile.display_name);
     setSelectedStyle(profile.preferred_style);
+    setAvatarUrl(profile.avatar_url);
   }, [profile]);
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Limit to 2MB
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image must be under 2 MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setAvatarUrl(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSave = async () => {
     setSaving(true);
-    await onSave({ display_name: displayName, preferred_style: selectedStyle });
+    await onSave({ display_name: displayName, preferred_style: selectedStyle, avatar_url: avatarUrl });
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
   const hasChanges =
-    displayName !== profile.display_name || selectedStyle !== profile.preferred_style;
+    displayName !== profile.display_name ||
+    selectedStyle !== profile.preferred_style ||
+    avatarUrl !== profile.avatar_url;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h2 className="text-lg font-serif font-semibold text-stone-900 mb-1">Your Profile</h2>
-        <p className="text-xs text-stone-400">
+        <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">Your Profile</h2>
+        <p className="text-sm text-stone-400">
           Personalize your Plot Ark experience.
         </p>
       </div>
 
       {/* Identity card */}
-      <div className="bg-white border border-stone-200 rounded-xl shadow-sm p-6 space-y-5">
+      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-8 space-y-8">
         {/* Avatar + email */}
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-xl font-bold shadow-sm">
-            {(profile.display_name || profile.email || '?')[0].toUpperCase()}
-          </div>
+        <div className="flex items-center gap-5">
+          {/* Clickable avatar */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="relative group shrink-0"
+            title="Change avatar"
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Avatar"
+                className="w-20 h-20 rounded-full object-cover shadow-sm border-2 border-stone-100"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-2xl font-bold shadow-sm">
+                {(profile.display_name || profile.email || '?')[0].toUpperCase()}
+              </div>
+            )}
+            {/* Camera overlay */}
+            <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/40 flex items-center justify-center transition-all">
+              <Camera size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarUpload}
+              className="hidden"
+            />
+          </button>
           <div>
-            <p className="text-sm font-semibold text-stone-900">
+            <p className="text-base font-semibold text-stone-900">
               {profile.display_name || 'Student'}
             </p>
-            <p className="text-xs text-stone-400">{profile.email}</p>
+            <p className="text-sm text-stone-400">{profile.email}</p>
           </div>
         </div>
 
         {/* Display name */}
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider block">
             Display Name
           </label>
@@ -120,19 +172,21 @@ const ProfileSection: React.FC<{
             value={displayName}
             onChange={e => setDisplayName(e.target.value)}
             placeholder="How should we call you?"
-            className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
+            className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
           />
         </div>
 
         {/* Learning style */}
-        <div className="space-y-3">
-          <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider block">
-            Preferred Learning Style
-          </label>
-          <p className="text-xs text-stone-400 -mt-1">
-            Choose how you prefer concepts to be explained.
-          </p>
-          <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider block">
+              Preferred Learning Style
+            </label>
+            <p className="text-sm text-stone-400 mt-1">
+              Choose how you prefer concepts to be explained. Here's how each style would explain <span className="font-medium text-stone-600">Contract Law</span>:
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
             {STYLE_OPTIONS.map(opt => {
               const active = selectedStyle === opt.value;
               return (
@@ -140,22 +194,28 @@ const ProfileSection: React.FC<{
                   key={opt.value}
                   type="button"
                   onClick={() => setSelectedStyle(active ? '' : opt.value)}
-                  className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center ${
+                  className={`relative flex flex-col items-center gap-2.5 p-5 rounded-xl border-2 transition-all text-center ${
                     active
-                      ? 'border-amber-400 bg-amber-50 shadow-sm'
+                      ? 'border-amber-400 bg-amber-50 shadow-md'
                       : 'border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50'
                   }`}
                 >
                   {active && (
-                    <span className="absolute top-2 right-2">
-                      <Check size={14} className="text-amber-500" />
+                    <span className="absolute top-2.5 right-2.5">
+                      <Check size={16} className="text-amber-500" />
                     </span>
                   )}
-                  <span className="text-2xl">{opt.emoji}</span>
-                  <span className={`text-xs font-semibold ${active ? 'text-amber-700' : 'text-stone-700'}`}>
+                  <span className="text-3xl">{opt.emoji}</span>
+                  <span className={`text-sm font-semibold ${active ? 'text-amber-700' : 'text-stone-700'}`}>
                     {opt.label}
                   </span>
-                  <span className="text-[10px] text-stone-400 leading-tight">{opt.desc}</span>
+                  <span className="text-xs text-stone-400 leading-relaxed">{opt.desc}</span>
+                  {/* Concrete example */}
+                  <span className={`text-[11px] leading-snug mt-1 italic ${
+                    active ? 'text-amber-600/80' : 'text-stone-400/70'
+                  }`}>
+                    {opt.example}
+                  </span>
                 </button>
               );
             })}
@@ -163,11 +223,11 @@ const ProfileSection: React.FC<{
         </div>
 
         {/* Save button */}
-        <div className="flex justify-end pt-1">
+        <div className="flex justify-end pt-2">
           <button
             onClick={handleSave}
             disabled={saving || (!hasChanges && !saving)}
-            className={`px-5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            className={`px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${
               saved
                 ? 'bg-green-500 text-white'
                 : hasChanges
@@ -275,6 +335,7 @@ const StudentProfilePage: React.FC = () => {
     email,
     display_name: '',
     preferred_style: '',
+    avatar_url: '',
   });
   const [courses, setCourses] = useState<CourseProgress[]>([]);
   const [loading, setLoading] = useState(true);
@@ -296,6 +357,7 @@ const StudentProfilePage: React.FC = () => {
           email: profileData.email || email,
           display_name: profileData.display_name || '',
           preferred_style: profileData.preferred_style || '',
+          avatar_url: profileData.avatar_url || '',
         });
         setCourses(coursesData.courses || []);
       })
@@ -394,9 +456,13 @@ const StudentProfilePage: React.FC = () => {
           {/* Header */}
           <div className="p-4 border-b border-stone-700">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-sm font-bold">
-                {(profile.display_name || email || '?')[0].toUpperCase()}
-              </div>
+              {profile.avatar_url ? (
+                <img src={profile.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-sm font-bold">
+                  {(profile.display_name || email || '?')[0].toUpperCase()}
+                </div>
+              )}
               <div className="min-w-0">
                 <p className="text-sm text-stone-100 font-medium truncate">
                   {profile.display_name || 'Student'}

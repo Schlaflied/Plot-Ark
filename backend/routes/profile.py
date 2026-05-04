@@ -15,7 +15,7 @@ def _get_or_create_profile(email: str) -> dict | None:
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, email, display_name, preferred_style, persona_sets, created_at, updated_at "
+            "SELECT id, email, display_name, preferred_style, persona_sets, avatar_url, created_at, updated_at "
             "FROM student_profiles WHERE email = %s",
             (email,),
         )
@@ -29,8 +29,9 @@ def _get_or_create_profile(email: str) -> dict | None:
                 "display_name": row[2] or "",
                 "preferred_style": row[3] or "",
                 "persona_sets": row[4] or [],
-                "created_at": row[5].isoformat() if row[5] else None,
-                "updated_at": row[6].isoformat() if row[6] else None,
+                "avatar_url": row[5] or "",
+                "created_at": row[6].isoformat() if row[6] else None,
+                "updated_at": row[7].isoformat() if row[7] else None,
             }
         # Auto-create
         cur.execute(
@@ -47,6 +48,7 @@ def _get_or_create_profile(email: str) -> dict | None:
             "display_name": "",
             "preferred_style": "",
             "persona_sets": [],
+            "avatar_url": "",
             "created_at": new[1].isoformat() if new[1] else None,
             "updated_at": None,
         }
@@ -79,6 +81,7 @@ def update_profile():
     data = request.get_json(force=True)
     display_name = data.get("display_name")
     preferred_style = data.get("preferred_style")
+    avatar_url = data.get("avatar_url")
 
     # Validate preferred_style
     valid_styles = ("", "analogy", "steps", "narrative")
@@ -102,6 +105,9 @@ def update_profile():
         if preferred_style is not None:
             updates.append("preferred_style = %s")
             params.append(preferred_style)
+        if avatar_url is not None:
+            updates.append("avatar_url = %s")
+            params.append(avatar_url)
         if not updates:
             cur.close()
             conn.close()
