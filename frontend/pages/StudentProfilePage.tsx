@@ -110,21 +110,44 @@ const ProfileSection: React.FC<{
     doSave({ display_name: displayName, preferred_style: newStyle, avatar_url: avatarUrl });
   };
 
-  // Immediate save for avatar upload
+  // Immediate save for avatar upload — resize to 512×512 for crisp display
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      alert('Image must be under 2 MB');
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be under 5 MB');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
+
+    const img = new Image();
+    img.onload = () => {
+      // Center-crop to square, then resize to 512×512
+      const size = 512;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d')!;
+
+      // Enable high-quality scaling
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      // Calculate center crop (square)
+      const srcSize = Math.min(img.width, img.height);
+      const sx = (img.width - srcSize) / 2;
+      const sy = (img.height - srcSize) / 2;
+
+      ctx.drawImage(img, sx, sy, srcSize, srcSize, 0, 0, size, size);
+
+      const dataUrl = canvas.toDataURL('image/png');
       setAvatarUrl(dataUrl);
       clearTimeout(debounceRef.current);
       doSave({ display_name: displayName, preferred_style: selectedStyle, avatar_url: dataUrl });
     };
+
+    // Read file → img element → canvas
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result as string; };
     reader.readAsDataURL(file);
   };
 
