@@ -19,6 +19,21 @@ interface StudentProfile {
   discipline: string;
   avatar_url: string;
   custom_prompt: string;
+  model_config?: ModelConfig;
+}
+
+interface ModelConfig {
+  use_own_key: boolean;
+  api_keys: {
+    openai: string;
+    anthropic: string;
+    google: string;
+  };
+  roles: {
+    explainer: string;
+    checker: string;
+    adapter: string;
+  };
 }
 
 interface PersonaGroup {
@@ -774,7 +789,7 @@ const NarrativeSettingsSection: React.FC<{
         <div>
           <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">CP / OC Narrative</h2>
           <p className="text-sm text-stone-400">
-            Define character groups for narrative-style learning. Different groups can anchor different types of concepts.
+            <span className="text-stone-500">CP</span> (Coupling) &amp; <span className="text-stone-500">OC</span> (Original Character) — define character groups for narrative-style learning.
           </p>
         </div>
         <span className={`text-xs font-medium transition-all duration-300 ${
@@ -789,9 +804,9 @@ const NarrativeSettingsSection: React.FC<{
       <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-stone-800">Enable CP/OC Narrative Mode</p>
+            <p className="text-sm font-semibold text-stone-800">Enable CP / OC Narrative Mode</p>
             <p className="text-xs text-stone-400 mt-0.5">
-              Learning content will use your characters as semantic anchors for concept explanations.
+              Learning content will use your Coupling or Original Character pairs as semantic anchors for concept explanations.
             </p>
           </div>
           <button
@@ -890,8 +905,8 @@ const NarrativeSettingsSection: React.FC<{
                         <GenderSelect value={group.char_1_gender || ''} onChange={v => updateGroup(gi, 'char_1_gender', v)} />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-medium text-stone-400 uppercase tracking-wider">Personality</label>
-                        <textarea value={group.char_1_desc} onChange={e => updateGroup(gi, 'char_1_desc', e.target.value)} placeholder="Brief personality so the AI stays in character, e.g. cold exterior, fiercely protective, genius-level IQ" rows={2} className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed" />
+                        <label className="text-[10px] font-medium text-stone-400 uppercase tracking-wider">Personality <span className="normal-case font-normal text-stone-300">— helps AI stay in character</span></label>
+                        <textarea value={group.char_1_desc} onChange={e => updateGroup(gi, 'char_1_desc', e.target.value)} placeholder="e.g. cold exterior, fiercely protective" rows={2} className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed" />
                       </div>
                     </div>
                     <div className="space-y-3">
@@ -904,8 +919,8 @@ const NarrativeSettingsSection: React.FC<{
                         <GenderSelect value={group.char_2_gender || ''} onChange={v => updateGroup(gi, 'char_2_gender', v)} />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-medium text-stone-400 uppercase tracking-wider">Personality</label>
-                        <textarea value={group.char_2_desc} onChange={e => updateGroup(gi, 'char_2_desc', e.target.value)} placeholder="e.g. gentle, emotionally steady, sees the best in people" rows={2} className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed" />
+                        <label className="text-[10px] font-medium text-stone-400 uppercase tracking-wider">Personality <span className="normal-case font-normal text-stone-300">— helps AI stay in character</span></label>
+                        <textarea value={group.char_2_desc} onChange={e => updateGroup(gi, 'char_2_desc', e.target.value)} placeholder="e.g. gentle, emotionally steady" rows={2} className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed" />
                       </div>
                     </div>
                   </div>
@@ -980,6 +995,187 @@ const NarrativeSettingsSection: React.FC<{
 
 // ─── AI Settings Section ─────────────────────────────────────────────────────────
 
+const DEFAULT_MODEL_CONFIG: ModelConfig = {
+  use_own_key: false,
+  api_keys: { openai: '', anthropic: '', google: '' },
+  roles: { explainer: 'gpt-4o', checker: 'claude-haiku-4-5', adapter: 'gemini-2.5-flash' },
+};
+
+const MODEL_OPTIONS = [
+  { value: 'gpt-4o',           label: 'GPT-4o',           provider: 'openai',    cost: 0.52 },
+  { value: 'gpt-4o-mini',      label: 'GPT-4o Mini',      provider: 'openai',    cost: 0.03 },
+  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', provider: 'anthropic', cost: 0.72 },
+  { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5',  provider: 'anthropic', cost: 0.24 },
+  { value: 'claude-opus-4-7',  label: 'Claude Opus 4.7',   provider: 'anthropic', cost: 1.20 },
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash',  provider: 'google',    cost: 0.11 },
+  { value: 'gemini-3-flash',   label: 'Gemini 3 Flash',    provider: 'google',    cost: 0.14 },
+];
+
+/* Custom amber dropdown for model selection */
+const ModelSelect: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+}> = ({ value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const selected = MODEL_OPTIONS.find(o => o.value === value);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`w-full flex items-center justify-between gap-1.5 bg-white border rounded-lg px-3 py-2 text-xs text-left outline-none transition-all cursor-pointer ${
+          open ? 'border-amber-400 ring-2 ring-amber-200/60 shadow-sm' : 'border-stone-200 hover:border-stone-300'
+        }`}
+      >
+        <span className="text-stone-700 truncate">{selected?.label || value}</span>
+        <ChevronDown size={12} className={`text-stone-400 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg shadow-stone-900/8 overflow-hidden py-0.5 max-h-56 overflow-y-auto">
+          {MODEL_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-xs transition-colors flex items-center justify-between ${
+                value === opt.value ? 'bg-amber-50 text-amber-800 font-medium' : 'text-stone-700 hover:bg-stone-50'
+              }`}
+            >
+              <span>{opt.label}</span>
+              <span className="text-[10px] text-stone-300">${opt.cost.toFixed(2)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AGENT_ROLES = [
+  { key: 'explainer' as const, emoji: '🧠', label: 'Primary Explainer', desc: 'Main content generation & concept explanation', warn: 'Recommend dense architecture model' },
+  { key: 'checker'   as const, emoji: '🔍', label: 'Fact Checker',      desc: 'Cross-validation, error correction, hallucination reduction', warn: null },
+  { key: 'adapter'   as const, emoji: '📝', label: 'Style Adapter',     desc: 'Rewrites content to match your learning preferences', warn: null },
+];
+
+const ModelSelectionCard: React.FC<{
+  mc: ModelConfig;
+  onChange: (field: string, value: string | boolean) => void;
+}> = ({ mc, onChange }) => {
+  const totalCost = AGENT_ROLES.reduce((sum, r) => {
+    const m = MODEL_OPTIONS.find(o => o.value === mc.roles[r.key]);
+    return sum + (m?.cost || 0);
+  }, 0);
+
+  return (
+    <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-5">
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <Settings2 size={16} className="text-amber-500" />
+          <p className="text-sm font-semibold text-stone-800">Model Selection</p>
+        </div>
+        <p className="text-xs text-stone-400 leading-relaxed">
+          Configure your Agent Team — each role uses a different model optimized for its task.
+        </p>
+      </div>
+
+      {/* Agent role cards */}
+      <div className="space-y-3">
+        {AGENT_ROLES.map(role => (
+          <div key={role.key} className="bg-stone-50/80 border border-stone-100 rounded-xl p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-base">{role.emoji}</span>
+                  <span className="text-sm font-semibold text-stone-700">{role.label}</span>
+                </div>
+                <p className="text-xs text-stone-400 leading-relaxed">{role.desc}</p>
+                {role.warn && (
+                  <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                    <span>⚠</span> {role.warn}
+                  </p>
+                )}
+              </div>
+              <div className="w-44 flex-shrink-0">
+                <ModelSelect value={mc.roles[role.key]} onChange={v => onChange(role.key, v)} />
+                <div className="text-[10px] text-stone-300 mt-1 text-right">
+                  ~${MODEL_OPTIONS.find(o => o.value === mc.roles[role.key])?.cost.toFixed(2) || '?'}/gen
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Cost estimate */}
+      <div className="flex items-center justify-between bg-amber-50/60 border border-amber-100 rounded-xl px-4 py-3">
+        <span className="text-xs text-stone-500">💰 Estimated cost per generation</span>
+        <span className="text-sm font-semibold text-amber-700">~${totalCost.toFixed(2)}</span>
+      </div>
+
+      {/* API Key toggle */}
+      <div className="border-t border-stone-100 pt-4 space-y-3">
+        <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">API Keys</p>
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <input
+            type="radio"
+            name="api-key-mode"
+            checked={!mc.use_own_key}
+            onChange={() => onChange('use_own_key', false)}
+            className="accent-amber-500 w-3.5 h-3.5"
+          />
+          <span className="text-sm text-stone-600 group-hover:text-stone-800 transition">Use school's default keys</span>
+        </label>
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <input
+            type="radio"
+            name="api-key-mode"
+            checked={mc.use_own_key}
+            onChange={() => onChange('use_own_key', true)}
+            className="accent-amber-500 w-3.5 h-3.5"
+          />
+          <span className="text-sm text-stone-600 group-hover:text-stone-800 transition">Use my own API keys</span>
+        </label>
+        {mc.use_own_key && (
+          <div className="space-y-2 pl-6">
+            {[
+              { key: 'openai' as const,    label: 'OpenAI',    placeholder: 'sk-...',          needed: Object.values(mc.roles).some(v => v.startsWith('gpt')) },
+              { key: 'anthropic' as const,  label: 'Anthropic', placeholder: 'sk-ant-...',      needed: Object.values(mc.roles).some(v => v.startsWith('claude')) },
+              { key: 'google' as const,     label: 'Google AI', placeholder: 'AIza...',         needed: Object.values(mc.roles).some(v => v.startsWith('gemini')) },
+            ].map(p => (
+              <div key={p.key} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] font-medium text-stone-400 uppercase tracking-wider">{p.label}</label>
+                  {p.needed && <span className="text-[9px] text-amber-500 font-medium">required</span>}
+                  {!p.needed && <span className="text-[9px] text-stone-300">not used</span>}
+                </div>
+                <input
+                  type="password"
+                  value={mc.api_keys[p.key]}
+                  onChange={e => onChange(`api_key_${p.key}`, e.target.value)}
+                  placeholder={p.placeholder}
+                  disabled={!p.needed}
+                  className={`w-full text-sm border rounded-xl px-4 py-2 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition font-mono ${
+                    p.needed ? 'bg-stone-50 border-stone-200 text-stone-800' : 'bg-stone-100 border-stone-100 text-stone-300 cursor-not-allowed'
+                  }`}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const AI_PROMPT_EXAMPLES = [
   '“Please explain things concisely — I prefer short, clear paragraphs over long explanations.”',
   '“I\'m a visual learner. When possible, describe things using spatial or visual metaphors.”',
@@ -990,11 +1186,18 @@ const AI_PROMPT_EXAMPLES = [
 const AISettingsSection: React.FC<{
   customPrompt: string;
   onSave: (prompt: string) => void;
-}> = ({ customPrompt, onSave }) => {
+  modelConfig: ModelConfig;
+  onSaveModel: (mc: ModelConfig) => void;
+}> = ({ customPrompt, onSave, modelConfig, onSaveModel }) => {
   const [prompt, setPrompt] = useState(customPrompt);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const isInit = useRef(true);
+
+  // Model config local state
+  const [mc, setMc] = useState<ModelConfig>(modelConfig);
+  const mcDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const mcInit = useRef(true);
 
   useEffect(() => {
     setPrompt(customPrompt);
@@ -1074,14 +1277,27 @@ const AISettingsSection: React.FC<{
         </div>
       </div>
 
-      {/* Future: Model selection will go here */}
-      <div className="bg-stone-50 border border-dashed border-stone-300 rounded-2xl p-6 text-center">
-        <Sparkles size={20} className="text-stone-300 mx-auto mb-2" />
-        <p className="text-sm text-stone-400 font-medium">Model Selection</p>
-        <p className="text-xs text-stone-300 mt-1">
-          Choose your preferred AI model — coming soon.
-        </p>
-      </div>
+      {/* Model Selection — Sprint 3A.2 */}
+      <ModelSelectionCard mc={mc} onChange={(field, val) => {
+        const next = { ...mc };
+        if (field === 'use_own_key') {
+          next.use_own_key = val as boolean;
+        } else if (field.startsWith('api_key_')) {
+          const provider = field.replace('api_key_', '') as keyof ModelConfig['api_keys'];
+          next.api_keys = { ...next.api_keys, [provider]: val as string };
+        } else {
+          next.roles = { ...next.roles, [field]: val as string };
+        }
+        setMc(next);
+        if (mcInit.current) { mcInit.current = false; return; }
+        clearTimeout(mcDebounce.current);
+        mcDebounce.current = setTimeout(() => {
+          setSaveStatus('saving');
+          onSaveModel(next);
+          setTimeout(() => setSaveStatus('saved'), 300);
+          setTimeout(() => setSaveStatus('idle'), 1800);
+        }, 800);
+      }} />
     </div>
   );
 };
@@ -1130,6 +1346,7 @@ const StudentProfilePage: React.FC = () => {
           discipline: profileData.discipline || 'humanities',
           avatar_url: profileData.avatar_url || '',
           custom_prompt: profileData.custom_prompt || '',
+          model_config: profileData.model_config || DEFAULT_MODEL_CONFIG,
         });
         // Load persona_sets from profile (with migration for old format)
         const ps = profileData.persona_sets;
@@ -1311,6 +1528,8 @@ const StudentProfilePage: React.FC = () => {
               <AISettingsSection
                 customPrompt={profile.custom_prompt}
                 onSave={(prompt) => handleSave({ custom_prompt: prompt })}
+                modelConfig={profile.model_config || DEFAULT_MODEL_CONFIG}
+                onSaveModel={(mc) => handleSave({ model_config: mc } as any)}
               />
             )}
           </div>
