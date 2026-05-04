@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, User, BarChart3, Check, Camera, Settings2, ChevronDown, Sparkles, Plus, Trash2, Star, X } from 'lucide-react';
+import { ChevronLeft, User, BarChart3, Check, Camera, Settings2, ChevronDown, Sparkles, Plus, Trash2, Star, X, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,8 +24,10 @@ interface StudentProfile {
 interface PersonaGroup {
   name: string;
   char_1: string;
+  char_1_gender: string;
   char_1_desc: string;
   char_2: string;
+  char_2_gender: string;
   char_2_desc: string;
   fandom: string;
   relationship_tags: string[];
@@ -442,91 +444,6 @@ const ProgressSection: React.FC<{ courses: CourseProgress[] }> = ({ courses }) =
 
 // ─── Narrative Settings Section ───────────────────────────────────────────────
 
-const GENDER_OPTIONS = ['Male', 'Female', 'Nonbinary'] as const;
-
-// ─── Custom Gender Dropdown (matches syllabus Select style) ───────────────────
-
-const GenderSelect: React.FC<{
-  value: string;
-  onChange: (v: string) => void;
-}> = ({ value, onChange }) => {
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  // Close on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const handleSelect = (v: string) => {
-    onChange(v);
-    setOpen(false);
-  };
-
-  return (
-    <div ref={wrapperRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={`
-          w-full flex items-center justify-between gap-2
-          bg-white border rounded-xl px-4 py-2.5 text-sm text-left
-          outline-none transition-all cursor-pointer
-          ${open
-            ? 'border-amber-400 ring-2 ring-amber-200/60 shadow-sm'
-            : 'border-stone-200 hover:border-stone-300'
-          }
-        `}
-      >
-        <span className="text-stone-800">{value}</span>
-        <ChevronDown
-          size={16}
-          className={`text-stone-400 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-
-      {open && (
-        <div className="
-          absolute z-50 left-0 right-0 mt-1.5
-          bg-white border border-stone-200 rounded-xl
-          shadow-lg shadow-stone-900/8
-          overflow-hidden py-1.5
-        ">
-          {GENDER_OPTIONS.map(g => {
-            const isSelected = g === value;
-            return (
-              <button
-                key={g}
-                type="button"
-                onClick={() => handleSelect(g)}
-                className={`
-                  w-full text-left px-4 py-2.5 text-sm transition-colors
-                  flex items-center gap-2
-                  ${isSelected
-                    ? 'bg-amber-50 text-amber-800 font-medium'
-                    : 'text-stone-700 hover:bg-stone-50'
-                  }
-                `}
-              >
-                {isSelected && (
-                  <span className="w-0.5 h-5 rounded-full bg-amber-500 -ml-1 mr-1 flex-shrink-0" />
-                )}
-                <span className="flex-1">{g}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
-
 const RELATIONSHIP_TAG_PRESETS = [
   { label: 'Trust', value: 'trust' },
   { label: 'Protection', value: 'protection' },
@@ -543,8 +460,10 @@ const RELATIONSHIP_TAG_PRESETS = [
 const DEFAULT_GROUP: PersonaGroup = {
   name: 'Main CP',
   char_1: '',
+  char_1_gender: '',
   char_1_desc: '',
   char_2: '',
+  char_2_gender: '',
   char_2_desc: '',
   fandom: '',
   relationship_tags: [],
@@ -571,8 +490,10 @@ function migratePersonaSets(raw: any): PersonaSets {
       groups: [{
         name: 'Main CP',
         char_1: raw.characters[0]?.description || '',
+        char_1_gender: raw.characters[0]?.gender || '',
         char_1_desc: '',
         char_2: raw.characters[1]?.description || '',
+        char_2_gender: raw.characters[1]?.gender || '',
         char_2_desc: '',
         fandom: raw.fandom || '',
         relationship_tags: [],
@@ -592,18 +513,24 @@ const LinkedCoursesSelect: React.FC<{
   onChange: (tags: string[]) => void;
 }> = ({ allCourses, selected, onChange }) => {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setOpen(false);
+        setSearch('');
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  useEffect(() => {
+    if (open && searchRef.current) searchRef.current.focus();
+  }, [open]);
 
   const toggleCourse = (topic: string) => {
     const next = selected.includes(topic)
@@ -611,6 +538,11 @@ const LinkedCoursesSelect: React.FC<{
       : [...selected, topic];
     onChange(next);
   };
+
+  const filtered = allCourses.filter(c => {
+    const q = search.toLowerCase();
+    return c.topic.toLowerCase().includes(q) || (c.course_code || '').toLowerCase().includes(q);
+  });
 
   const label = selected.length === 0
     ? 'All Courses'
@@ -631,87 +563,123 @@ const LinkedCoursesSelect: React.FC<{
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className={`
-            w-full flex items-center justify-between gap-2
-            bg-white border rounded-xl px-4 py-2.5 text-sm text-left
-            outline-none transition-all cursor-pointer
-            ${open
-              ? 'border-amber-400 ring-2 ring-amber-200/60 shadow-sm'
-              : 'border-stone-200 hover:border-stone-300'
-            }
-          `}
+          className={`w-full flex items-center justify-between gap-2 bg-white border rounded-xl px-4 py-2.5 text-sm text-left outline-none transition-all cursor-pointer ${
+            open ? 'border-amber-400 ring-2 ring-amber-200/60 shadow-sm' : 'border-stone-200 hover:border-stone-300'
+          }`}
         >
-          <span className={selected.length === 0 ? 'text-stone-400' : 'text-stone-800'}>
-            {label}
-          </span>
-          <ChevronDown
-            size={16}
-            className={`text-stone-400 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`}
-          />
+          <span className={selected.length === 0 ? 'text-stone-400' : 'text-stone-800'}>{label}</span>
+          <ChevronDown size={16} className={`text-stone-400 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
         </button>
 
         {open && (
-          <div className="
-            absolute z-50 left-0 right-0 mt-1.5
-            bg-white border border-stone-200 rounded-xl
-            shadow-lg shadow-stone-900/8
-            overflow-hidden py-1.5
-            max-h-56 overflow-y-auto
-          ">
-            {allCourses.length === 0 ? (
-              <p className="px-4 py-3 text-xs text-stone-400 text-center">No courses found</p>
-            ) : (
-              allCourses.map(course => {
-                const isSelected = selected.includes(course.topic);
-                return (
-                  <button
-                    key={course.id}
-                    type="button"
-                    onClick={() => toggleCourse(course.topic)}
-                    className={`
-                      w-full text-left px-4 py-2.5 text-sm transition-colors
-                      flex items-center gap-2.5
-                      ${isSelected
-                        ? 'bg-amber-50 text-amber-800'
-                        : 'text-stone-700 hover:bg-stone-50'
-                      }
-                    `}
-                  >
-                    <span className={`
-                      w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all
-                      ${isSelected
-                        ? 'bg-amber-500 border-amber-500'
-                        : 'border-stone-300'
-                      }
-                    `}>
-                      {isSelected && <Check size={10} className="text-white" />}
-                    </span>
-                    <span className="flex-1 truncate">{course.topic}</span>
-                    {course.course_code && (
-                      <span className="text-[10px] text-stone-400 shrink-0">{course.course_code}</span>
-                    )}
-                  </button>
-                );
-              })
-            )}
+          <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-stone-200 rounded-xl shadow-lg shadow-stone-900/8 overflow-hidden">
+            {/* Search input */}
+            <div className="px-3 py-2 border-b border-stone-100">
+              <div className="flex items-center gap-2 bg-stone-50 rounded-lg px-3 py-1.5">
+                <Search size={14} className="text-stone-400 shrink-0" />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search courses..."
+                  className="flex-1 text-xs bg-transparent outline-none text-stone-700 placeholder:text-stone-300"
+                />
+              </div>
+            </div>
+            <div className="max-h-48 overflow-y-auto py-1">
+              {filtered.length === 0 ? (
+                <p className="px-4 py-3 text-xs text-stone-400 text-center">No courses found</p>
+              ) : (
+                filtered.map(course => {
+                  const isSelected = selected.includes(course.topic);
+                  return (
+                    <button
+                      key={course.id}
+                      type="button"
+                      onClick={() => toggleCourse(course.topic)}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
+                        isSelected ? 'bg-amber-50 text-amber-800' : 'text-stone-700 hover:bg-stone-50'
+                      }`}
+                    >
+                      <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                        isSelected ? 'bg-amber-500 border-amber-500' : 'border-stone-300'
+                      }`}>
+                        {isSelected && <Check size={10} className="text-white" />}
+                      </span>
+                      <span className="flex-1 truncate">{course.topic}</span>
+                      {course.course_code && <span className="text-[10px] text-stone-400 shrink-0">{course.course_code}</span>}
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Selected course pills */}
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-1">
           {selected.map((ct, ci) => (
             <span key={ci} className="inline-flex items-center gap-1 text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-2.5 py-1">
               {ct}
-              <button
-                type="button"
-                onClick={() => onChange(selected.filter((_, i) => i !== ci))}
-                className="text-amber-400 hover:text-amber-600 transition-colors"
-              >
+              <button type="button" onClick={() => onChange(selected.filter((_, i) => i !== ci))} className="text-amber-400 hover:text-amber-600 transition-colors">
                 <X size={12} />
               </button>
             </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const GENDER_OPTIONS = [
+  { label: 'Male', value: 'male' },
+  { label: 'Female', value: 'female' },
+  { label: 'Non-binary', value: 'non-binary' },
+];
+
+const GenderSelect: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+}> = ({ value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const label = GENDER_OPTIONS.find(o => o.value === value)?.label || 'Select...';
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`w-full flex items-center justify-between gap-2 bg-white border rounded-xl px-4 py-2.5 text-sm text-left outline-none transition-all cursor-pointer ${
+          open ? 'border-amber-400 ring-2 ring-amber-200/60 shadow-sm' : 'border-stone-200 hover:border-stone-300'
+        }`}
+      >
+        <span className={value ? 'text-stone-800' : 'text-stone-400'}>{label}</span>
+        <ChevronDown size={14} className={`text-stone-400 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-stone-200 rounded-xl shadow-lg shadow-stone-900/8 overflow-hidden py-1">
+          {GENDER_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                value === opt.value ? 'bg-amber-50 text-amber-800 font-medium' : 'text-stone-700 hover:bg-stone-50'
+              }`}
+            >
+              {opt.label}
+            </button>
           ))}
         </div>
       )}
@@ -726,6 +694,7 @@ const NarrativeSettingsSection: React.FC<{
 }> = ({ personaSets, onSave, allCourses }) => {
   const [data, setData] = useState<PersonaSets>(personaSets);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const isInit = useRef(true);
 
@@ -844,6 +813,15 @@ const NarrativeSettingsSection: React.FC<{
         <div className="space-y-5">
           {data.groups.map((group, gi) => {
             const isDefault = gi === data.default_group;
+            const isCollapsed = collapsedGroups.has(gi);
+            const toggleCollapse = () => setCollapsedGroups(prev => {
+              const next = new Set(prev);
+              next.has(gi) ? next.delete(gi) : next.add(gi);
+              return next;
+            });
+            // Collect custom tags (not in presets)
+            const presetValues = RELATIONSHIP_TAG_PRESETS.map(t => t.value);
+            const customTags = group.relationship_tags.filter(t => !presetValues.includes(t));
             return (
               <div
                 key={gi}
@@ -851,26 +829,35 @@ const NarrativeSettingsSection: React.FC<{
                   isDefault ? 'border-amber-300 ring-1 ring-amber-200/50' : 'border-stone-200'
                 }`}
               >
-                {/* Group header */}
-                <div className={`px-6 py-4 flex items-center gap-3 border-b rounded-t-2xl overflow-hidden ${
-                  isDefault ? 'bg-amber-50/50 border-amber-200' : 'bg-stone-50/50 border-stone-100'
-                }`}>
+                {/* Group header — clickable to collapse */}
+                <div
+                  className={`px-6 py-4 flex items-center gap-3 cursor-pointer select-none ${
+                    isCollapsed ? 'rounded-2xl' : 'border-b rounded-t-2xl'
+                  } overflow-hidden ${
+                    isDefault ? 'bg-amber-50/50 border-amber-200' : 'bg-stone-50/50 border-stone-100'
+                  }`}
+                  onClick={toggleCollapse}
+                >
+                  <ChevronDown size={14} className={`text-stone-400 transition-transform duration-200 shrink-0 ${isCollapsed ? '-rotate-90' : ''}`} />
                   <input
                     type="text"
                     value={group.name}
                     onChange={e => updateGroup(gi, 'name', e.target.value)}
+                    onClick={e => e.stopPropagation()}
                     className="text-sm font-semibold text-stone-800 bg-transparent border-none outline-none flex-1 min-w-0 placeholder:text-stone-300"
                     placeholder="Group name..."
                   />
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Summary pills when collapsed */}
+                  {isCollapsed && group.char_1 && group.char_2 && (
+                    <span className="text-[10px] text-stone-400 shrink-0 hidden sm:inline">{group.char_1} × {group.char_2}</span>
+                  )}
+                  <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
                     <button
                       type="button"
                       onClick={() => setDefault(gi)}
                       title={isDefault ? 'Default group' : 'Set as default'}
                       className={`p-1.5 rounded-lg transition-all ${
-                        isDefault
-                          ? 'text-amber-500 bg-amber-100'
-                          : 'text-stone-300 hover:text-amber-400 hover:bg-stone-100'
+                        isDefault ? 'text-amber-500 bg-amber-100' : 'text-stone-300 hover:text-amber-400 hover:bg-stone-100'
                       }`}
                     >
                       <Star size={14} fill={isDefault ? 'currentColor' : 'none'} />
@@ -888,106 +875,90 @@ const NarrativeSettingsSection: React.FC<{
                   </div>
                 </div>
 
+                {/* Collapsible body */}
+                {!isCollapsed && (
                 <div className="p-6 space-y-5">
                   {/* Characters side by side */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-3">
                       <div className="space-y-2">
                         <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Character 1</label>
-                        <input
-                          type="text"
-                          value={group.char_1}
-                          onChange={e => updateGroup(gi, 'char_1', e.target.value)}
-                          placeholder="e.g. Ash Lynx"
-                          className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
-                        />
+                        <input type="text" value={group.char_1} onChange={e => updateGroup(gi, 'char_1', e.target.value)} placeholder="e.g. Ash Lynx" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-medium text-stone-400 uppercase tracking-wider">Gender</label>
+                        <GenderSelect value={group.char_1_gender || ''} onChange={v => updateGroup(gi, 'char_1_gender', v)} />
                       </div>
                       <div className="space-y-1">
                         <label className="text-[10px] font-medium text-stone-400 uppercase tracking-wider">Personality</label>
-                        <textarea
-                          value={group.char_1_desc}
-                          onChange={e => updateGroup(gi, 'char_1_desc', e.target.value)}
-                          placeholder="Brief personality so the AI stays in character, e.g. cold exterior, fiercely protective, genius-level IQ"
-                          rows={2}
-                          className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed"
-                        />
+                        <textarea value={group.char_1_desc} onChange={e => updateGroup(gi, 'char_1_desc', e.target.value)} placeholder="Brief personality so the AI stays in character, e.g. cold exterior, fiercely protective, genius-level IQ" rows={2} className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed" />
                       </div>
                     </div>
                     <div className="space-y-3">
                       <div className="space-y-2">
                         <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Character 2</label>
-                        <input
-                          type="text"
-                          value={group.char_2}
-                          onChange={e => updateGroup(gi, 'char_2', e.target.value)}
-                          placeholder="e.g. Eiji Okumura"
-                          className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
-                        />
+                        <input type="text" value={group.char_2} onChange={e => updateGroup(gi, 'char_2', e.target.value)} placeholder="e.g. Eiji Okumura" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-medium text-stone-400 uppercase tracking-wider">Gender</label>
+                        <GenderSelect value={group.char_2_gender || ''} onChange={v => updateGroup(gi, 'char_2_gender', v)} />
                       </div>
                       <div className="space-y-1">
                         <label className="text-[10px] font-medium text-stone-400 uppercase tracking-wider">Personality</label>
-                        <textarea
-                          value={group.char_2_desc}
-                          onChange={e => updateGroup(gi, 'char_2_desc', e.target.value)}
-                          placeholder="e.g. gentle, emotionally steady, sees the best in people"
-                          rows={2}
-                          className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed"
-                        />
+                        <textarea value={group.char_2_desc} onChange={e => updateGroup(gi, 'char_2_desc', e.target.value)} placeholder="e.g. gentle, emotionally steady, sees the best in people" rows={2} className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed" />
                       </div>
                     </div>
                   </div>
 
                   {/* Fandom */}
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
-                      Fandom <span className="text-stone-300 font-normal">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={group.fandom}
-                      onChange={e => updateGroup(gi, 'fandom', e.target.value)}
-                      placeholder="e.g. Banana Fish, Genshin Impact, Original"
-                      className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
-                    />
+                    <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Fandom <span className="text-stone-300 font-normal">(optional)</span></label>
+                    <input type="text" value={group.fandom} onChange={e => updateGroup(gi, 'fandom', e.target.value)} placeholder="e.g. Banana Fish, Genshin Impact, Original" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition" />
                   </div>
 
-                  {/* Relationship tags */}
+                  {/* Relationship tags — presets + custom */}
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
-                      Relationship Tags
-                    </label>
-                    <p className="text-xs text-stone-400">
-                      How do these characters relate? The AI uses these tags to match concepts — click to toggle.
-                    </p>
+                    <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Relationship Tags</label>
+                    <p className="text-xs text-stone-400">Click presets to toggle, or type your own and press Enter.</p>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {RELATIONSHIP_TAG_PRESETS.map(tag => {
                         const active = group.relationship_tags.includes(tag.value);
                         return (
-                          <button
-                            key={tag.value}
-                            type="button"
-                            onClick={() => toggleTag(gi, tag.value)}
-                            className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                              active
-                                ? 'bg-amber-100 border-amber-300 text-amber-800 font-medium shadow-sm'
-                                : 'bg-stone-50 border-stone-200 text-stone-500 hover:border-amber-200 hover:bg-amber-50'
-                            }`}
-                          >
-                            {active && <span className="mr-1">✓</span>}
-                            {tag.label}
+                          <button key={tag.value} type="button" onClick={() => toggleTag(gi, tag.value)} className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                            active ? 'bg-amber-100 border-amber-300 text-amber-800 font-medium shadow-sm' : 'bg-stone-50 border-stone-200 text-stone-500 hover:border-amber-200 hover:bg-amber-50'
+                          }`}>
+                            {active && <span className="mr-1">✓</span>}{tag.label}
                           </button>
                         );
                       })}
+                      {/* Custom tags */}
+                      {customTags.map(ct => (
+                        <span key={ct} className="inline-flex items-center gap-1 text-xs bg-amber-100 border border-amber-300 text-amber-800 font-medium rounded-full px-3 py-1.5 shadow-sm">
+                          ✓ {ct}
+                          <button type="button" onClick={() => toggleTag(gi, ct)} className="text-amber-500 hover:text-amber-700 ml-0.5"><X size={12} /></button>
+                        </span>
+                      ))}
                     </div>
+                    {/* Custom tag input */}
+                    <input
+                      type="text"
+                      placeholder="Add custom tag... (press Enter)"
+                      className="text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition w-full mt-1"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
+                          e.preventDefault();
+                          const val = (e.target as HTMLInputElement).value.trim().toLowerCase().replace(/\s+/g, '-');
+                          if (!group.relationship_tags.includes(val)) toggleTag(gi, val);
+                          (e.target as HTMLInputElement).value = '';
+                        }
+                      }}
+                    />
                   </div>
 
                   {/* Linked Courses dropdown */}
-                  <LinkedCoursesSelect
-                    allCourses={allCourses}
-                    selected={group.course_tags || []}
-                    onChange={tags => updateGroup(gi, 'course_tags', tags)}
-                  />
+                  <LinkedCoursesSelect allCourses={allCourses} selected={group.course_tags || []} onChange={tags => updateGroup(gi, 'course_tags', tags)} />
                 </div>
+                )}
               </div>
             );
           })}
