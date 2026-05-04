@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ChevronLeft, ChevronRight, Globe, Moon, Settings, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Globe, Moon, Settings, BookOpen, X, Lightbulb } from 'lucide-react';
 import { arrayMove } from '@dnd-kit/sortable';
 import type { DragEndEvent } from '@dnd-kit/core';
 
@@ -68,6 +68,14 @@ const CoursePage: React.FC = () => {
   const [notifDismissed, setNotifDismissed] = useState(false);
   const [profFabDismissed, setProfFabDismissed] = useState(false);
   const [studentFabDismissed, setStudentFabDismissed] = useState(false);
+  const [diagnosis, setDiagnosis] = useState<{
+    has_diagnosis: boolean;
+    message: string;
+    suggestions: string[];
+    related_modules: { module_id: string; module_title: string }[];
+    tone: string;
+  } | null>(null);
+  const [diagnosisDismissed, setDiagnosisDismissed] = useState(false);
   const isResizing = React.useRef(false);
   const navigate = useNavigate();
 
@@ -149,6 +157,17 @@ const CoursePage: React.FC = () => {
       .then(data => setStudentHints(data.hints || {}))
       .catch(() => setStudentHints({}));
   }, [id, isStudent]);
+
+  // Fetch student diagnosis (one-sentence warm feedback)
+  useEffect(() => {
+    if (!isStudent || !id) return;
+    const email = auth?.email || '';
+    if (!email) return;
+    fetch(`/api/profile/diagnosis/${id}`, { headers: { 'X-User-Email': email } })
+      .then(r => r.ok ? r.json() : { has_diagnosis: false })
+      .then(data => setDiagnosis(data))
+      .catch(() => setDiagnosis(null));
+  }, [id, isStudent, auth?.email]);
 
   // Fetch KG concept mapping
   const [kgData, setKgData] = useState<any>(null);
@@ -307,6 +326,76 @@ const CoursePage: React.FC = () => {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
             </button>
           )}
+        </div>
+      )}
+
+      {/* Student Diagnosis Card */}
+      {isStudent && diagnosis?.has_diagnosis && !diagnosisDismissed && (
+        <div className="mx-6 mt-4 mb-0">
+          <div className={`relative rounded-xl border p-5 shadow-sm ${
+            diagnosis.tone === 'gentle_nudge'
+              ? 'bg-amber-50 border-amber-200'
+              : 'bg-green-50 border-green-200'
+          }`}>
+            {/* Dismiss button */}
+            <button
+              onClick={() => setDiagnosisDismissed(true)}
+              className="absolute top-3 right-3 text-stone-400 hover:text-stone-600 transition-colors p-1 rounded-lg hover:bg-black/5"
+              title="Dismiss"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="flex gap-3.5">
+              <div className={`mt-0.5 p-2 rounded-lg ${
+                diagnosis.tone === 'gentle_nudge'
+                  ? 'bg-amber-100 text-amber-600'
+                  : 'bg-green-100 text-green-600'
+              }`}>
+                <Lightbulb size={18} />
+              </div>
+              <div className="flex-1 min-w-0 pr-6">
+                <p className={`text-sm font-medium leading-relaxed ${
+                  diagnosis.tone === 'gentle_nudge' ? 'text-amber-900' : 'text-green-900'
+                }`}>
+                  {diagnosis.message}
+                </p>
+
+                {diagnosis.suggestions.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {diagnosis.suggestions.map((s, i) => (
+                      <li key={i} className={`text-xs leading-relaxed ${
+                        diagnosis.tone === 'gentle_nudge' ? 'text-amber-700' : 'text-green-700'
+                      }`}>
+                        💡 {s}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {diagnosis.related_modules.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {diagnosis.related_modules.map(rm => {
+                      const idx = parseInt(rm.module_id.replace('module_', ''), 10) - 1;
+                      return (
+                        <button
+                          key={rm.module_id}
+                          onClick={() => setCurrentModuleIndex(idx)}
+                          className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${
+                            diagnosis.tone === 'gentle_nudge'
+                              ? 'bg-amber-200/60 text-amber-800 hover:bg-amber-200'
+                              : 'bg-green-200/60 text-green-800 hover:bg-green-200'
+                          }`}
+                        >
+                          Jump to {rm.module_title}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

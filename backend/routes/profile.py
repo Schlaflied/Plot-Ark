@@ -203,3 +203,15 @@ def get_student_courses():
         print(f"[profile] courses error: {e}")
         conn.close()
         return jsonify({"error": str(e)}), 500
+
+
+@profile_bp.route("/api/profile/diagnosis/<int:course_id>", methods=["GET"])
+def get_diagnosis(course_id: int):
+    """Return a one-sentence diagnosis for the student in a specific course."""
+    email = request.headers.get("X-User-Email", "").strip()
+    if not email:
+        return jsonify({"error": "Missing X-User-Email header"}), 400
+
+    from services.student_diagnosis import generate_diagnosis
+    result = generate_diagnosis(course_id, email)
+    return jsonify(result), 200
