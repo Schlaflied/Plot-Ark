@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, User, BarChart3, Check, Camera, Settings2 } from 'lucide-react';
+import { ChevronLeft, User, BarChart3, Check, Camera, Settings2, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -366,6 +366,89 @@ const ProgressSection: React.FC<{ courses: CourseProgress[] }> = ({ courses }) =
 
 const GENDER_OPTIONS = ['Male', 'Female', 'Nonbinary'] as const;
 
+// ─── Custom Gender Dropdown (matches syllabus Select style) ───────────────────
+
+const GenderSelect: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+}> = ({ value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleSelect = (v: string) => {
+    onChange(v);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`
+          w-full flex items-center justify-between gap-2
+          bg-white border rounded-xl px-4 py-2.5 text-sm text-left
+          outline-none transition-all cursor-pointer
+          ${open
+            ? 'border-amber-400 ring-2 ring-amber-200/60 shadow-sm'
+            : 'border-stone-200 hover:border-stone-300'
+          }
+        `}
+      >
+        <span className="text-stone-800">{value}</span>
+        <ChevronDown
+          size={16}
+          className={`text-stone-400 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="
+          absolute z-50 left-0 right-0 mt-1.5
+          bg-white border border-stone-200 rounded-xl
+          shadow-lg shadow-stone-900/8
+          overflow-hidden py-1.5
+        ">
+          {GENDER_OPTIONS.map(g => {
+            const isSelected = g === value;
+            return (
+              <button
+                key={g}
+                type="button"
+                onClick={() => handleSelect(g)}
+                className={`
+                  w-full text-left px-4 py-2.5 text-sm transition-colors
+                  flex items-center gap-2
+                  ${isSelected
+                    ? 'bg-amber-50 text-amber-800 font-medium'
+                    : 'text-stone-700 hover:bg-stone-50'
+                  }
+                `}
+              >
+                {isSelected && (
+                  <span className="w-0.5 h-5 rounded-full bg-amber-500 -ml-1 mr-1 flex-shrink-0" />
+                )}
+                <span className="flex-1">{g}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const DEFAULT_PERSONA: PersonaSets = {
   enabled: true,
   fandom: '',
@@ -482,15 +565,10 @@ const NarrativeSettingsSection: React.FC<{
                   <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider block">
                     Gender
                   </label>
-                  <select
+                  <GenderSelect
                     value={char.gender}
-                    onChange={e => updateChar(i, 'gender', e.target.value)}
-                    className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-4 py-2.5 text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
-                  >
-                    {GENDER_OPTIONS.map(g => (
-                      <option key={g} value={g}>{g}</option>
-                    ))}
-                  </select>
+                    onChange={v => updateChar(i, 'gender', v)}
+                  />
                 </div>
               </div>
             ))}
@@ -626,7 +704,7 @@ const StudentProfilePage: React.FC = () => {
     },
     {
       id: 'narrative',
-      label: 'CP / OC',
+      label: 'Customized Learning',
       icon: <Settings2 size={14} />,
     },
     {
