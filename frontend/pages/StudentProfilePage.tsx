@@ -740,15 +740,25 @@ const AISettingsSection: React.FC<{
         />
 
         <div className="text-xs text-stone-400">
-          <span className="font-medium text-stone-500">Ideas:</span>
-          <ul className="mt-1.5 space-y-1">
-            {AI_PROMPT_EXAMPLES.map((ex, i) => (
-              <li key={i} className="flex gap-1.5">
-                <span className="text-amber-400 mt-px">•</span>
-                <span className="italic">{ex}</span>
-              </li>
-            ))}
-          </ul>
+          <span className="font-medium text-stone-500">Ideas</span>
+          <span className="text-stone-300 ml-1">— click to add</span>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {AI_PROMPT_EXAMPLES.map((ex, i) => {
+              // Strip surrounding curly quotes for clean insertion
+              const clean = ex.replace(/^[\u201c"\u201d]+|[\u201c"\u201d]+$/g, '');
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setPrompt(prev => prev ? `${prev}\n${clean}` : clean)}
+                  className="flex items-center gap-2 text-left px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 hover:border-amber-300 hover:bg-amber-50 transition-all group"
+                >
+                  <span className="text-amber-400 group-hover:text-amber-500 text-sm flex-shrink-0">+</span>
+                  <span className="italic text-stone-500 group-hover:text-amber-700 transition-colors">{ex}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
