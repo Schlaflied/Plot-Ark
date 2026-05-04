@@ -16,6 +16,7 @@ interface StudentProfile {
   email: string;
   display_name: string;
   preferred_style: string;
+  discipline: string;
   avatar_url: string;
 }
 
@@ -45,30 +46,53 @@ const MASTERY_COLORS: Record<string, { bg: string; border: string; label: string
   not_started: { bg: 'bg-stone-200',  border: 'border-stone-300',  label: 'Not started' },
 };
 
-// ─── Style options ────────────────────────────────────────────────────────────
+const DISCIPLINES = [
+  { value: 'humanities', label: 'Humanities', emoji: '📜', hint: 'Law, Philosophy, Literature, History' },
+  { value: 'stem',       label: 'STEM',       emoji: '🔬', hint: 'Math, Physics, CS, Engineering' },
+  { value: 'business',   label: 'Business',   emoji: '📊', hint: 'Finance, Marketing, Management' },
+  { value: 'social',     label: 'Social Sci.', emoji: '🧠', hint: 'Psychology, Sociology, Poli Sci' },
+  { value: 'arts',       label: 'Arts & Design', emoji: '🎨', hint: 'Fine Arts, Music, Architecture' },
+];
 
-const STYLE_OPTIONS = [
-  {
-    value: 'analogy',
-    label: 'Analogies',
-    emoji: '🌉',
-    desc: 'Learn through comparisons with familiar things',
-    example: '"A contract is like a promise you pinky-swear on — but with lawyers watching."',
+const DISCIPLINE_EXAMPLES: Record<string, { concept: string; analogy: string; steps: string; narrative: string; stepsLabel?: string; stepsDesc?: string }> = {
+  humanities: {
+    concept: 'Contract Law',
+    analogy: '"A contract is like a promise you pinky-swear on — but with lawyers watching."',
+    steps: '"1. Offer → 2. Acceptance → 3. Consideration → 4. Binding contract."',
+    narrative: '"Alex offered to sell her car for $5k. Ben said yes and paid — now there\'s a contract."',
   },
-  {
-    value: 'steps',
-    label: 'Step-by-step',
-    emoji: '📝',
-    desc: 'Learn through structured, numbered breakdowns',
-    example: '"1. Offer → 2. Acceptance → 3. Consideration → 4. Binding contract."',
+  stem: {
+    concept: 'Newton\'s Second Law',
+    analogy: '"F = ma is like pushing a shopping cart — the harder you push, the faster it goes, but a full cart resists more."',
+    steps: '"1. Identify all forces → 2. Sum as vectors → 3. Apply F = ma → 4. Solve for unknowns."',
+    stepsLabel: 'Derivation',
+    stepsDesc: 'Learn through proofs, formulas, and logical derivation',
+    narrative: '"A rocket engineer needs to launch a 10-ton satellite — she starts with F = ma to calculate the required thrust."',
   },
-  {
-    value: 'narrative',
-    label: 'Stories',
-    emoji: '📖',
-    desc: 'Learn through scenarios and narratives',
-    example: '"Alex offered to sell her car for $5k. Ben said yes and paid — now there\'s a contract."',
+  business: {
+    concept: 'Supply & Demand',
+    analogy: '"Supply and demand is like a seesaw — when one side goes up, the other tilts down until they balance."',
+    steps: '"1. Plot demand curve → 2. Plot supply curve → 3. Find intersection → 4. That\'s equilibrium price."',
+    narrative: '"When a coffee shop raises latte prices by $1, they notice 20% fewer orders — the demand curve in action."',
   },
+  social: {
+    concept: 'Cognitive Dissonance',
+    analogy: '"Cognitive dissonance is like wearing mismatched shoes — your brain keeps nagging you to fix the inconsistency."',
+    steps: '"1. Hold belief A → 2. Encounter contradicting evidence B → 3. Feel discomfort → 4. Adjust belief or rationalize."',
+    narrative: '"Sam believes smoking is bad but can\'t quit. To reduce the mental tension, he tells himself \'my grandpa smoked and lived to 90.\'"',
+  },
+  arts: {
+    concept: 'Color Theory',
+    analogy: '"Complementary colors are like musical harmonies — opposites that create something richer together."',
+    steps: '"1. Primary colors → 2. Mix to get secondaries → 3. Identify complements on the wheel → 4. Apply contrast."',
+    narrative: '"A designer choosing a poster palette picks orange and blue — opposites on the wheel — creating visual tension that draws the eye."',
+  },
+};
+
+const STYLE_BASE = [
+  { value: 'analogy',    label: 'Analogies',    emoji: '🌉', desc: 'Learn through comparisons with familiar things' },
+  { value: 'steps',      label: 'Step-by-step', emoji: '📝', desc: 'Learn through structured, numbered breakdowns' },
+  { value: 'narrative',  label: 'Stories',       emoji: '📖', desc: 'Learn through scenarios and narratives' },
 ];
 
 // ─── Profile Section ──────────────────────────────────────────────────────────
@@ -79,6 +103,7 @@ const ProfileSection: React.FC<{
 }> = ({ profile, onSave }) => {
   const [displayName, setDisplayName] = useState(profile.display_name);
   const [selectedStyle, setSelectedStyle] = useState(profile.preferred_style);
+  const [discipline, setDiscipline] = useState(profile.discipline || 'humanities');
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -89,6 +114,7 @@ const ProfileSection: React.FC<{
   useEffect(() => {
     setDisplayName(profile.display_name);
     setSelectedStyle(profile.preferred_style);
+    setDiscipline(profile.discipline || 'humanities');
     setAvatarUrl(profile.avatar_url);
     isInitialMount.current = true;
   }, [profile]);
@@ -106,7 +132,7 @@ const ProfileSection: React.FC<{
     if (isInitialMount.current) { isInitialMount.current = false; return; }
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      doSave({ display_name: displayName, preferred_style: selectedStyle, avatar_url: avatarUrl });
+      doSave({ display_name: displayName, preferred_style: selectedStyle, discipline, avatar_url: avatarUrl });
     }, 800);
     return () => clearTimeout(debounceRef.current);
   }, [displayName]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -116,7 +142,14 @@ const ProfileSection: React.FC<{
     const newStyle = selectedStyle === value ? '' : value;
     setSelectedStyle(newStyle);
     clearTimeout(debounceRef.current);
-    doSave({ display_name: displayName, preferred_style: newStyle, avatar_url: avatarUrl });
+    doSave({ display_name: displayName, preferred_style: newStyle, discipline, avatar_url: avatarUrl });
+  };
+
+  // Immediate save for discipline selection
+  const handleDisciplineChange = (value: string) => {
+    setDiscipline(value);
+    clearTimeout(debounceRef.current);
+    doSave({ display_name: displayName, preferred_style: selectedStyle, discipline: value, avatar_url: avatarUrl });
   };
 
   // Immediate save for avatar upload — resize to 512×512 for crisp display
@@ -151,7 +184,7 @@ const ProfileSection: React.FC<{
       const dataUrl = canvas.toDataURL('image/png');
       setAvatarUrl(dataUrl);
       clearTimeout(debounceRef.current);
-      doSave({ display_name: displayName, preferred_style: selectedStyle, avatar_url: dataUrl });
+      doSave({ display_name: displayName, preferred_style: selectedStyle, discipline, avatar_url: dataUrl });
     };
 
     // Read file → img element → canvas
@@ -234,6 +267,37 @@ const ProfileSection: React.FC<{
           />
         </div>
 
+        {/* Discipline selector */}
+        <div className="space-y-3">
+          <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider block">
+            Your Discipline
+          </label>
+          <p className="text-xs text-stone-400">
+            This helps us show relevant examples and tailor content style.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {DISCIPLINES.map(d => {
+              const active = discipline === d.value;
+              return (
+                <button
+                  key={d.value}
+                  type="button"
+                  onClick={() => handleDisciplineChange(d.value)}
+                  title={d.hint}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium transition-all ${
+                    active
+                      ? 'bg-amber-500 text-white shadow-sm'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  <span>{d.emoji}</span>
+                  <span>{d.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Learning style */}
         <div className="space-y-4">
           <div>
@@ -241,12 +305,17 @@ const ProfileSection: React.FC<{
               Preferred Learning Style
             </label>
             <p className="text-sm text-stone-400 mt-1">
-              Choose how you prefer concepts to be explained. Here's how each style would explain <span className="font-medium text-stone-600">Contract Law</span>:
+              Choose how you prefer concepts to be explained. Here's how each style would explain <span className="font-medium text-stone-600">{DISCIPLINE_EXAMPLES[discipline]?.concept || 'a concept'}</span>:
             </p>
           </div>
           <div className="grid grid-cols-3 gap-4">
-            {STYLE_OPTIONS.map(opt => {
+            {STYLE_BASE.map(opt => {
               const active = selectedStyle === opt.value;
+              const ex = DISCIPLINE_EXAMPLES[discipline] || DISCIPLINE_EXAMPLES.humanities;
+              const example = opt.value === 'analogy' ? ex.analogy : opt.value === 'steps' ? ex.steps : ex.narrative;
+              // STEM overrides for step-by-step
+              const label = opt.value === 'steps' && ex.stepsLabel ? ex.stepsLabel : opt.label;
+              const desc = opt.value === 'steps' && ex.stepsDesc ? ex.stepsDesc : opt.desc;
               return (
                 <button
                   key={opt.value}
@@ -265,14 +334,14 @@ const ProfileSection: React.FC<{
                   )}
                   <span className="text-3xl">{opt.emoji}</span>
                   <span className={`text-sm font-semibold ${active ? 'text-amber-700' : 'text-stone-700'}`}>
-                    {opt.label}
+                    {label}
                   </span>
-                  <span className="text-xs text-stone-400 leading-relaxed">{opt.desc}</span>
+                  <span className="text-xs text-stone-400 leading-relaxed">{desc}</span>
                   {/* Concrete example */}
                   <span className={`text-[11px] leading-snug mt-1 italic ${
                     active ? 'text-amber-600/80' : 'text-stone-400/70'
                   }`}>
-                    {opt.example}
+                    {example}
                   </span>
                 </button>
               );
@@ -610,6 +679,7 @@ const StudentProfilePage: React.FC = () => {
     email,
     display_name: '',
     preferred_style: '',
+    discipline: 'humanities',
     avatar_url: '',
   });
   const [personaSets, setPersonaSets] = useState<PersonaSets>(DEFAULT_PERSONA);
@@ -633,6 +703,7 @@ const StudentProfilePage: React.FC = () => {
           email: profileData.email || email,
           display_name: profileData.display_name || '',
           preferred_style: profileData.preferred_style || '',
+          discipline: profileData.discipline || 'humanities',
           avatar_url: profileData.avatar_url || '',
         });
         // Load persona_sets from profile

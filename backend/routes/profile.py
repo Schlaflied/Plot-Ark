@@ -15,7 +15,7 @@ def _get_or_create_profile(email: str) -> dict | None:
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, email, display_name, preferred_style, persona_sets, avatar_url, created_at, updated_at "
+            "SELECT id, email, display_name, preferred_style, persona_sets, avatar_url, discipline, created_at, updated_at "
             "FROM student_profiles WHERE email = %s",
             (email,),
         )
@@ -30,8 +30,9 @@ def _get_or_create_profile(email: str) -> dict | None:
                 "preferred_style": row[3] or "",
                 "persona_sets": row[4] or [],
                 "avatar_url": row[5] or "",
-                "created_at": row[6].isoformat() if row[6] else None,
-                "updated_at": row[7].isoformat() if row[7] else None,
+                "discipline": row[6] or "humanities",
+                "created_at": row[7].isoformat() if row[7] else None,
+                "updated_at": row[8].isoformat() if row[8] else None,
             }
         # Auto-create
         cur.execute(
@@ -49,6 +50,7 @@ def _get_or_create_profile(email: str) -> dict | None:
             "preferred_style": "",
             "persona_sets": [],
             "avatar_url": "",
+            "discipline": "humanities",
             "created_at": new[1].isoformat() if new[1] else None,
             "updated_at": None,
         }
@@ -81,6 +83,7 @@ def update_profile():
     data = request.get_json(force=True)
     display_name = data.get("display_name")
     preferred_style = data.get("preferred_style")
+    discipline = data.get("discipline")
     avatar_url = data.get("avatar_url")
     persona_sets = data.get("persona_sets")
 
@@ -109,6 +112,9 @@ def update_profile():
         if avatar_url is not None:
             updates.append("avatar_url = %s")
             params.append(avatar_url)
+        if discipline is not None:
+            updates.append("discipline = %s")
+            params.append(discipline)
         if persona_sets is not None:
             updates.append("persona_sets = %s")
             params.append(json.dumps(persona_sets))
