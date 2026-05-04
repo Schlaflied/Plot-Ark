@@ -82,6 +82,7 @@ def update_profile():
     display_name = data.get("display_name")
     preferred_style = data.get("preferred_style")
     avatar_url = data.get("avatar_url")
+    persona_sets = data.get("persona_sets")
 
     # Validate preferred_style
     valid_styles = ("", "analogy", "steps", "narrative")
@@ -108,6 +109,9 @@ def update_profile():
         if avatar_url is not None:
             updates.append("avatar_url = %s")
             params.append(avatar_url)
+        if persona_sets is not None:
+            updates.append("persona_sets = %s")
+            params.append(json.dumps(persona_sets))
         if not updates:
             cur.close()
             conn.close()

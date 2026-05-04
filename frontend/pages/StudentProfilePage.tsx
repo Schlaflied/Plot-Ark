@@ -5,18 +5,27 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, User, BarChart3, Check, Camera } from 'lucide-react';
+import { ChevronLeft, User, BarChart3, Check, Camera, Settings2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SidebarSection = 'profile' | 'progress';
+type SidebarSection = 'profile' | 'progress' | 'narrative';
 
 interface StudentProfile {
   email: string;
   display_name: string;
   preferred_style: string;
   avatar_url: string;
+}
+
+interface PersonaSets {
+  enabled: boolean;
+  fandom: string;
+  characters: {
+    description: string;
+    gender: string;
+  }[];
 }
 
 interface CourseProgress {
@@ -353,6 +362,162 @@ const ProgressSection: React.FC<{ courses: CourseProgress[] }> = ({ courses }) =
   </div>
 );
 
+// ─── Narrative Settings Section ───────────────────────────────────────────────
+
+const GENDER_OPTIONS = ['Male', 'Female', 'Nonbinary'] as const;
+
+const DEFAULT_PERSONA: PersonaSets = {
+  enabled: true,
+  fandom: '',
+  characters: [
+    { description: '', gender: 'Male' },
+    { description: '', gender: 'Male' },
+  ],
+};
+
+const NarrativeSettingsSection: React.FC<{
+  personaSets: PersonaSets;
+  onSave: (ps: PersonaSets) => void;
+}> = ({ personaSets, onSave }) => {
+  const [data, setData] = useState<PersonaSets>(personaSets);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const isInit = useRef(true);
+
+  useEffect(() => {
+    setData(personaSets);
+    isInit.current = true;
+  }, [personaSets]);
+
+  const doSave = useCallback((updated: PersonaSets) => {
+    setSaveStatus('saving');
+    onSave(updated);
+    setTimeout(() => setSaveStatus('saved'), 300);
+    setTimeout(() => setSaveStatus('idle'), 1800);
+  }, [onSave]);
+
+  // Debounced auto-save for text fields
+  useEffect(() => {
+    if (isInit.current) { isInit.current = false; return; }
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => doSave(data), 800);
+    return () => clearTimeout(debounceRef.current);
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const updateChar = (idx: number, field: 'description' | 'gender', value: string) => {
+    setData(prev => {
+      const chars = [...prev.characters];
+      chars[idx] = { ...chars[idx], [field]: value };
+      return { ...prev, characters: chars };
+    });
+  };
+
+  const handleToggle = () => {
+    const updated = { ...data, enabled: !data.enabled };
+    setData(updated);
+    clearTimeout(debounceRef.current);
+    doSave(updated);
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">CP / OC Narrative</h2>
+          <p className="text-sm text-stone-400">
+            Define your characters for narrative-style learning content.
+          </p>
+        </div>
+        <span className={`text-xs font-medium transition-all duration-300 ${
+          saveStatus === 'saving' ? 'text-amber-500' :
+          saveStatus === 'saved' ? 'text-green-500' : 'text-transparent'
+        }`}>
+          {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : '·'}
+        </span>
+      </div>
+
+      {/* Master toggle */}
+      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-stone-800">Enable CP/OC Narrative Mode</p>
+            <p className="text-xs text-stone-400 mt-0.5">
+              Learning content will be wrapped in your characters' story.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleToggle}
+            className={`relative w-11 h-6 rounded-full transition-colors ${
+              data.enabled ? 'bg-amber-500' : 'bg-stone-300'
+            }`}
+          >
+            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
+              data.enabled ? 'left-[22px]' : 'left-0.5'
+            }`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Character fields — only shown when enabled */}
+      {data.enabled && (
+        <div className="space-y-6">
+          {/* Characters */}
+          <div className="grid grid-cols-2 gap-5">
+            {data.characters.map((char, i) => (
+              <div key={i} className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-4">
+                <h3 className="text-sm font-semibold text-stone-800">Character {i + 1}</h3>
+                <textarea
+                  value={char.description}
+                  onChange={e => updateChar(i, 'description', e.target.value)}
+                  placeholder={
+                    i === 0
+                      ? 'Example: Ash Lynx, a charismatic gang leader in New York with a traumatic past, extraordinary intelligence, and blonde hair...'
+                      : 'Example: Eiji Okumura, a kind-hearted Japanese photographer who becomes an unwavering light in Ash\'s life...'
+                  }
+                  rows={5}
+                  className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y"
+                />
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider block">
+                    Gender
+                  </label>
+                  <select
+                    value={char.gender}
+                    onChange={e => updateChar(i, 'gender', e.target.value)}
+                    className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-4 py-2.5 text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
+                  >
+                    {GENDER_OPTIONS.map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Fandom */}
+          <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-2">
+            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider block">
+              Fandom <span className="text-stone-300 font-normal">(optional)</span>
+            </label>
+            <p className="text-xs text-stone-400">
+              Specify the universe your characters belong to. Helps keep the narrative consistent.
+            </p>
+            <input
+              type="text"
+              value={data.fandom}
+              onChange={e => setData(prev => ({ ...prev, fandom: e.target.value }))}
+              placeholder="e.g. Banana Fish, Genshin Impact, Original"
+              className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Page Component ───────────────────────────────────────────────────────────
 
 const StudentProfilePage: React.FC = () => {
@@ -369,6 +534,7 @@ const StudentProfilePage: React.FC = () => {
     preferred_style: '',
     avatar_url: '',
   });
+  const [personaSets, setPersonaSets] = useState<PersonaSets>(DEFAULT_PERSONA);
   const [courses, setCourses] = useState<CourseProgress[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -391,6 +557,11 @@ const StudentProfilePage: React.FC = () => {
           preferred_style: profileData.preferred_style || '',
           avatar_url: profileData.avatar_url || '',
         });
+        // Load persona_sets from profile
+        const ps = profileData.persona_sets;
+        if (ps && typeof ps === 'object' && 'enabled' in ps) {
+          setPersonaSets(ps);
+        }
         setCourses(coursesData.courses || []);
       })
       .catch(err => console.warn('Profile fetch error:', err))
@@ -400,19 +571,30 @@ const StudentProfilePage: React.FC = () => {
   // ── Save handler ────────────────────────────────────────────────────────────
 
   const handleSave = useCallback(
-    async (updates: Partial<StudentProfile>) => {
+    async (updates: Partial<StudentProfile> & { persona_sets?: PersonaSets }) => {
       try {
         await fetch('/api/profile', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-User-Email': email },
           body: JSON.stringify(updates),
         });
-        setProfile(prev => ({ ...prev, ...updates }));
+        const { persona_sets: _ps, ...profileUpdates } = updates;
+        if (Object.keys(profileUpdates).length > 0) {
+          setProfile(prev => ({ ...prev, ...profileUpdates }));
+        }
       } catch (err) {
         console.warn('Profile save error:', err);
       }
     },
     [email]
+  );
+
+  const handlePersonaSave = useCallback(
+    (ps: PersonaSets) => {
+      setPersonaSets(ps);
+      handleSave({ persona_sets: ps });
+    },
+    [handleSave]
   );
 
   // ── Sidebar resize ──────────────────────────────────────────────────────────
@@ -441,6 +623,11 @@ const StudentProfilePage: React.FC = () => {
       id: 'profile',
       label: 'Profile',
       icon: <User size={14} />,
+    },
+    {
+      id: 'narrative',
+      label: 'CP / OC',
+      icon: <Settings2 size={14} />,
     },
     {
       id: 'progress',
@@ -535,6 +722,9 @@ const StudentProfilePage: React.FC = () => {
           <div className="max-w-2xl mx-auto">
             {activeSection === 'profile' && (
               <ProfileSection profile={profile} onSave={handleSave} />
+            )}
+            {activeSection === 'narrative' && (
+              <NarrativeSettingsSection personaSets={personaSets} onSave={handlePersonaSave} />
             )}
             {activeSection === 'progress' && (
               <ProgressSection courses={courses} />
