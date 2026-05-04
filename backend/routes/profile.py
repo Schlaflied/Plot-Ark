@@ -15,7 +15,7 @@ def _get_or_create_profile(email: str) -> dict | None:
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, email, display_name, preferred_style, persona_sets, avatar_url, discipline, created_at, updated_at "
+            "SELECT id, email, display_name, preferred_style, persona_sets, avatar_url, discipline, custom_prompt, created_at, updated_at "
             "FROM student_profiles WHERE email = %s",
             (email,),
         )
@@ -31,8 +31,9 @@ def _get_or_create_profile(email: str) -> dict | None:
                 "persona_sets": row[4] or [],
                 "avatar_url": row[5] or "",
                 "discipline": row[6] or "humanities",
-                "created_at": row[7].isoformat() if row[7] else None,
-                "updated_at": row[8].isoformat() if row[8] else None,
+                "custom_prompt": row[7] or "",
+                "created_at": row[8].isoformat() if row[8] else None,
+                "updated_at": row[9].isoformat() if row[9] else None,
             }
         # Auto-create
         cur.execute(
@@ -51,6 +52,7 @@ def _get_or_create_profile(email: str) -> dict | None:
             "persona_sets": [],
             "avatar_url": "",
             "discipline": "humanities",
+            "custom_prompt": "",
             "created_at": new[1].isoformat() if new[1] else None,
             "updated_at": None,
         }
@@ -84,6 +86,7 @@ def update_profile():
     display_name = data.get("display_name")
     preferred_style = data.get("preferred_style")
     discipline = data.get("discipline")
+    custom_prompt = data.get("custom_prompt")
     avatar_url = data.get("avatar_url")
     persona_sets = data.get("persona_sets")
 
@@ -115,6 +118,9 @@ def update_profile():
         if discipline is not None:
             updates.append("discipline = %s")
             params.append(discipline)
+        if custom_prompt is not None:
+            updates.append("custom_prompt = %s")
+            params.append(custom_prompt)
         if persona_sets is not None:
             updates.append("persona_sets = %s")
             params.append(json.dumps(persona_sets))

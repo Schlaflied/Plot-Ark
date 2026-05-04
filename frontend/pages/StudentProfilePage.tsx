@@ -5,12 +5,12 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, User, BarChart3, Check, Camera, Settings2, ChevronDown } from 'lucide-react';
+import { ChevronLeft, User, BarChart3, Check, Camera, Settings2, ChevronDown, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SidebarSection = 'profile' | 'progress' | 'narrative';
+type SidebarSection = 'profile' | 'progress' | 'narrative' | 'ai-settings';
 
 interface StudentProfile {
   email: string;
@@ -18,6 +18,7 @@ interface StudentProfile {
   preferred_style: string;
   discipline: string;
   avatar_url: string;
+  custom_prompt: string;
 }
 
 interface PersonaSets {
@@ -665,7 +666,105 @@ const NarrativeSettingsSection: React.FC<{
   );
 };
 
-// ─── Page Component ───────────────────────────────────────────────────────────
+// ─── AI Settings Section ─────────────────────────────────────────────────────────
+
+const AI_PROMPT_EXAMPLES = [
+  '“Please explain things concisely — I prefer short, clear paragraphs over long explanations.”',
+  '“I\'m a visual learner. When possible, describe things using spatial or visual metaphors.”',
+  '“用中文解释概念，但保留英文术语。”',
+  '“Relate concepts to real-world software engineering scenarios when you can.”',
+];
+
+const AISettingsSection: React.FC<{
+  customPrompt: string;
+  onSave: (prompt: string) => void;
+}> = ({ customPrompt, onSave }) => {
+  const [prompt, setPrompt] = useState(customPrompt);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const isInit = useRef(true);
+
+  useEffect(() => {
+    setPrompt(customPrompt);
+    isInit.current = true;
+  }, [customPrompt]);
+
+  useEffect(() => {
+    if (isInit.current) { isInit.current = false; return; }
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSaveStatus('saving');
+      onSave(prompt);
+      setTimeout(() => setSaveStatus('saved'), 300);
+      setTimeout(() => setSaveStatus('idle'), 1800);
+    }, 800);
+    return () => clearTimeout(debounceRef.current);
+  }, [prompt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">AI Settings</h2>
+          <p className="text-sm text-stone-400">
+            Customize how the AI generates and explains content for you.
+          </p>
+        </div>
+        <span className={`text-xs font-medium transition-all duration-300 ${
+          saveStatus === 'saving' ? 'text-amber-500' :
+          saveStatus === 'saved' ? 'text-green-500' : 'text-transparent'
+        }`}>
+          {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : '·'}
+        </span>
+      </div>
+
+      {/* Custom Instructions */}
+      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles size={16} className="text-amber-500" />
+            <p className="text-sm font-semibold text-stone-800">Custom Instructions</p>
+          </div>
+          <p className="text-xs text-stone-400 leading-relaxed">
+            Tell the AI what you’d like it to keep in mind when generating or explaining content.
+            This message will be included in every AI interaction.
+          </p>
+        </div>
+
+        <textarea
+          value={prompt}
+          onChange={e => setPrompt(e.target.value)}
+          placeholder="e.g. I prefer concise explanations with real-world examples. Use analogies from gaming or sports when possible."
+          rows={6}
+          className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed"
+        />
+
+        <div className="text-xs text-stone-400">
+          <span className="font-medium text-stone-500">Ideas:</span>
+          <ul className="mt-1.5 space-y-1">
+            {AI_PROMPT_EXAMPLES.map((ex, i) => (
+              <li key={i} className="flex gap-1.5">
+                <span className="text-amber-400 mt-px">•</span>
+                <span className="italic">{ex}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* Future: Model selection will go here */}
+      <div className="bg-stone-50 border border-dashed border-stone-300 rounded-2xl p-6 text-center">
+        <Sparkles size={20} className="text-stone-300 mx-auto mb-2" />
+        <p className="text-sm text-stone-400 font-medium">Model Selection</p>
+        <p className="text-xs text-stone-300 mt-1">
+          Choose your preferred AI model — coming soon.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+// ─── Page Component ───────────────────────────────────────────────────────────────
 
 const StudentProfilePage: React.FC = () => {
   const { auth } = useAuth();
@@ -681,6 +780,7 @@ const StudentProfilePage: React.FC = () => {
     preferred_style: '',
     discipline: 'humanities',
     avatar_url: '',
+    custom_prompt: '',
   });
   const [personaSets, setPersonaSets] = useState<PersonaSets>(DEFAULT_PERSONA);
   const [courses, setCourses] = useState<CourseProgress[]>([]);
@@ -705,6 +805,7 @@ const StudentProfilePage: React.FC = () => {
           preferred_style: profileData.preferred_style || '',
           discipline: profileData.discipline || 'humanities',
           avatar_url: profileData.avatar_url || '',
+          custom_prompt: profileData.custom_prompt || '',
         });
         // Load persona_sets from profile
         const ps = profileData.persona_sets;
@@ -782,6 +883,11 @@ const StudentProfilePage: React.FC = () => {
       id: 'progress',
       label: 'My Progress',
       icon: <BarChart3 size={14} />,
+    },
+    {
+      id: 'ai-settings',
+      label: 'AI Settings',
+      icon: <Sparkles size={14} />,
     },
   ];
 
@@ -877,6 +983,12 @@ const StudentProfilePage: React.FC = () => {
             )}
             {activeSection === 'progress' && (
               <ProgressSection courses={courses} />
+            )}
+            {activeSection === 'ai-settings' && (
+              <AISettingsSection
+                customPrompt={profile.custom_prompt}
+                onSave={(prompt) => handleSave({ custom_prompt: prompt })}
+              />
             )}
           </div>
         </main>

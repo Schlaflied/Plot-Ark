@@ -323,6 +323,7 @@ def init_db():
                 cur.execute("ALTER TABLE course_analysis_snapshots ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE")
                 cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''")
                 cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS discipline TEXT DEFAULT 'humanities'")
+                cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS custom_prompt TEXT DEFAULT ''")
                 cur.execute("ALTER TABLE curricula ADD COLUMN IF NOT EXISTS semester TEXT DEFAULT ''")
                 conn.commit()
                 cur.close()
