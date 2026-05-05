@@ -173,9 +173,13 @@ def update_profile():
     if preferred_style is not None and preferred_style not in valid_styles:
         return jsonify({"error": f"preferred_style must be one of {valid_styles}"}), 400
 
-    # Validate model_config roles against AVAILABLE_MODELS
+    # Validate model_config roles against AVAILABLE_MODELS (+ custom models)
     if model_config is not None:
         valid_model_values = {m["value"] for m in AVAILABLE_MODELS}
+        # Also allow any custom model IDs (prefixed with "custom-")
+        custom_models = model_config.get("custom_models", [])
+        custom_ids = {cm["id"] for cm in custom_models if isinstance(cm, dict) and "id" in cm}
+        valid_model_values |= custom_ids
         roles = model_config.get("roles", {})
         for role_name, model_val in roles.items():
             if role_name not in ("explainer", "checker", "adapter"):

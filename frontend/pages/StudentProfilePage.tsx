@@ -1090,6 +1090,15 @@ const AISettingsSection: React.FC<{
         const next = { ...mc };
         if (field === 'use_own_key') {
           next.use_own_key = val as boolean;
+        } else if (field === 'add_custom_model') {
+          const cm = JSON.parse(val as string);
+          next.custom_models = [...(next.custom_models || []), cm];
+        } else if (field === 'remove_custom_model') {
+          next.custom_models = (next.custom_models || []).filter(m => m.id !== val);
+          // Reset any role that was using this model
+          for (const role of Object.keys(next.roles) as (keyof typeof next.roles)[]) {
+            if (next.roles[role] === val) next.roles[role] = 'gpt-4o';
+          }
         } else if (field.startsWith('api_key_')) {
           const provider = field.replace('api_key_', '') as keyof ModelConfig['api_keys'];
           next.api_keys = { ...next.api_keys, [provider]: val as string };
