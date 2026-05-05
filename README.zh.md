@@ -261,39 +261,40 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 **系统架构**
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│  前端 (React + TypeScript + Vite)                                          │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌───────────────┐  │
-│  │ Generate  │ │ Courses  │ │  Course  │ │ Knowledge │ │ Student Data  │  │
-│  │   Page    │ │   Page   │ │   Page   │ │   Graph   │ │    Page       │  │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └──────┬────────┘  │
-│       │            │            │              │              │           │
-│  components/ui/  components/generate/    components/analytics/           │
-│  (Select, Input)   (SyllabusUpload)   (TrendChart, ReportSections, ...)  │
-│                         GraphViewer（3D 知识图谱 + 标注叠层）             │
-│                                              SSE 流式传输                │
-└───────┼────────────┼────────────┼──────────────┼──────────────┼──────────┘
-        │            │            │              │              │
-        ▼            ▼            ▼              ▼              ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│  后端 (Flask + Blueprints)                                                 │
-│  ├── app.py (~30 行，仅路由)             ├── config.py (仅环境常量)        │
-│  ├── extensions.py (单例：AI、Redis 等)  ├── async_loop.py (后台异步循环)  │
-│  ├─────────────────────────────────────────────────────────────────────┐   │
-│  │  routes/                                                            │   │
-│  │  ├── curriculum.py           生成 / 验架 / 展开 / 保存              │   │
-│  │  ├── curriculum_agent_routes 标记 / 建议 / 应用 / 撤销 / 变更      │   │
-│  │  ├── history.py              CRUD + 收藏 + DOCX 导出                │   │
-│  │  ├── analytics.py            A2A SSE 分析 + PDF/DOCX/Excel 导出    │   │
-│  │  ├── xapi.py                 xAPI 语句 + Mock 数据种子             │   │
-│  │  ├── feedback.py             学生情绪反馈 + 评论收集               │   │
-│  │  ├── graph.py                知识图谱 + RAG 查询 + /courses 查询   │   │
-│  │  ├── annotations.py          KG 概念标注（confused / important /   │   │
-│  │  │                           exam_focus）+ 匿名聚合                │   │
-│  │  ├── sources.py              Tavily 源预览                          │   │
-│  │  ├── syllabus.py             PDF/DOCX 解析 + 导入                   │   │
-│  │  └── materials.py            LightRAG 材料摄入                     │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+┌───────────────────────────────────────────────────────────────────────────────────────────┐
+│  前端 (React + TypeScript + Vite)                                                           │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌───────────────┐ ┌────────┐ ┌────┐│
+│  │ Generate  │ │ Courses  │ │  Course  │ │ Knowledge │ │ Student Data  │ │Student │ │设置││
+│  │   Page    │ │   Page   │ │   Page   │ │   Graph   │ │    Page       │ │Profile │ │教授││
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └──────┬────────┘ └───┬────┘ └──┬─┘│
+│       │            │            │              │              │              │          │  │
+│  components/ui/  components/generate/    components/analytics/    ModelSelection (共享) │  │
+│  (Select, Input)   (SyllabusUpload)   (TrendChart, ReportSections, ...)                  │
+│                         GraphViewer（2D 知识图谱 + 掌握度叠层）                             │
+│                                              SSE 流式传输                                  │
+└───────┼────────────┼────────────┼──────────────┼──────────────┼──────────┼──────────┼──────┘
+        │            │            │              │              │          │          │
+        ▼            ▼            ▼              ▼              ▼          ▼          ▼
+┌───────────────────────────────────────────────────────────────────────────────────────────┐
+│  后端 (Flask + Blueprints)                                                                  │
+│  ├── app.py (~30 行，仅路由)             ├── config.py (18 模型 + 环境常量)                  │
+│  ├── extensions.py (单例：AI、Redis 等)  ├── async_loop.py (后台异步循环)                    │
+│  ├──────────────────────────────────────────────────────────────────────────────────────┐  │
+│  │  routes/                                                                              │  │
+│  │  ├── curriculum.py           生成 / 验架 / 展开 / 保存                                │  │
+│  │  ├── curriculum_agent_routes 标记 / 建议 / 应用 / 撤销 / 变更                         │  │
+│  │  ├── history.py              CRUD + 收藏 + DOCX 导出                                  │  │
+│  │  ├── analytics.py            A2A SSE 分析 + PDF/DOCX/Excel 导出                       │  │
+│  │  ├── xapi.py                 xAPI 语句 + Mock 数据种子                                │  │
+│  │  ├── feedback.py             学生情绪反馈 + 评论收集                                   │  │
+│  │  ├── profile.py              Profile CRUD + model_config + Fernet API Key 加密        │  │
+│  │  ├── settings.py             教授设置（偏好、模型、Prompt 模板）                        │  │
+│  │  ├── graph.py                知识图谱 + RAG 查询 + /courses 查询                      │  │
+│  │  ├── annotations.py          KG 概念标注（confused / important / exam_focus）          │  │
+│  │  ├── sources.py              Tavily 源预览                                            │  │
+│  │  ├── syllabus.py             PDF/DOCX 解析 + 导入                                     │  │
+│  │  └── materials.py            LightRAG 材料摄入                                        │  │
+│  └──────────────────────────────────────────────────────────────────────────────────────┘  │
 │  ┌─────────────────────────────┐  ┌────────────────────────────────────┐   │
 │  │  agents/ (Hive 风格 A2A)    │  │  services/                         │   │
 │  │  ├── base.py (BaseNode)     │  │  ├── research.py (Tavily)          │   │

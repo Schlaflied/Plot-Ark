@@ -261,40 +261,40 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 **System Architecture**
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│  Frontend (React + TypeScript + Vite)                                            │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌─────────┐ ┌──────────┐ │
-│  │ Generate  │ │ Courses  │ │  Course  │ │ Knowledge │ │ Student │ │ Student  │ │
-│  │   Page    │ │   Page   │ │   Page   │ │   Graph   │ │  Data   │ │ Profile  │ │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └────┬────┘ └────┬─────┘ │
-│       │            │            │              │            │           │        │
-│  components/ui/  components/generate/    components/analytics/                  │
-│  (Select, Input)   (SyllabusUpload)   (TrendChart, ReportSections, ...)         │
-│                             GraphViewer (2D KG + mastery overlay)               │
-│                                              SSE streaming                      │
-└───────┼────────────┼────────────┼──────────────┼────────────┼───────────┼────────┘
-        │            │            │              │            │           │
-        ▼            ▼            ▼              ▼            ▼           ▼
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│  Backend (Flask + Blueprints)                                                    │
-│  ├── app.py (~30 lines, routing)         ├── config.py (Env constants)           │
-│  ├── extensions.py (Global instances)    ├── async_loop.py (Event loop)          │
-│  ├───────────────────────────────────────────────────────────────────────────┐   │
-│  │  routes/                                                                  │   │
-│  │  ├── curriculum.py           generate / skeleton / expand / save          │   │
-│  │  ├── curriculum_agent_routes flags / suggestions / apply / redo           │   │
-│  │  ├── history.py              CRUD + favorite + DOCX export                │   │
-│  │  ├── analytics.py            A2A SSE + history API + export               │   │
-│  │  ├── xapi.py                 xAPI statements + mock data seed             │   │
-│  │  ├── feedback.py             Student sentiment + comments                 │   │
-│  │  ├── profile.py              Student profile CRUD + custom_prompt         │   │
-│  │  ├── settings.py             Platform settings (API keys, models)         │   │
-│  │  ├── graph.py                KG data + RAG query + /courses lookup        │   │
-│  │  ├── annotations.py          KG concept annotations + aggregation         │   │
-│  │  ├── sources.py              Tavily source preview                        │   │
-│  │  ├── syllabus.py             PDF/DOCX parse + import                      │   │
-│  │  └── materials.py            LightRAG ingest                              │   │
-│  └───────────────────────────────────────────────────────────────────────────┘   │
+┌───────────────────────────────────────────────────────────────────────────────────────────┐
+│  Frontend (React + TypeScript + Vite)                                                      │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌─────────┐ ┌──────────┐ ┌────────┐│
+│  │ Generate  │ │ Courses  │ │  Course  │ │ Knowledge │ │ Student │ │ Student  │ │Settings││
+│  │   Page    │ │   Page   │ │   Page   │ │   Graph   │ │  Data   │ │ Profile  │ │ (Prof) ││
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └────┬────┘ └────┬─────┘ └───┬────┘│
+│       │            │            │              │            │           │            │     │
+│  components/ui/  components/generate/    components/analytics/  ModelSelection (shared)   │
+│  (Select, Input)   (SyllabusUpload)   (TrendChart, ReportSections, ...)                   │
+│                             GraphViewer (2D KG + mastery overlay)                          │
+│                                              SSE streaming                                 │
+└───────┼────────────┼────────────┼──────────────┼────────────┼───────────┼────────────┼─────┘
+        │            │            │              │            │           │            │
+        ▼            ▼            ▼              ▼            ▼           ▼            ▼
+┌───────────────────────────────────────────────────────────────────────────────────────────┐
+│  Backend (Flask + Blueprints)                                                              │
+│  ├── app.py (~30 lines, routing)         ├── config.py (18 models + env constants)        │
+│  ├── extensions.py (Global instances)    ├── async_loop.py (Event loop)                   │
+│  ├──────────────────────────────────────────────────────────────────────────────────────┐  │
+│  │  routes/                                                                              │  │
+│  │  ├── curriculum.py           generate / skeleton / expand / save                      │  │
+│  │  ├── curriculum_agent_routes flags / suggestions / apply / redo                       │  │
+│  │  ├── history.py              CRUD + favorite + DOCX export                            │  │
+│  │  ├── analytics.py            A2A SSE + history API + export                           │  │
+│  │  ├── xapi.py                 xAPI statements + mock data seed                         │  │
+│  │  ├── feedback.py             Student sentiment + comments                             │  │
+│  │  ├── profile.py              Profile CRUD + model_config + Fernet API keys            │  │
+│  │  ├── settings.py             Professor settings (preferences, models, prompts)        │  │
+│  │  ├── graph.py                KG data + RAG query + /courses lookup                    │  │
+│  │  ├── annotations.py          KG concept annotations + aggregation                     │  │
+│  │  ├── sources.py              Tavily source preview                                    │  │
+│  │  ├── syllabus.py             PDF/DOCX parse + import                                  │  │
+│  │  └── materials.py            LightRAG ingest                                          │  │
+│  └──────────────────────────────────────────────────────────────────────────────────────┘  │
 │  ┌─────────────────────────────┐  ┌──────────────────────────────────────────┐   │
 │  │  agents/ (Hive-style A2A)   │  │  services/                               │   │
 │  │  ├── base.py (BaseNode)     │  │  ├── research.py (Tavily)                │   │
