@@ -324,6 +324,8 @@ def init_db():
                 cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''")
                 cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS discipline TEXT DEFAULT 'humanities'")
                 cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS custom_prompt TEXT DEFAULT ''")
+                cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS model_config JSONB DEFAULT '{}'")
+
                 cur.execute("ALTER TABLE curricula ADD COLUMN IF NOT EXISTS semester TEXT DEFAULT ''")
                 cur.execute("ALTER TABLE concept_annotations ADD COLUMN IF NOT EXISTS student_id TEXT DEFAULT 'anonymous'")
                 conn.commit()
