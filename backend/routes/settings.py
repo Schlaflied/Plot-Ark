@@ -80,3 +80,30 @@ def get_keys():
         else:
             result[field] = raw  # model names are not sensitive
     return jsonify(result)
+
+
+# ─── Professor custom prompt ──────────────────────────────────────────────────
+
+_PROMPT_KEY = _REDIS_PREFIX + "professor_prompt"
+
+
+@settings_bp.route("/api/settings/prompt", methods=["GET"])
+def get_prompt():
+    if redis_client:
+        raw = redis_client.get(_PROMPT_KEY)
+    else:
+        raw = _mem_store.get("professor_prompt")
+    return jsonify({"prompt": raw or ""})
+
+
+@settings_bp.route("/api/settings/prompt", methods=["POST"])
+def save_prompt():
+    data = request.get_json(silent=True) or {}
+    prompt = data.get("prompt", "")
+    if not isinstance(prompt, str):
+        return jsonify({"error": "prompt must be a string"}), 400
+    if redis_client:
+        redis_client.set(_PROMPT_KEY, prompt)
+    else:
+        _mem_store["professor_prompt"] = prompt
+    return jsonify({"status": "ok"})
