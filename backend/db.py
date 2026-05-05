@@ -326,6 +326,15 @@ def init_db():
                 cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS custom_prompt TEXT DEFAULT ''")
                 cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS model_config JSONB DEFAULT '{}'")
 
+                # ── prompt_templates (professor-editable prompt instructions) ──
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS prompt_templates (
+                        id SERIAL PRIMARY KEY,
+                        template_key TEXT UNIQUE NOT NULL,
+                        custom_instructions TEXT DEFAULT '',
+                        updated_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
                 cur.execute("ALTER TABLE curricula ADD COLUMN IF NOT EXISTS semester TEXT DEFAULT ''")
                 cur.execute("ALTER TABLE concept_annotations ADD COLUMN IF NOT EXISTS student_id TEXT DEFAULT 'anonymous'")
                 conn.commit()

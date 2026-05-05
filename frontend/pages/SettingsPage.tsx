@@ -17,10 +17,7 @@ import {
   ModelSelectionCard,
 } from '../components/ModelSelection';
 
-// ─── Backend helpers ──────────────────────────────────────────────────────────
-
 const API_KEYS = '/api/settings/keys';
-const API_PROMPT = '/api/settings/prompt';
 
 async function fetchBackendKeys(): Promise<Record<string, string | null>> {
   try { const r = await fetch(API_KEYS); if (!r.ok) return {}; return r.json(); }
@@ -34,20 +31,6 @@ async function postKeys(payload: Record<string, string>): Promise<void> {
       body: JSON.stringify(payload),
     });
   } catch (e) { console.warn('Settings: backend unreachable', e); }
-}
-
-async function fetchPrompt(): Promise<string> {
-  try { const r = await fetch(API_PROMPT); if (!r.ok) return ''; const d = await r.json(); return d.prompt ?? ''; }
-  catch { return ''; }
-}
-
-async function savePrompt(prompt: string): Promise<void> {
-  try {
-    await fetch(API_PROMPT, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
-    });
-  } catch (e) { console.warn('Prompt save failed', e); }
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -168,24 +151,51 @@ const AiModelsSection: React.FC<{
 
 // ─── Prompt Templates Section ─────────────────────────────────────────────────
 
-const PROMPT_EXAMPLES = [
-  '"Focus on practical, real-world applications when generating module content."',
-  '"Always include 2-3 discussion questions at the end of each module."',
-  '"Use Socratic questioning style — guide students to discover answers rather than stating them."',
-  '"Keep vocabulary at an undergraduate level, but don\'t oversimplify core concepts."',
-];
+const PROMPT_IDEAS: Record<string, string[]> = {
+  generate: [
+    'Focus on practical, real-world applications when generating module content.',
+    'Always include at least one case study per module.',
+    'Use Socratic questioning in teaching suggestions.',
+  ],
+  skeleton: [
+    'Front-load foundational theory in the first 3 modules before applied topics.',
+    'Ensure module titles are student-friendly — avoid jargon in titles.',
+    'Design the progression so each module builds explicitly on the previous one.',
+  ],
+  expand: [
+    'Prefer open-ended reflection assignments over quizzes.',
+    'Include at least one video resource per module when available.',
+    'Keep vocabulary at an undergraduate level, but don\'t oversimplify core concepts.',
+  ],
+};
+
+const TEMPLATE_ICONS: Record<string, string> = {
+  generate: '📋',
+  skeleton: '🦴',
+  expand: '🔍',
+};
+
+interface TemplateData {
+  key: string;
+  label: string;
+  description: string;
+  placeholder: string;
+  custom_instructions: string;
+  updated_at: string | null;
+}
 
 const PromptSection: React.FC<{
-  prompt: string;
-  setPrompt: (v: string) => void;
+  templates: Record<string, TemplateData>;
+  onUpdate: (key: string, value: string) => void;
+  onReset: (key: string) => void;
   saveStatus: 'idle' | 'saving' | 'saved';
-}> = ({ prompt, setPrompt, saveStatus }) => (
+}> = ({ templates, onUpdate, onReset, saveStatus }) => (
   <div className="space-y-6">
     <div className="flex items-center justify-between">
       <div>
         <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">Prompt Templates</h2>
         <p className="text-sm text-stone-400">
-          Custom instructions included in every AI generation across all courses.
+          Custom instructions injected into each AI generation stage. These are applied across all courses.
         </p>
       </div>
       <span className={`text-xs font-medium transition-all duration-300 ${
@@ -196,44 +206,66 @@ const PromptSection: React.FC<{
       </span>
     </div>
 
-    <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-4">
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <Sparkles size={16} className="text-amber-500" />
-          <p className="text-sm font-semibold text-stone-800">Custom Instructions</p>
-        </div>
-        <p className="text-xs text-stone-400 leading-relaxed">
-          Tell the AI what to keep in mind when generating curriculum, explanations, and suggestions.
-          This message is included in every AI interaction.
-        </p>
-      </div>
+    {['generate', 'skeleton', 'expand'].map(key => {
+      const t = templates[key];
+      if (!t) return null;
+      const ideas = PROMPT_IDEAS[key] || [];
+      const icon = TEMPLATE_ICONS[key] || '📝';
+      const hasCustom = (t.custom_instructions || '').trim().length > 0;
 
-      <textarea
-        value={prompt}
-        onChange={e => setPrompt(e.target.value)}
-        placeholder="e.g. Focus on case-study-based learning. Always connect theory to practical scenarios. Use inclusive language."
-        rows={8}
-        className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed"
-      />
+      return (
+        <div key={key} className="bg-white border border-stone-200 rounded-2xl shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl leading-none">{icon}</span>
+              <div>
+                <h3 className="text-sm font-semibold text-stone-900">{t.label}</h3>
+                <p className="text-xs text-stone-400 mt-0.5">{t.description}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {hasCustom && (
+                <span className="flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5">
+                  <Sparkles size={10} /> Customized
+                </span>
+              )}
+              {hasCustom && (
+                <button
+                  type="button"
+                  onClick={() => { if (window.confirm(`Reset "${t.label}" to default? Your custom instructions will be removed.`)) onReset(key); }}
+                  className="text-xs text-stone-400 hover:text-red-500 transition-colors px-2 py-1 rounded-lg hover:bg-red-50"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
 
-      <div className="text-xs text-stone-400">
-        <span className="font-medium text-stone-500">Ideas</span>
-        <span className="text-stone-300 ml-1">— click to add</span>
-        <div className="mt-2 flex flex-col gap-1.5">
-          {PROMPT_EXAMPLES.map((ex, i) => {
-            const clean = ex.replace(/^[\u201c"\u201d]+|[\u201c"\u201d]+$/g, '');
-            return (
-              <button key={i} type="button"
-                onClick={() => setPrompt(prev => prev ? `${prev}\n${clean}` : clean)}
-                className="flex items-center gap-2 text-left px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 hover:border-amber-300 hover:bg-amber-50 transition-all group">
-                <span className="text-amber-400 group-hover:text-amber-500 text-sm flex-shrink-0">+</span>
-                <span className="italic text-stone-500 group-hover:text-amber-700 transition-colors">{ex}</span>
-              </button>
-            );
-          })}
+          <textarea
+            value={t.custom_instructions}
+            onChange={e => onUpdate(key, e.target.value)}
+            placeholder={t.placeholder}
+            rows={4}
+            className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition resize-y leading-relaxed"
+          />
+
+          <div className="text-xs text-stone-400">
+            <span className="font-medium text-stone-500">Ideas</span>
+            <span className="text-stone-300 ml-1">— click to add</span>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {ideas.map((idea, i) => (
+                <button key={i} type="button"
+                  onClick={() => onUpdate(key, t.custom_instructions ? `${t.custom_instructions}\n${idea}` : idea)}
+                  className="flex items-center gap-2 text-left px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 hover:border-amber-300 hover:bg-amber-50 transition-all group">
+                  <span className="text-amber-400 group-hover:text-amber-500 text-sm flex-shrink-0">+</span>
+                  <span className="italic text-stone-500 group-hover:text-amber-700 transition-colors">"{idea}"</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      );
+    })}
   </div>
 );
 
@@ -642,10 +674,10 @@ const SettingsPage: React.FC = () => {
   const mcDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
   const mcInit = useRef(true);
 
-  // ── Prompt state (synced with backend via /api/settings/prompt) ────────────
-  const [prompt, setPrompt] = useState('');
-  const promptDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const promptInit = useRef(true);
+  // ── Prompt templates state (synced with backend via /api/prompts) ───────────
+  const [templates, setTemplates] = useState<Record<string, TemplateData>>({});
+  const templateDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const templateInit = useRef(true);
 
   // ── Fetch initial data ────────────────────────────────────────────────────
   useEffect(() => {
@@ -664,8 +696,11 @@ const SettingsPage: React.FC = () => {
       setMc(next);
       mcInit.current = true;
     });
-    // Load prompt
-    fetchPrompt().then(p => { setPrompt(p); promptInit.current = true; });
+    // Load prompt templates from DB
+    fetch('/api/prompts').then(r => r.ok ? r.json() : {}).then(data => {
+      setTemplates(data);
+      templateInit.current = true;
+    }).catch(() => {});
   }, []);
 
   // ── Auto-save model config ────────────────────────────────────────────────
@@ -695,18 +730,35 @@ const SettingsPage: React.FC = () => {
     }, 800);
   }, []);
 
-  // ── Auto-save prompt ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (promptInit.current) { promptInit.current = false; return; }
-    clearTimeout(promptDebounce.current);
-    promptDebounce.current = setTimeout(() => {
+  // ── Auto-save prompt templates ────────────────────────────────────────────
+  const handleTemplateUpdate = useCallback((key: string, value: string) => {
+    setTemplates(prev => ({
+      ...prev,
+      [key]: { ...prev[key], custom_instructions: value },
+    }));
+    clearTimeout(templateDebounce.current);
+    templateDebounce.current = setTimeout(() => {
       setSaveStatus('saving');
-      savePrompt(prompt);
+      fetch(`/api/prompts/${key}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ custom_instructions: value }),
+      }).catch(() => {});
       setTimeout(() => setSaveStatus('saved'), 300);
       setTimeout(() => setSaveStatus('idle'), 1800);
     }, 800);
-    return () => clearTimeout(promptDebounce.current);
-  }, [prompt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleTemplateReset = useCallback((key: string) => {
+    setTemplates(prev => ({
+      ...prev,
+      [key]: { ...prev[key], custom_instructions: '', updated_at: null },
+    }));
+    setSaveStatus('saving');
+    fetch(`/api/prompts/${key}/reset`, { method: 'POST' }).catch(() => {});
+    setTimeout(() => setSaveStatus('saved'), 300);
+    setTimeout(() => setSaveStatus('idle'), 1800);
+  }, []);
 
   // ── Sidebar resize ────────────────────────────────────────────────────────
   const startResize = (e: React.MouseEvent) => {
@@ -796,7 +848,7 @@ const SettingsPage: React.FC = () => {
               <AiModelsSection mc={mc} onMcChange={handleMcChange} saveStatus={saveStatus} onStatusChange={setSaveStatus} />
             )}
             {activeSection === 'prompt' && (
-              <PromptSection prompt={prompt} setPrompt={setPrompt} saveStatus={saveStatus} />
+              <PromptSection templates={templates} onUpdate={handleTemplateUpdate} onReset={handleTemplateReset} saveStatus={saveStatus} />
             )}
             {activeSection === 'preferences' && <PreferencesSection saveStatus={saveStatus} onStatusChange={setSaveStatus} />}
           </div>

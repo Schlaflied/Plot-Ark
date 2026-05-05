@@ -13,6 +13,33 @@ from constants import (
 )
 
 
+def _load_custom_instructions(template_key: str) -> str:
+    """Load professor-defined custom instructions from DB.
+
+    Returns the custom instruction text (possibly empty string).
+    Falls back silently on any DB error.
+    """
+    try:
+        from db import get_db
+        conn = get_db()
+        if not conn:
+            return ""
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT custom_instructions FROM prompt_templates "
+                "WHERE template_key = %s",
+                (template_key,),
+            )
+            row = cur.fetchone()
+            cur.close()
+            return (row[0] or "").strip() if row else ""
+        finally:
+            conn.close()
+    except Exception:
+        return ""
+
+
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 
 RESOURCE_PRIORITY_PROMPT = {
@@ -112,6 +139,8 @@ def build_generate_prompt(
     design_approach_label, design_approach_instructions, sam_module_field = _design_approach_block(design_approach)
     reading_priority_instructions = _reading_priority_block(required_sources, optional_sources)
     sources_context = _sources_context_block(real_sources)
+    custom_instr = _load_custom_instructions("generate")
+    custom_block = f"\n\nProfessor Custom Instructions:\n{custom_instr}\n" if custom_instr else ""
 
     return f"""You are an expert curriculum designer applying evidence-based instructional design principles. Generate a rigorous, narrative-driven curriculum.
 
@@ -136,7 +165,7 @@ Pedagogical Constraints:
 - Assignment rubric_highlights: MUST contain exactly 3-4 concrete criteria describing what excellent work looks like for THIS specific task.
 - Assignment estimated_time: MUST be realistic given the session duration constraint above. A 75-min session cannot have a 3-hour assignment.
 {design_approach_instructions}{reading_priority_instructions}
-{RESOURCE_PRIORITY_PROMPT.get(course_type, RESOURCE_PRIORITY_PROMPT["mixed"])}
+{RESOURCE_PRIORITY_PROMPT.get(course_type, RESOURCE_PRIORITY_PROMPT["mixed"])}{custom_block}
 Return ONLY valid JSON (no markdown, no explanation):
 {{
   "design_approach": "{design_approach}",
@@ -223,6 +252,8 @@ def build_skeleton_prompt(
 ) -> str:
     """Build the skeleton-only (titles + objectives) prompt."""
     blooms_constraint = get_blooms_constraint(level)
+    custom_instr = _load_custom_instructions("skeleton")
+    custom_block = f"\n\nProfessor Custom Instructions:\n{custom_instr}\n" if custom_instr else ""
 
     return f"""You are an expert curriculum designer. Generate ONLY the module skeleton for the following course.
 
@@ -236,7 +267,7 @@ Number of Modules: {module_count}
 Design Approach: {design_approach}
 
 Bloom's Verb Constraint: {blooms_constraint}
-Difficulty Progression: complexity_level must start at 1 and reach 5 by the final module, increasing evenly.
+Difficulty Progression: complexity_level must start at 1 and reach 5 by the final module, increasing evenly.{custom_block}
 
 Generate the course skeleton. Include a course_narrative (2-3 sentences explaining the central question or theme of this course and why these modules belong together — the "story" of the whole course). For each module provide: module_number, title, complexity_level, learning_objectives (list of 2-3 objectives using the permitted Bloom's verbs). Nothing else — no readings, no assignments, no narrative_preview.
 
@@ -308,6 +339,8 @@ def build_expand_prompt(
         "mixed": "PRIORITY: recommended_readings should include a balanced mix of academic, news, and video sources across modules.",
     }
     resource_priority = resource_priority_map.get(course_type, resource_priority_map["mixed"])
+    custom_instr = _load_custom_instructions("expand")
+    custom_block = f"\n\nProfessor Custom Instructions:\n{custom_instr}\n" if custom_instr else ""
 
     objectives_str = "\n".join(f"  - {obj}" for obj in learning_objectives)
 
@@ -339,7 +372,7 @@ Constraints:
 - Assignment task_description: MUST be specific and actionable (e.g. "Write a 500-word reflection comparing two case studies..."), NOT generic.
 - Assignment rubric_highlights: MUST contain exactly 3-4 concrete criteria.
 - Not every module requires an assignment. Only include one if it meaningfully fits this module.
-- narrative_preview: A compelling 2-3 sentence narrative hook using metaphor, scenario, or challenge framing.{sources_context}
+- narrative_preview: A compelling 2-3 sentence narrative hook using metaphor, scenario, or challenge framing.{sources_context}{custom_block}
 
 Return ONLY valid JSON for this single module (no markdown, no explanation):
 {{
