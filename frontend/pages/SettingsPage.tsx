@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, Sparkles, Eye, EyeOff, Camera } from 'lucide-react';
+import { ChevronLeft, ChevronDown, Sparkles, Eye, EyeOff, Camera } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   ModelConfig,
@@ -233,6 +233,78 @@ const PromptSection: React.FC<{
 
 import { LEVELS, LEVEL_GROUPS, COURSE_TYPES, SESSION_DURATIONS, DESIGN_APPROACHES } from '../constants/formOptions';
 
+/* Custom amber-themed dropdown — mirrors ModelSelect from P2 */
+const AmberSelect: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  options: { value: string; label: string; group?: string }[];
+  groups?: readonly string[];
+}> = ({ value, onChange, placeholder, options, groups }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const selected = options.find(o => o.value === value);
+
+  const renderOptions = (list: typeof options) =>
+    list.map(opt => (
+      <button
+        key={opt.value}
+        type="button"
+        onClick={() => { onChange(opt.value); setOpen(false); }}
+        className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center ${ 
+          value === opt.value ? 'bg-amber-50 text-amber-800 font-medium' : 'text-stone-700 hover:bg-stone-50'
+        }`}
+      >
+        {opt.label}
+      </button>
+    ));
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`w-full flex items-center justify-between gap-2 bg-white border rounded-xl px-4 py-2.5 text-sm text-left outline-none transition-all cursor-pointer ${
+          open ? 'border-amber-400 ring-2 ring-amber-200/60 shadow-sm' : 'border-stone-200 hover:border-stone-300'
+        }`}
+      >
+        <span className={selected ? 'text-stone-700' : 'text-stone-400'}>{selected?.label || placeholder}</span>
+        <ChevronDown size={14} className={`text-stone-400 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg shadow-stone-900/8 overflow-hidden py-0.5 max-h-64 overflow-y-auto animate-selectOpen">
+          {groups ? (
+            <>
+              {/* Grouped rendering */}
+              {groups.map(g => {
+                const items = options.filter(o => o.group === g);
+                if (!items.length) return null;
+                return (
+                  <div key={g}>
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-stone-400 uppercase tracking-wider bg-stone-50/80 sticky top-0">{g}</div>
+                    {renderOptions(items)}
+                  </div>
+                );
+              })}
+              {/* Ungrouped items at the end */}
+              {renderOptions(options.filter(o => !o.group || !groups.includes(o.group as any)))}
+            </>
+          ) : (
+            renderOptions(options)
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const PreferencesSection: React.FC<{
   saveStatus: 'idle' | 'saving' | 'saved';
   onStatusChange: (s: 'idle' | 'saving' | 'saved') => void;
@@ -262,24 +334,7 @@ const PreferencesSection: React.FC<{
     return () => clearTimeout(debounceRef.current);
   }, [level, courseType, duration, approach, format]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectCls =
-    'w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 cursor-pointer transition appearance-none';
-
-  /* Amber-themed custom select wrapper */
-  const SelectWrap: React.FC<{ label: string; hint?: string; value: string; onChange: (v: string) => void; children: React.ReactNode }> =
-    ({ label, hint, value, onChange, children }) => (
-      <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">{label}</label>
-        {hint && <p className="text-xs text-stone-400">{hint}</p>}
-        <div className="relative">
-          <select value={value} onChange={e => onChange(e.target.value)}
-            className={selectCls}
-            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23d97706' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}>
-            {children}
-          </select>
-        </div>
-      </div>
-    );
+  const labelCls = "text-xs font-semibold text-stone-500 uppercase tracking-wider";
 
   return (
     <div className="space-y-6">
@@ -305,38 +360,34 @@ const PreferencesSection: React.FC<{
           <p className="text-sm font-semibold text-stone-800">Course Generation Defaults</p>
         </div>
 
-        <SelectWrap label="Default Student Level" hint="The academic level pre-selected when you create a new course." value={level} onChange={setLevel}>
-          <option value="">— Select level —</option>
-          {LEVEL_GROUPS.map(group => (
-            <optgroup key={group} label={group}>
-              {LEVELS.filter(l => l.group === group).map(l => (
-                <option key={l.value} value={l.value}>{l.label}</option>
-              ))}
-            </optgroup>
-          ))}
-          <option value="other-custom">Other / Custom</option>
-        </SelectWrap>
+        <div className="space-y-1.5">
+          <label className={labelCls}>Default Student Level</label>
+          <p className="text-xs text-stone-400">The academic level pre-selected when you create a new course.</p>
+          <AmberSelect value={level} onChange={setLevel} placeholder="— Select level —"
+            options={LEVELS.map(l => ({ value: l.value, label: l.label, group: l.group }))}
+            groups={LEVEL_GROUPS} />
+        </div>
 
-        <SelectWrap label="Default Course Type" hint="How course activities are structured." value={courseType} onChange={setCourseType}>
-          <option value="">— Select type —</option>
-          {COURSE_TYPES.map(t => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
-        </SelectWrap>
+        <div className="space-y-1.5">
+          <label className={labelCls}>Default Course Type</label>
+          <p className="text-xs text-stone-400">How course activities are structured.</p>
+          <AmberSelect value={courseType} onChange={setCourseType} placeholder="— Select type —"
+            options={COURSE_TYPES} />
+        </div>
 
-        <SelectWrap label="Default Session Duration" hint="Typical class session length." value={duration} onChange={v => setDuration(v)}>
-          <option value="">— Select duration —</option>
-          {SESSION_DURATIONS.map(d => (
-            <option key={d.value} value={String(d.value)}>{d.label}</option>
-          ))}
-        </SelectWrap>
+        <div className="space-y-1.5">
+          <label className={labelCls}>Default Session Duration</label>
+          <p className="text-xs text-stone-400">Typical class session length.</p>
+          <AmberSelect value={duration} onChange={setDuration} placeholder="— Select duration —"
+            options={SESSION_DURATIONS.map(d => ({ value: String(d.value), label: d.label }))} />
+        </div>
 
-        <SelectWrap label="Default Design Approach" hint="Instructional design methodology." value={approach} onChange={setApproach}>
-          <option value="">— Select approach —</option>
-          {DESIGN_APPROACHES.map(a => (
-            <option key={a.value} value={a.value}>{a.label}</option>
-          ))}
-        </SelectWrap>
+        <div className="space-y-1.5">
+          <label className={labelCls}>Default Design Approach</label>
+          <p className="text-xs text-stone-400">Instructional design methodology.</p>
+          <AmberSelect value={approach} onChange={setApproach} placeholder="— Select approach —"
+            options={DESIGN_APPROACHES} />
+        </div>
       </div>
 
       {/* Export Defaults */}
@@ -346,11 +397,16 @@ const PreferencesSection: React.FC<{
           <p className="text-sm font-semibold text-stone-800">Export Defaults</p>
         </div>
 
-        <SelectWrap label="Default Export Format" hint="File format when downloading course reports and syllabi." value={format} onChange={setFormat}>
-          <option value="PDF">PDF</option>
-          <option value="DOCX">DOCX (Word)</option>
-          <option value="Excel">Excel (.xlsx)</option>
-        </SelectWrap>
+        <div className="space-y-1.5">
+          <label className={labelCls}>Default Export Format</label>
+          <p className="text-xs text-stone-400">File format when downloading course reports and syllabi.</p>
+          <AmberSelect value={format} onChange={setFormat} placeholder="PDF"
+            options={[
+              { value: 'PDF', label: 'PDF' },
+              { value: 'DOCX', label: 'DOCX (Word)' },
+              { value: 'Excel', label: 'Excel (.xlsx)' },
+            ]} />
+        </div>
       </div>
     </div>
   );
