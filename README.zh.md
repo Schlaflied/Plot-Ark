@@ -27,7 +27,7 @@
   👉 <a href="https://schlaflied.github.io/Plot-Ark/">访问精美的互动式官方主页</a> 👈
 </h3>
 
-**一款开源主动式平台，完整覆盖课程闭环：基于教学理论生成课程内容、通过 xAPI 追踪真实学习行为，并借助 AI 驱动的反馈循环持续优化课程模块。**
+**一款开源的双端（教授 + 学生）主动式课程平台，完整覆盖课程闭环：基于教学理论生成课程内容、通过 xAPI 追踪真实学习行为，并借助 AI Agent 在人在回路控制下持续优化课程模块。**
 
 > **生成（Generate）** — Tavily 研究 Agent 在内容生成前检索经验证的学术、视频与新闻来源。布鲁姆认知分类法、Krashen 的 i+1 难度递进和认知负荷理论内置于生成流水线，确保课程结构符合真实学习规律。不会出现幻觉引用。
 
@@ -35,7 +35,28 @@
 
 > **优化（Optimize）** — 课程 Agent 将分析结果转化为具体的模块修改建议。教师通过修改前后对比预览逐一审阅并批准或拒绝每条 AI 建议。已批准的修改回流至下一轮学习数据周期——闭环完成。
 
-> **个性化（Personalize）** — 学生可以建立学习画像：学科偏好、CP/OC 叙事锚点、自定义 AI 指令。模板驱动的诊断引擎提供温和的一句话概念差距指引——无分数、无排名，只有"去哪里看"的地图。
+> **个性化（Personalize）** — 学生可以建立学习画像：学科偏好、多角色人设组（含关系映射的叙事锚点）、自定义 AI 指令。可配置 Agent 团队（18 个预设模型 + 自定义模型，覆盖 9 家 provider）让用户自选 LLM 组合。模板驱动的诊断引擎提供温和的一句话概念差距指引——无分数、无排名，只有"去哪里看"的地图。
+
+---
+
+### 🆕 最近更新（2026 年 5 月）
+
+| 功能 | 说明 |
+|------|------|
+| 🤖 **多模型 Agent 团队** | 9 家 provider 的 18 个预设模型（OpenAI、Anthropic、Google、DeepSeek、Mistral、xAI、Groq、MiniMax、GLM）+ 自定义模型支持任意 OpenAI 兼容 API。★ 推荐标签、MoE ⚠ 架构警告、动态 API Key 检测。 |
+| 👤 **学生画像系统** | 4 标签页画像（Profile、Customized Learning、My Progress、AI Settings），含头像、学科选择、CP/OC 叙事锚点、多角色人设组（含关系标签）、自定义 AI 指令。 |
+| 🎓 **教授设置门户** | 完整设置页：个人信息、学术偏好（难度级别、课程类型、课时、教学设计、导出格式）、自定义 AmberSelect 下拉、模型默认值、Prompt 模板——全部自动保存。 |
+| 🔐 **按 Provider 的 API Key** | 自带密钥——仅显示当前使用的 provider 的密钥输入框。后端 Fernet 加密存储。 |
+
+---
+
+### 👥 目标用户
+
+| 角色 | 你将获得 |
+|------|---------|
+| **教师** | 基于教学理论的 AI 课程生成、xAPI 分析仪表板、三层人在回路优化建议、知识图谱、可导出报告（PDF/DOCX/Excel/IMS） |
+| **学生** | 个性化学习画像、一句话概念差距诊断、叙事锚定解释（CP/OC）、可配置 AI 模型团队、进度可视化 |
+| **开发者** | 模块化 Flask + React 代码库、Hive 风格 A2A Agent 架构、Docker 一键启动、通过 OpenAI 兼容 SDK 的可扩展模型路由 |
 
 ---
 
@@ -152,13 +173,39 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 
 - **4 标签页画像** — Profile（头像 + 显示名）、Customized Learning、My Progress、AI Settings
 - **学科选择器** — 5 个学术领域（人文、社科、商科、STEM、健康科学），动态示例切换；STEM 自动突出推导类教学法
-- **CP/OC 叙事系统** — 学生定义角色对及关系类型（BL/BG/GL/自定义）+ 可选 fandom；LLM 使用这些作为概念解释的语义锚点
+- **多角色人设组** — 定义多组角色对，每组含性别、性格描述、fandom、关系标签（信任、对抗、师徒等）及关联课程；可折叠面板 + 默认组收藏
+- **CP/OC 叙事系统** — 学生定义角色对（Coupling & Original Character）；LLM 使用关系动态作为概念解释的语义锚点
 - **My Progress** — 按课程显示颜色块掌握度（绿/黄/红/灰）；不显示任何数值（UX 红线）
 - **自定义 AI 指令** — 持久化 `custom_prompt` 文本框，学生可以为 LLM 提供学习偏好上下文
 - **Prompt 灵感库** — 可点击的示例 prompt，一键追加到文本框
 - **自动保存** — 800ms 防抖保存所有画像字段
 - **一句话诊断** — 模板驱动引擎（`student_diagnosis.py`）生成温和的概念差距指引；CoursePage 内琥珀/绿色诊断卡片 + "Jump to Module" 导航
 - **隐私红线** — 无数值分数、无班级对比、无排名；教授不可查看学生画像
+
+</details>
+
+<details>
+<summary><strong>🤖 多模型 Agent 团队（新功能）</strong></summary>
+
+- **18 个预设模型**，覆盖 9 家 provider：OpenAI（GPT-4o、GPT-4o Mini）、Anthropic（Sonnet 4.6、Haiku 4.5、Opus 4.7）、Google（Gemini 2.5 Flash、Gemini 3 Flash）、DeepSeek（V3、R1）、Mistral（Large、Small）、xAI（Grok 3、Grok 3 Mini）、Groq（Llama 3.3 70B）、MiniMax（MiniMax-01）、GLM/智谱（GLM-4 Flash、GLM-4 Plus）
+- **3 个 Agent 角色** — 🧠 主讲解员、🔍 事实核查员、📝 风格适配器；各自独立选模型
+- **★ 推荐标签** — Dense 架构模型在 Explainer 角色标记为推荐
+- **⚠ MoE 警告** — MoE 模型在 Explainer 角色显示架构警告（"可能产生不一致的结构化输出"）
+- **自定义模型** — 下拉底部 `+ Add custom model`；配置名称、model_id、base_url、API Key、成本，支持任意 OpenAI 兼容端点（Ollama、vLLM、本地部署）
+- **动态 API Key** — 仅显示当前选用 provider 的密钥输入框；逐 provider 显示 required / not used
+- **成本估算** — 每角色 `~$X.XX/gen` + 总计 `💰 Estimated cost per generation` 条
+- **Fernet 加密存储** — API Key 静态加密；GET 返回掩码值（`••••••••xxxx`）
+
+</details>
+
+<details>
+<summary><strong>🎓 教授设置门户（新功能）</strong></summary>
+
+- **个人信息** — 头像、显示名、多选学科、多选教学模式，自动保存并同步侧边栏
+- **学术偏好** — 默认难度级别（14 个分组选项）、课程类型、课时时长、教学设计方法、导出格式；全部使用自定义 AmberSelect 下拉组件
+- **模型默认值** — 与学生端相同的 ModelSelectionCard；配置 Agent 团队的课程级默认模型
+- **Prompt 模板** — 课程生成的自定义 AI 指令 + 可点击灵感库
+- **统一自动保存** — 所有字段 600ms 防抖 + 可视化保存状态指示器
 
 </details>
 
@@ -414,8 +461,10 @@ plot-ark/
 │   │   ├── CoursesPage.tsx              ← 课程仪表板
 │   │   ├── GraphPage.tsx                ← 知识图谱查看器
 │   │   ├── StudentDataPage.tsx          ← A2A 多 Agent 分析仪表板
-│   │   └── StudentProfilePage.tsx       ← 学生画像（4 标签页：Profile / Learning / Progress / AI Settings）
+│   │   ├── StudentProfilePage.tsx       ← 学生画像（4 标签页：Profile / Learning / Progress / AI Settings）
+│   │   └── SettingsPage.tsx             ← 教授设置（Profile / Preferences / Models / Prompts）
 │   ├── components/
+│   │   ├── ModelSelection.tsx           ← 共享多模型 Agent 团队卡片（18 预设 + 自定义模型）
 │   │   ├── ui/
 │   │   │   ├── Select.tsx               ← 可复用下拉选择
 │   │   │   ├── Input.tsx                ← 可复用文本输入框
@@ -479,8 +528,11 @@ plot-ark/
 - [x] 学生画像 — 4 标签页画像：头像、学科选择器（5 大领域）、CP/OC 叙事锚点、进度颜色块
 - [x] 一句话诊断 — 模板驱动概念差距指引 + "Jump to Module" 导航
 - [x] AI 设置 — 自定义 Prompt 指令 + 可点击灵感库 + 自动保存
-- [ ] A2A 多角色模型选择 — 可配置 Agent 团队（Explainer / Checker / Adapter），按角色选模型
-- [ ] 教授 Prompt 模板编辑器 — 数据库驱动的 Prompt 管理 + 版本控制
+- [x] 多角色人设组 — 多组角色对 + 关系标签、性别、性格描述、关联课程
+- [x] 多模型 Agent 团队 — 9 家 provider 的 18 个预设模型 + 自定义模型；★ 推荐标签、⚠ MoE 警告、动态 API Key
+- [x] 教授设置门户 — 个人信息、学术偏好、模型默认值、Prompt 模板；全部自动保存
+- [x] 按 Provider API Key — Fernet 加密存储、动态检测、掩码 GET 返回
+- [ ] 教授 Prompt 模板编辑器 — 数据库驱动的 Prompt 管理 + 版本控制 + 变量高亮
 - [ ] 作业时间轴 + 截止日期计算器
 - [ ] A2A Phase 2 — CurriculumAgent 接入 LLM（必须 dense 模型）；其余 Agent 保持 sql-only
 - [ ] 渐进式摘要 — 学期级 LTM 摘要用于 LLM 上下文管理

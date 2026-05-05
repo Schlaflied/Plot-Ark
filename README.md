@@ -27,7 +27,7 @@
   👉 <a href="https://schlaflied.github.io/Plot-Ark/">Visit the Official Landing Page</a> 👈
 </h3>
 
-**An open-source agentic platform that closes the curriculum loop — generate evidence-based course content, track real learner behavior via xAPI, and continuously optimize modules through an AI agent with instructor-in-the-loop control.**
+**An open-source, dual-portal (instructor + student) agentic platform that closes the curriculum loop — generate evidence-based course content, track real learner behavior via xAPI, and continuously optimize modules through AI agents with human-in-the-loop control.**
 
 > **Generate** — A Tavily research agent queries academic, video, and news sources before any content is written. Bloom's Taxonomy alignment, Krashen's i+1 difficulty progression, and Cognitive Load Theory are built into the generation pipeline, so the curriculum structure is grounded in how learning actually works. No hallucinated citations.
 
@@ -35,7 +35,28 @@
 
 > **Optimize** — The Curriculum Agent translates analytics findings into targeted module edits. Instructors review each suggestion with a before/after preview and approve or reject changes individually. Approved edits feed back into the next xAPI data cycle — the loop closes.
 
-> **Personalize** — Students build learning profiles with discipline preferences, CP/OC narrative anchors, and custom AI instructions. A template-driven diagnosis engine provides gentle, one-sentence concept-gap guidance — no scores, no rankings, just a map of where to look next.
+> **Personalize** — Students build learning profiles with discipline preferences, multi-character persona sets with relationship-mapped narrative anchors, and custom AI instructions. A configurable Agent Team (18 preset models + custom model support across 9 providers) lets users choose their own LLM stack. A template-driven diagnosis engine provides gentle, one-sentence concept-gap guidance — no scores, no rankings, just a map of where to look next.
+
+---
+
+### 🆕 What's New (May 2026)
+
+| Feature | Description |
+|---------|-------------|
+| 🤖 **Multi-Model Agent Team** | 18 preset models across 9 providers (OpenAI, Anthropic, Google, DeepSeek, Mistral, xAI, Groq, MiniMax, GLM) + custom model support for any OpenAI-compatible API. ★ Recommended tags, MoE ⚠ architecture warnings, dynamic API key detection. |
+| 👤 **Student Profile System** | 4-tab profile (Profile, Customized Learning, My Progress, AI Settings) with avatar, discipline selector, CP/OC narrative anchors, multi-persona sets with relationship tags, and custom AI instructions. |
+| 🎓 **Professor Settings Portal** | Full settings page with profile, academic preferences (level, course type, session duration, design approach), custom AmberSelect dropdowns, model defaults, and prompt templates — all with auto-save. |
+| 🔐 **Per-Provider API Keys** | Bring your own key — dynamic key inputs appear only for providers currently in use. Fernet-encrypted storage on backend. |
+
+---
+
+### 👥 Who Is This For?
+
+| Role | What You Get |
+|------|-------------|
+| **Instructors** | AI-generated course content grounded in pedagogy, xAPI analytics dashboard, three-layer HITL optimization suggestions, knowledge graph, exportable reports (PDF/DOCX/Excel/IMS) |
+| **Students** | Personalized learning profiles, one-sentence concept-gap diagnosis, narrative-anchored explanations (CP/OC), configurable AI model team, progress visualization |
+| **Developers** | Modular Flask + React codebase, Hive-style A2A agent architecture, Docker one-command setup, extensible model routing via OpenAI-compatible SDK |
 
 ---
 
@@ -152,13 +173,39 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 
 - **4-tab profile** — Profile (avatar + display name), Customized Learning, My Progress, AI Settings
 - **Discipline selector** — 5 academic disciplines (Humanities, Social Science, Business, STEM, Health Science) with dynamic example switching; STEM surfaces derivation-focused pedagogy
-- **CP/OC narrative system** — students define character pairs with relationship types (BL/BG/GL/custom) and optional fandom; LLM uses these as semantic anchors for concept explanations
+- **Multi-persona sets** — define multiple character groups with per-character gender, personality descriptions, fandom, relationship tags (Trust, Rivalry, Mentorship, etc.), and linked courses; collapsible panels with default group starring
+- **CP/OC narrative system** — students define character pairs (Coupling & Original Character); LLM uses relationship dynamics as semantic anchors for concept explanations
 - **My Progress** — color-block mastery overview per course (green/yellow/red/gray); zero numeric values displayed (UX red line)
 - **Custom AI instructions** — persistent `custom_prompt` field for students to provide context to the LLM ("I learn best with real-world examples")
 - **Prompt ideas library** — clickable example prompts that append directly to the textarea with one click
 - **Auto-save** — debounced 800ms save for all profile fields via `PUT /api/profile`
 - **One-sentence diagnosis** — template-driven engine (`student_diagnosis.py`) generates gentle concept-gap guidance per course; warm amber/green card on CoursePage with "Jump to Module" navigation
 - **Privacy red lines** — no numeric scores, no class comparisons, no rankings; professors cannot see student profiles
+
+</details>
+
+<details>
+<summary><strong>🤖 Multi-Model Agent Team (NEW)</strong></summary>
+
+- **18 preset models** across 9 providers: OpenAI (GPT-4o, GPT-4o Mini), Anthropic (Sonnet 4.6, Haiku 4.5, Opus 4.7), Google (Gemini 2.5 Flash, Gemini 3 Flash), DeepSeek (V3, R1), Mistral (Large, Small), xAI (Grok 3, Grok 3 Mini), Groq (Llama 3.3 70B), MiniMax (MiniMax-01), GLM/Zhipu (GLM-4 Flash, GLM-4 Plus)
+- **3 agent roles** — 🧠 Primary Explainer, 🔍 Fact Checker, 📝 Style Adapter; each with independent model selection
+- **★ Recommended tags** — dense architecture models marked as recommended for Explainer role
+- **⚠ MoE warnings** — Mixture-of-Experts models show architecture warning on Explainer role ("may produce inconsistent structured output")
+- **Custom model support** — `+ Add custom model` at dropdown bottom; configure name, model_id, base_url, API key, and cost for any OpenAI-compatible endpoint (Ollama, vLLM, local deployments)
+- **Dynamic API keys** — key input fields appear only for providers currently selected; per-provider required/not-used indicators
+- **Cost estimation** — per-role `~$X.XX/gen` and total `💰 Estimated cost per generation` bar
+- **Fernet-encrypted storage** — API keys encrypted at rest; GET returns masked values (`••••••••xxxx`)
+
+</details>
+
+<details>
+<summary><strong>🎓 Professor Settings Portal (NEW)</strong></summary>
+
+- **Profile** — avatar, display name, multi-select disciplines, multi-select delivery modes, auto-save with sidebar sync
+- **Academic Preferences** — default level (14 grouped options), course type, session duration, design approach, export format; all using custom AmberSelect dropdowns matching the P2 design system
+- **Model Defaults** — same ModelSelectionCard as student side; configures course-level default models for the Agent Team
+- **Prompt Templates** — custom AI instructions for course generation with clickable idea library
+- **Unified auto-save** — 600ms debounce across all fields with visual save status indicators
 
 </details>
 
@@ -415,8 +462,10 @@ plot-ark/
 │   │   ├── CoursesPage.tsx              ← Course dashboard
 │   │   ├── GraphPage.tsx                ← Knowledge graph viewer
 │   │   ├── StudentDataPage.tsx          ← A2A multi-agent analytics dashboard
-│   │   └── StudentProfilePage.tsx       ← Student profile (4 tabs: Profile, Learning, Progress, AI Settings)
+│   │   ├── StudentProfilePage.tsx       ← Student profile (4 tabs: Profile, Learning, Progress, AI Settings)
+│   │   └── SettingsPage.tsx             ← Professor settings (Profile, Preferences, Models, Prompts)
 │   ├── components/
+│   │   ├── ModelSelection.tsx           ← Shared multi-model Agent Team card (18 presets + custom models)
 │   │   ├── ui/
 │   │   │   ├── Select.tsx               ← Reusable dropdown
 │   │   │   ├── Input.tsx                ← Reusable text input
@@ -480,8 +529,11 @@ plot-ark/
 - [x] Student Profile — 4-tab profile with avatar, discipline selector (5 disciplines), CP/OC narrative anchors, and progress color blocks
 - [x] One-sentence diagnosis — template-driven concept-gap guidance with "Jump to Module" navigation
 - [x] AI Settings — custom prompt instructions + clickable ideas library with auto-save
-- [ ] A2A multi-role model selection — configurable agent team (Explainer / Checker / Adapter) with per-role model choice
-- [ ] Professor prompt template editor — DB-backed prompt management with version control
+- [x] Multi-persona sets — multiple character groups with relationship tags, gender, personality descriptions, linked courses
+- [x] Multi-model Agent Team — 18 preset models across 9 providers + custom model support; ★ recommended tags, ⚠ MoE warnings, dynamic API keys
+- [x] Professor Settings Portal — profile, academic preferences, model defaults, prompt templates; all with auto-save
+- [x] Per-provider API keys — Fernet-encrypted storage, dynamic detection, masked GET responses
+- [ ] Professor prompt template editor — DB-backed prompt management with version control and variable highlighting
 - [ ] Assignment Timeline + Due Date calculator
 - [ ] A2A Phase 2 — LLM integration for CurriculumAgent (dense model required); other agents remain sql-only
 - [ ] Progressive summarization — semester-level LTM summaries for LLM context management
