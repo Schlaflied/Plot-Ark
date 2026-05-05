@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, Sparkles, Eye, EyeOff } from 'lucide-react';
+import { ChevronLeft, Sparkles, Eye, EyeOff, Camera } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   ModelConfig,
@@ -52,7 +52,7 @@ async function savePrompt(prompt: string): Promise<void> {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SidebarSection = 'ai-models' | 'prompt' | 'preferences' | 'account';
+type SidebarSection = 'profile' | 'ai-models' | 'prompt' | 'preferences';
 
 // ─── AI Models Section ────────────────────────────────────────────────────────
 
@@ -60,25 +60,34 @@ const AiModelsSection: React.FC<{
   mc: ModelConfig;
   onMcChange: (next: ModelConfig) => void;
   saveStatus: 'idle' | 'saving' | 'saved';
-}> = ({ mc, onMcChange, saveStatus }) => {
-  // Tavily standalone card
+  onStatusChange: (s: 'idle' | 'saving' | 'saved') => void;
+}> = ({ mc, onMcChange, saveStatus, onStatusChange }) => {
   const [tavilyKey, setTavilyKey] = useState('');
   const [tavilyVisible, setTavilyVisible] = useState(false);
-  const [tavilySaved, setTavilySaved] = useState(false);
+  const tavilyDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const tavilyInit = useRef(true);
 
   useEffect(() => {
     const stored = localStorage.getItem('plotark_tavily_key') ?? '';
     setTavilyKey(stored);
+    tavilyInit.current = true;
   }, []);
 
-  const saveTavily = () => {
-    const v = tavilyKey.trim();
-    if (v) localStorage.setItem('plotark_tavily_key', v);
-    else localStorage.removeItem('plotark_tavily_key');
-    postKeys({ tavily_key: v });
-    setTavilySaved(true);
-    setTimeout(() => setTavilySaved(false), 2000);
-  };
+  // Auto-save Tavily key on change
+  useEffect(() => {
+    if (tavilyInit.current) { tavilyInit.current = false; return; }
+    clearTimeout(tavilyDebounce.current);
+    tavilyDebounce.current = setTimeout(() => {
+      const v = tavilyKey.trim();
+      if (v) localStorage.setItem('plotark_tavily_key', v);
+      else localStorage.removeItem('plotark_tavily_key');
+      postKeys({ tavily_key: v });
+      onStatusChange('saving');
+      setTimeout(() => onStatusChange('saved'), 300);
+      setTimeout(() => onStatusChange('idle'), 1800);
+    }, 800);
+    return () => clearTimeout(tavilyDebounce.current);
+  }, [tavilyKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-6">
@@ -86,7 +95,7 @@ const AiModelsSection: React.FC<{
         <div>
           <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">AI Models</h2>
           <p className="text-sm text-stone-400">
-            Configure default models and API keys for curriculum generation and A2A agents.
+            Configure models and API keys for curriculum generation, A2A agents, and xAPI analytics.
           </p>
         </div>
         <span className={`text-xs font-medium transition-all duration-300 ${
@@ -128,12 +137,6 @@ const AiModelsSection: React.FC<{
           <button type="button" onClick={() => setTavilyVisible(v => !v)}
             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 transition-colors">
             {tavilyVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        </div>
-        <div className="flex justify-end">
-          <button onClick={saveTavily}
-            className="px-4 py-1.5 rounded-lg text-xs font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors">
-            {tavilySaved ? '✓ Saved' : 'Save'}
           </button>
         </div>
       </div>
@@ -228,81 +231,317 @@ const PromptSection: React.FC<{
 
 // ─── Preferences Section ──────────────────────────────────────────────────────
 
-const PreferencesSection: React.FC = () => {
-  const [level, setLevel] = useState(() => localStorage.getItem('plotark_default_level') ?? 'Beginner');
-  const [format, setFormat] = useState(() => localStorage.getItem('plotark_export_format') ?? 'PDF');
-  const [saved, setSaved] = useState(false);
+import { LEVELS, LEVEL_GROUPS, COURSE_TYPES, SESSION_DURATIONS, DESIGN_APPROACHES } from '../constants/formOptions';
 
-  const handleSave = () => {
-    localStorage.setItem('plotark_default_level', level);
-    localStorage.setItem('plotark_export_format', format);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
+const PreferencesSection: React.FC<{
+  saveStatus: 'idle' | 'saving' | 'saved';
+  onStatusChange: (s: 'idle' | 'saving' | 'saved') => void;
+}> = ({ saveStatus, onStatusChange }) => {
+  const [level, setLevel] = useState(() => localStorage.getItem('plotark_pref_level') ?? '');
+  const [courseType, setCourseType] = useState(() => localStorage.getItem('plotark_pref_coursetype') ?? '');
+  const [duration, setDuration] = useState(() => localStorage.getItem('plotark_pref_duration') ?? '');
+  const [approach, setApproach] = useState(() => localStorage.getItem('plotark_pref_approach') ?? '');
+  const [format, setFormat] = useState(() => localStorage.getItem('plotark_pref_export') ?? 'PDF');
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const isInit = useRef(true);
 
-  const selectClass =
-    'w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer';
+  // Auto-save
+  useEffect(() => {
+    if (isInit.current) { isInit.current = false; return; }
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      localStorage.setItem('plotark_pref_level', level);
+      localStorage.setItem('plotark_pref_coursetype', courseType);
+      localStorage.setItem('plotark_pref_duration', duration);
+      localStorage.setItem('plotark_pref_approach', approach);
+      localStorage.setItem('plotark_pref_export', format);
+      onStatusChange('saving');
+      setTimeout(() => onStatusChange('saved'), 300);
+      setTimeout(() => onStatusChange('idle'), 1800);
+    }, 600);
+    return () => clearTimeout(debounceRef.current);
+  }, [level, courseType, duration, approach, format]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectCls =
+    'w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 cursor-pointer transition appearance-none';
+
+  /* Amber-themed custom select wrapper */
+  const SelectWrap: React.FC<{ label: string; hint?: string; value: string; onChange: (v: string) => void; children: React.ReactNode }> =
+    ({ label, hint, value, onChange, children }) => (
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">{label}</label>
+        {hint && <p className="text-xs text-stone-400">{hint}</p>}
+        <div className="relative">
+          <select value={value} onChange={e => onChange(e.target.value)}
+            className={selectCls}
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23d97706' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}>
+            {children}
+          </select>
+        </div>
+      </div>
+    );
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">Preferences</h2>
-        <p className="text-sm text-stone-400">Default values used when creating new courses.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">Preferences</h2>
+          <p className="text-sm text-stone-400">
+            Default values pre-filled when generating new courses. You can always override per course.
+          </p>
+        </div>
+        <span className={`text-xs font-medium transition-all duration-300 ${
+          saveStatus === 'saving' ? 'text-amber-500' :
+          saveStatus === 'saved' ? 'text-green-500' : 'text-transparent'
+        }`}>
+          {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : '·'}
+        </span>
       </div>
 
-      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-5 space-y-5">
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Default Course Level</label>
-          <select value={level} onChange={e => setLevel(e.target.value)} className={selectClass}>
-            <option value="Beginner">Beginner</option>
-            <option value="Intermediate">Intermediate</option>
-            <option value="Advanced">Advanced</option>
-          </select>
+      {/* Course Generation Defaults */}
+      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-lg">📐</span>
+          <p className="text-sm font-semibold text-stone-800">Course Generation Defaults</p>
         </div>
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Export Format</label>
-          <select value={format} onChange={e => setFormat(e.target.value)} className={selectClass}>
-            <option value="PDF">PDF</option>
-            <option value="DOCX">DOCX</option>
-            <option value="Excel">Excel</option>
-          </select>
+
+        <SelectWrap label="Default Student Level" hint="The academic level pre-selected when you create a new course." value={level} onChange={setLevel}>
+          <option value="">— Select level —</option>
+          {LEVEL_GROUPS.map(group => (
+            <optgroup key={group} label={group}>
+              {LEVELS.filter(l => l.group === group).map(l => (
+                <option key={l.value} value={l.value}>{l.label}</option>
+              ))}
+            </optgroup>
+          ))}
+          <option value="other-custom">Other / Custom</option>
+        </SelectWrap>
+
+        <SelectWrap label="Default Course Type" hint="How course activities are structured." value={courseType} onChange={setCourseType}>
+          <option value="">— Select type —</option>
+          {COURSE_TYPES.map(t => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </SelectWrap>
+
+        <SelectWrap label="Default Session Duration" hint="Typical class session length." value={duration} onChange={v => setDuration(v)}>
+          <option value="">— Select duration —</option>
+          {SESSION_DURATIONS.map(d => (
+            <option key={d.value} value={String(d.value)}>{d.label}</option>
+          ))}
+        </SelectWrap>
+
+        <SelectWrap label="Default Design Approach" hint="Instructional design methodology." value={approach} onChange={setApproach}>
+          <option value="">— Select approach —</option>
+          {DESIGN_APPROACHES.map(a => (
+            <option key={a.value} value={a.value}>{a.label}</option>
+          ))}
+        </SelectWrap>
+      </div>
+
+      {/* Export Defaults */}
+      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-lg">📤</span>
+          <p className="text-sm font-semibold text-stone-800">Export Defaults</p>
         </div>
-        <div className="flex justify-end pt-1">
-          <button onClick={handleSave}
-            className="px-4 py-1.5 rounded-lg text-xs font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors">
-            {saved ? '✓ Saved' : 'Save Preferences'}
-          </button>
+
+        <SelectWrap label="Default Export Format" hint="File format when downloading course reports and syllabi." value={format} onChange={setFormat}>
+          <option value="PDF">PDF</option>
+          <option value="DOCX">DOCX (Word)</option>
+          <option value="Excel">Excel (.xlsx)</option>
+        </SelectWrap>
+      </div>
+    </div>
+  );
+};
+
+// ─── Profile Section ──────────────────────────────────────────────────────────
+
+const PROF_DISCIPLINES = [
+  { value: 'humanities', label: 'Humanities', emoji: '📜' },
+  { value: 'stem',       label: 'STEM',       emoji: '🔬' },
+  { value: 'business',   label: 'Business',   emoji: '📊' },
+  { value: 'social',     label: 'Social Sci.', emoji: '🧠' },
+  { value: 'arts',       label: 'Arts & Design', emoji: '🎨' },
+  { value: 'education',  label: 'Education',  emoji: '🎓' },
+  { value: 'health',     label: 'Health Sci.', emoji: '🏥' },
+];
+
+const DELIVERY_MODES = [
+  { value: 'in-person',  label: 'In-Person',  emoji: '🏫' },
+  { value: 'online',     label: 'Online',     emoji: '💻' },
+  { value: 'hybrid',     label: 'Hybrid',     emoji: '🔄' },
+  { value: 'async',      label: 'Async Only', emoji: '📧' },
+];
+
+const ProfileSection: React.FC<{
+  email: string;
+  saveStatus: 'idle' | 'saving' | 'saved';
+  onStatusChange: (s: 'idle' | 'saving' | 'saved') => void;
+  onProfileChange: (name: string, avatar: string) => void;
+}> = ({ email, saveStatus, onStatusChange, onProfileChange }) => {
+  const [displayName, setDisplayName] = useState(() => localStorage.getItem('plotark_prof_name') ?? '');
+  const [avatarUrl, setAvatarUrl] = useState(() => localStorage.getItem('plotark_prof_avatar') ?? '');
+  const [disciplines, setDisciplines] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('plotark_prof_discipline') ?? '[]'); } catch { return []; }
+  });
+  const [deliveries, setDeliveries] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('plotark_prof_delivery') ?? '[]'); } catch { return []; }
+  });
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const isInit = useRef(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync sidebar on mount
+  useEffect(() => { onProfileChange(displayName, avatarUrl); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save on any field change
+  useEffect(() => {
+    if (isInit.current) { isInit.current = false; return; }
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      localStorage.setItem('plotark_prof_name', displayName);
+      localStorage.setItem('plotark_prof_discipline', JSON.stringify(disciplines));
+      localStorage.setItem('plotark_prof_delivery', JSON.stringify(deliveries));
+      onProfileChange(displayName, avatarUrl);
+      onStatusChange('saving');
+      setTimeout(() => onStatusChange('saved'), 300);
+      setTimeout(() => onStatusChange('idle'), 1800);
+    }, 600);
+    return () => clearTimeout(debounceRef.current);
+  }, [displayName, disciplines, deliveries]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleMulti = (arr: string[], val: string) =>
+    arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val];
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert('Image must be under 5 MB'); return; }
+    const img = new Image();
+    img.onload = () => {
+      const size = 512;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d')!;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      const s = Math.min(img.width, img.height);
+      const sx = (img.width - s) / 2, sy = (img.height - s) / 2;
+      ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+      const url = canvas.toDataURL('image/jpeg', 0.85);
+      setAvatarUrl(url);
+      localStorage.setItem('plotark_prof_avatar', url);
+      onProfileChange(displayName, url);
+    };
+    img.src = URL.createObjectURL(file);
+  };
+
+  const initials = (displayName || email.split('@')[0] || 'P').charAt(0).toUpperCase();
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">Your Profile</h2>
+          <p className="text-sm text-stone-400">Personalize your Plot Ark experience.</p>
+        </div>
+        <span className={`text-xs font-medium transition-all duration-300 ${
+          saveStatus === 'saving' ? 'text-amber-500' :
+          saveStatus === 'saved' ? 'text-green-500' : 'text-transparent'
+        }`}>
+          {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : '·'}
+        </span>
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-6">
+        {/* Avatar + Email */}
+        <div className="flex items-center gap-5">
+          <div className="relative group">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-stone-200" />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-amber-500 flex items-center justify-center text-white text-2xl font-bold border-2 border-amber-400">
+                {initials}
+              </div>
+            )}
+            <button type="button" onClick={() => fileInputRef.current?.click()}
+              className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-white border border-stone-200 shadow-sm flex items-center justify-center hover:bg-stone-50 transition-colors">
+              <Camera size={13} className="text-stone-500" />
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+          </div>
+          <div>
+            <p className="text-base font-semibold text-stone-800">{displayName || email.split('@')[0]}</p>
+            <p className="text-xs text-stone-400">{email}</p>
+          </div>
+        </div>
+
+        {/* Display Name */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Display Name</label>
+          <input
+            value={displayName}
+            onChange={e => setDisplayName(e.target.value)}
+            placeholder="How should students address you?"
+            className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
+          />
+        </div>
+
+        {/* Discipline — multi-select */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Your Discipline</label>
+            <span className="text-[10px] text-stone-400 bg-stone-100 rounded px-1.5 py-0.5">Multiple allowed</span>
+          </div>
+          <p className="text-xs text-stone-400">Select all areas you teach. This helps tailor xAPI analytics dashboards and curriculum generation.</p>
+          <div className="flex flex-wrap gap-2">
+            {PROF_DISCIPLINES.map(d => (
+              <button key={d.value} type="button" onClick={() => setDisciplines(prev => toggleMulti(prev, d.value))}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium transition-all border ${
+                  disciplines.includes(d.value)
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                    : 'bg-white text-stone-600 border-stone-200 hover:border-stone-300'
+                }`}>
+                <span>{d.emoji}</span> {d.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Preferred Delivery — multi-select */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Preferred Delivery Mode</label>
+            <span className="text-[10px] text-stone-400 bg-stone-100 rounded px-1.5 py-0.5">Multiple allowed</span>
+          </div>
+          <p className="text-xs text-stone-400">Select all delivery modes you use across your courses.</p>
+          <div className="flex flex-wrap gap-2">
+            {DELIVERY_MODES.map(m => (
+              <button key={m.value} type="button" onClick={() => setDeliveries(prev => toggleMulti(prev, m.value))}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium transition-all border ${
+                  deliveries.includes(m.value)
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                    : 'bg-white text-stone-600 border-stone-200 hover:border-stone-300'
+                }`}>
+                <span>{m.emoji}</span> {m.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-// ─── Account Section ──────────────────────────────────────────────────────────
-
-const AccountSection: React.FC = () => (
-  <div className="space-y-4">
-    <div>
-      <h2 className="text-xl font-serif font-semibold text-stone-900 mb-1">Account</h2>
-      <p className="text-sm text-stone-400">Manage your Plot Ark account settings.</p>
-    </div>
-    <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-8 flex flex-col items-center justify-center gap-3 text-center">
-      <div className="w-12 h-12 rounded-full bg-stone-100 flex items-center justify-center">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" strokeWidth="1.5">
-          <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-        </svg>
-      </div>
-      <p className="text-sm font-medium text-stone-500">Account management coming soon</p>
-      <p className="text-xs text-stone-400 max-w-xs">
-        Sign-in, profile settings, and team collaboration features will be available in a future release.
-      </p>
-    </div>
-  </div>
-);
-
 // ─── Sidebar nav definitions ──────────────────────────────────────────────────
 
 const NAV_ITEMS: { id: SidebarSection; label: string; icon: React.ReactNode }[] = [
+  {
+    id: 'profile', label: 'Profile',
+    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg>,
+  },
   {
     id: 'ai-models', label: 'AI Models',
     icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /></svg>,
@@ -315,19 +554,23 @@ const NAV_ITEMS: { id: SidebarSection; label: string; icon: React.ReactNode }[] 
     id: 'preferences', label: 'Preferences',
     icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M12 1v2m0 18v2m-9-11h2m18 0h2m-2.64-6.36l-1.41 1.41m-12.73 12.73l-1.41 1.41m0-15.56l1.41 1.41m12.73 12.73l1.41 1.41" /></svg>,
   },
-  {
-    id: 'account', label: 'Account',
-    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg>,
-  },
 ];
 
 // ─── Page Component ───────────────────────────────────────────────────────────
 
 const SettingsPage: React.FC = () => {
   const { auth } = useAuth();
-  const [activeSection, setActiveSection] = useState<SidebarSection>('ai-models');
+  const [activeSection, setActiveSection] = useState<SidebarSection>('profile');
   const [sidebarWidth, setSidebarWidth] = useState(224);
   const isResizing = useRef(false);
+
+  // ── Sidebar profile state (synced from ProfileSection) ────────────────────
+  const [profName, setProfName] = useState(() => localStorage.getItem('plotark_prof_name') ?? '');
+  const [profAvatar, setProfAvatar] = useState(() => localStorage.getItem('plotark_prof_avatar') ?? '');
+  const handleProfileChange = useCallback((name: string, avatar: string) => {
+    setProfName(name);
+    setProfAvatar(avatar);
+  }, []);
 
   // ── Model config state (synced with backend via /api/settings/keys) ────────
   const [mc, setMc] = useState<ModelConfig>({ ...DEFAULT_MODEL_CONFIG, use_own_key: true });
@@ -437,14 +680,18 @@ const SettingsPage: React.FC = () => {
         <aside style={{ width: sidebarWidth }}
           className="bg-stone-900 flex flex-col shrink-0 overflow-y-auto relative">
 
-          {/* User info */}
+          {/* User info — synced from ProfileSection */}
           <div className="p-4 border-b border-stone-700">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-stone-700 flex items-center justify-center text-amber-400 text-sm font-semibold">
-                {auth?.email?.charAt(0).toUpperCase() || 'P'}
-              </div>
+              {profAvatar ? (
+                <img src={profAvatar} alt="" className="w-9 h-9 rounded-full object-cover border border-stone-600" />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-stone-700 flex items-center justify-center text-amber-400 text-sm font-semibold">
+                  {(profName || auth?.email || 'P').charAt(0).toUpperCase()}
+                </div>
+              )}
               <div className="min-w-0">
-                <p className="text-sm font-medium text-white truncate">{auth?.email?.split('@')[0] || 'Professor'}</p>
+                <p className="text-sm font-medium text-white truncate">{profName || auth?.email?.split('@')[0] || 'Professor'}</p>
                 <p className="text-[10px] text-stone-500 truncate">{auth?.email || ''}</p>
               </div>
             </div>
@@ -478,14 +725,16 @@ const SettingsPage: React.FC = () => {
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-2xl mx-auto">
+            {activeSection === 'profile' && (
+              <ProfileSection email={auth?.email || ''} saveStatus={saveStatus} onStatusChange={setSaveStatus} onProfileChange={handleProfileChange} />
+            )}
             {activeSection === 'ai-models' && (
-              <AiModelsSection mc={mc} onMcChange={handleMcChange} saveStatus={saveStatus} />
+              <AiModelsSection mc={mc} onMcChange={handleMcChange} saveStatus={saveStatus} onStatusChange={setSaveStatus} />
             )}
             {activeSection === 'prompt' && (
               <PromptSection prompt={prompt} setPrompt={setPrompt} saveStatus={saveStatus} />
             )}
-            {activeSection === 'preferences' && <PreferencesSection />}
-            {activeSection === 'account' && <AccountSection />}
+            {activeSection === 'preferences' && <PreferencesSection saveStatus={saveStatus} onStatusChange={setSaveStatus} />}
           </div>
         </main>
       </div>

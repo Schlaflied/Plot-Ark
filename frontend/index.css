@@ -1,4 +1,25 @@
 /* ═══════════════════════════════════════════════════════════════════════════
+   Plot Ark — Global Amber Accent
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Override browser-default blue highlight on native form controls */
+*,
+*::before,
+*::after {
+  accent-color: #d97706; /* amber-600 */
+}
+
+select option:checked {
+  background: #d97706 linear-gradient(0deg, #d97706 0%, #d97706 100%);
+  color: #fff;
+}
+
+select:focus option:checked {
+  background: #b45309 linear-gradient(0deg, #b45309 0%, #b45309 100%);
+  color: #fff;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    Custom Select Dropdown Animation
    ═══════════════════════════════════════════════════════════════════════════ */
 
