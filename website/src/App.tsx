@@ -6,6 +6,7 @@ import aiSuggestionUrl from './assets/AI suggestion within course generation.gif
 import studentPanelUrl from './assets/Student panel with four buttons.gif';
 import xapiDataUrl from './assets/xAPI student data analysis.gif';
 import curriculumRerunUrl from './assets/Curriculum agent & xAPI rerun.gif';
+import lightragUrl from './assets/LightRAG Knowledge Graph.gif';
 
 function App() {
   const fadeIn = {
@@ -277,6 +278,26 @@ function App() {
               <div className="lg:w-1/2">
                 <div className="rounded-2xl overflow-hidden shadow-2xl border border-nobel-gold/20">
                   <img src={curriculumRerunUrl} alt="Curriculum Rerun Demo" className="w-full h-auto rounded-xl" />
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+              className="flex flex-col lg:flex-row-reverse items-center gap-16"
+            >
+              <div className="lg:w-1/2">
+                <h2 className="text-4xl font-serif font-bold mb-6">Knowledge Graph RAG</h2>
+                <p className="text-lg text-gray-600 leading-relaxed mb-8">
+                  Drop in your syllabus PDFs and Plot Ark uses LightRAG to extract interconnected concepts, building a visual, queryable force-directed network. Entities and relationships become a live graph you can explore and query.
+                </p>
+              </div>
+              <div className="lg:w-1/2">
+                <div className="rounded-2xl overflow-hidden shadow-2xl border border-nobel-gold/20 bg-nobel-dark p-2">
+                  <img src={lightragUrl} alt="LightRAG Knowledge Graph Demo" className="w-full h-auto rounded-xl" />
                 </div>
               </div>
             </motion.div>
