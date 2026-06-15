@@ -100,6 +100,10 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 
 ![Curriculum agent & xAPI rerun](docs/Curriculum%20agent%20%26%20xAPI%20rerun.gif)
 
+**知识图谱 RAG (Knowledge Graph RAG)** — LightRAG 从大纲 PDF 中抽取相互关联的概念，构建可视化、可查询的力导向知识网络
+
+![LightRAG knowledge graph](docs/LightRAG%20knowledge%20graph.gif)
+
 ▶ [完整演示视频（Google Drive）](https://drive.google.com/file/d/14SLOJFImW9TqyyXipJL1wumkptir7WuU/view?usp=sharing)
 
 ▶ [xAPI + A2A 分析演示视频（Google Drive）](https://drive.google.com/file/d/1CVrWfrJ1gGUDf-VD1E9p443-7DKJs5MM/view?usp=drive_link)
@@ -405,7 +409,8 @@ plot-ark/
 │   ├── AI suggestion within course generation.gif ← 演示: 课程编辑器中的 AI 助教建议
 │   ├── Student panel with four buttons.gif      ← 演示: 每模块学情情绪收集反馈
 │   ├── xAPI student data analysis.gif           ← 演示: 5 节点多 Agent 数据分析流水线
-│   └── Curriculum agent & xAPI rerun.gif        ← 演示: 人在回路的课程内容动态优化闭环
+│   ├── Curriculum agent & xAPI rerun.gif        ← 演示: 人在回路的课程内容动态优化闭环
+│   └── LightRAG knowledge graph.gif             ← 演示: 从大纲 PDF 构建的力导向知识图谱
 │
 ├── backend/                             ← Flask（模块化 Blueprints）
 │   ├── app.py                           ← 入口文件（~30 行，注册 Blueprints）

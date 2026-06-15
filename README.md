@@ -100,6 +100,10 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 
 ![Curriculum agent & xAPI rerun](docs/Curriculum%20agent%20%26%20xAPI%20rerun.gif)
 
+**Knowledge Graph RAG** — LightRAG extracts interconnected concepts from your syllabus PDFs into a visual, queryable force-directed network
+
+![LightRAG knowledge graph](docs/LightRAG%20knowledge%20graph.gif)
+
 ▶ [Full demo video (Google Drive)](https://drive.google.com/file/d/14SLOJFImW9TqyyXipJL1wumkptir7WuU/view?usp=sharing)
 
 ▶ [xAPI + A2A Analytics demo (Google Drive)](https://drive.google.com/file/d/1CVrWfrJ1gGUDf-VD1E9p443-7DKJs5MM/view?usp=drive_link)
@@ -405,7 +409,8 @@ plot-ark/
 │   ├── AI suggestion within course generation.gif ← Demo: In-editor AI tutors and suggestions
 │   ├── Student panel with four buttons.gif      ← Demo: Per-module sentiment collection
 │   ├── xAPI student data analysis.gif           ← Demo: 5-node A2A agent pipeline and report export
-│   └── Curriculum agent & xAPI rerun.gif        ← Demo: Human-in-the-loop module optimization
+│   ├── Curriculum agent & xAPI rerun.gif        ← Demo: Human-in-the-loop module optimization
+│   └── LightRAG knowledge graph.gif             ← Demo: Force-directed knowledge graph from syllabus PDFs
 │
 ├── backend/                             ← Flask (modular Blueprints)
 │   ├── app.py                           ← Entry point (~30 lines, registers Blueprints)
