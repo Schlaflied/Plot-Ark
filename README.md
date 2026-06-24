@@ -76,6 +76,8 @@ This system was built so that no one gets left behind by the system. The author 
 
 Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophistication and response sophistication — the deeper you engage it, the deeper it responds.
 
+**The same principle runs through [Cogito](https://github.com/Schlaflied/Cogito)** — the author's personal-scale version of this problem. Cogito extracts git diffs and note content from a personal knowledge vault, embeds them semantically, and surfaces cognitive patterns the person wasn't aware of. xAPI is the same methodology at institutional scale: behavioral traces → semantic analysis → patterns formal records miss. A note is a final state. A diff is a decision. An xAPI statement is a moment of engagement. None of these are in the transcript.
+
 ---
 
 ## 🎬 Demo
