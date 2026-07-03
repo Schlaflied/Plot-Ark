@@ -144,6 +144,15 @@ student_feedback
   comment, student_id, created_at
   index: course_id
 
+selfview_snapshots                 ← student-side LTM (mirror layer)
+  id, email, course_id, period (ISO week),
+  rhythm_summary (JSONB), footprint_summary (JSONB),
+  statements_shown (JSONB), verdicts (JSONB)
+  index: email, course_id, created_at DESC
+  Stores only what cannot be recomputed from raw xAPI: the pattern
+  statements shown to the student and their "Sounds like me / Not quite"
+  verdicts. Never readable from any instructor endpoint.
+
 course_analysis_snapshots          ← LTM warm layer
   id, course_id, run_at, noise_label,
   risk_distribution (JSONB), total_students, at_risk_count, high_risk_count,
@@ -196,6 +205,8 @@ SharedMemory keys use namespace `a2a:{session_id}:{key}` in Redis (TTL 1h), with
 | `GET`  | `/api/selfview/footprint/<course_id>` | Student's own attention footprint: per-module visits/revisits/verbs + KG concept projection (X-User-Email) |
 | `GET`  | `/api/selfview/rhythm/<course_id>` | Student's own 7×24 study-rhythm matrix (X-User-Email) |
 | `GET`  | `/api/selfview/students/<course_id>` | Demo helper: list mock students with statement counts |
+| `POST` | `/api/selfview/retrospect/<course_id>` | Generate on-demand Look Back card: template pattern statements, idempotent per ISO week (X-User-Email) |
+| `POST` | `/api/selfview/verdict` | Record student's "Sounds like me / Not quite" verdict on a statement (owner-checked) |
 
 ---
 

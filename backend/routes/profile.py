@@ -296,7 +296,9 @@ def get_student_courses():
 
     try:
         cur = conn.cursor()
-        # Find courses from feedback + annotations, join with curricula for metadata
+        # Find courses from feedback + annotations + xAPI activity.
+        # xapi_statements.course_id is mostly NULL on legacy rows, so the
+        # course is parsed from object_id ('course/N/...') instead.
         cur.execute("""
             SELECT DISTINCT c.id, c.topic, c.course_code, c.module_count, c.modules
             FROM curricula c
@@ -304,9 +306,13 @@ def get_student_courses():
                 SELECT DISTINCT course_id FROM student_feedback WHERE student_id = %s
                 UNION
                 SELECT DISTINCT course_id FROM concept_annotations WHERE student_id = %s
+                UNION
+                SELECT DISTINCT substring(object_id from 'course/(\\d+)/')::int
+                FROM xapi_statements
+                WHERE actor_email = %s AND object_id ~ '^course/\\d+/'
             )
             ORDER BY c.id
-        """, (email, email))
+        """, (email, email, email))
         courses = []
         for row in cur.fetchall():
             course_id = row[0]

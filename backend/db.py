@@ -337,6 +337,28 @@ def init_db():
                 """)
                 cur.execute("ALTER TABLE curricula ADD COLUMN IF NOT EXISTS semester TEXT DEFAULT ''")
                 cur.execute("ALTER TABLE concept_annotations ADD COLUMN IF NOT EXISTS student_id TEXT DEFAULT 'anonymous'")
+
+                # ── selfview_snapshots (student-side warm LTM: retrospect cards) ──
+                # Stores only what cannot be recomputed from raw xAPI:
+                # the pattern statements shown and the student's own verdicts.
+                # PRIVACY WALL: never read by any professor-facing route.
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS selfview_snapshots (
+                        id SERIAL PRIMARY KEY,
+                        email TEXT NOT NULL,
+                        course_id INTEGER NOT NULL,
+                        period TEXT NOT NULL,
+                        rhythm_summary JSONB DEFAULT '{}',
+                        footprint_summary JSONB DEFAULT '{}',
+                        statements_shown JSONB DEFAULT '[]',
+                        verdicts JSONB DEFAULT '[]',
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_selfview_snapshots_lookup
+                    ON selfview_snapshots(email, course_id, created_at DESC)
+                """)
                 conn.commit()
                 cur.close()
                 conn.close()

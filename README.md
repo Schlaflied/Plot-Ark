@@ -44,6 +44,8 @@
 | Feature | Description |
 |---------|-------------|
 | 🪞 **Student Self-View (Mirror) Layer** | Students see their own behavioral data — a mirror, not a report card. **Attention footprint** overlays visited concepts on the knowledge graph (amber heat by visit depth, with a "Mastery / My footprint" fill toggle); **Learning Rhythm** renders a 7×24 heatmap of when you actually study, with pattern statements ("You tend to study most on Thursdays, usually around 9pm."). Pure SQL, zero LLM. Shades compare only against your own busiest hour — never against classmates. The institutional-scale port of [Cogito](https://github.com/Schlaflied/Cogito) Directions A & B. |
+| 🔍 **Look Back Card — a mirror you can veto** | On demand only — nothing appears until the student asks. Template pattern statements ("You came back to Legal Systems on 4 different days — revisiting is your brain asking to consolidate."), each with a **"Sounds like me / Not quite"** verdict button. *You decide if it's true — your answer stays with you.* Verdicts persist to a student-only LTM (`selfview_snapshots`) that no instructor endpoint can read — the only ground-truth signal in the system, reserved for future personalization. |
+| 🗂️ **My Courses, redesigned** | xAPI activity now counts as enrollment (not just feedback). Full-width flip cards — front: course name + mastery dots; back: labeled M1–Mn module bars with per-module tooltips. Keyword search across course names, codes, and module titles. |
 
 ### Earlier (May 2026)
 

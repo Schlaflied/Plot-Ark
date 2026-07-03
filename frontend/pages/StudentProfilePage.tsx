@@ -369,85 +369,165 @@ const ProfileSection: React.FC<{
 
 // ─── Progress Section ─────────────────────────────────────────────────────────
 
-const ProgressSection: React.FC<{ courses: CourseProgress[] }> = ({ courses }) => (
-  <div className="space-y-6">
-    <div>
-      <h2 className="text-lg font-serif font-semibold text-stone-900 mb-1">My Courses</h2>
-      <p className="text-xs text-stone-400">
-        Your learning progress across all enrolled courses.
-      </p>
-    </div>
+const CourseFlipCard: React.FC<{ course: CourseProgress }> = ({ course }) => {
+  const [flipped, setFlipped] = useState(false);
+  const moduleCount = course.module_count || 12;
+  const blocks = Array.from({ length: moduleCount }, (_, i) => {
+    const key = `module_${i + 1}`;
+    return course.module_mastery[key] || 'not_started';
+  });
 
-    {courses.length === 0 ? (
-      <div className="bg-white border border-stone-200 rounded-xl shadow-sm p-10 flex flex-col items-center justify-center gap-3 text-center">
-        <span className="text-3xl">📚</span>
-        <p className="text-sm font-medium text-stone-500">No courses yet</p>
-        <p className="text-xs text-stone-400 max-w-xs">
-          Start interacting with a course — submit feedback or explore the Knowledge Graph —
-          and it will appear here.
-        </p>
-      </div>
-    ) : (
-      <div className="space-y-4">
-        {courses.map(course => {
-          const moduleCount = course.module_count || 12;
-          const blocks = Array.from({ length: moduleCount }, (_, i) => {
-            const key = `module_${i + 1}`;
-            return course.module_mastery[key] || 'not_started';
-          });
+  const toggle = () => setFlipped(f => !f);
 
-          return (
-            <Link
-              key={course.id}
-              to={`/course/${course.id}`}
-              className="block bg-white border border-stone-200 rounded-xl shadow-sm p-5 hover:border-amber-300 hover:shadow-md transition-all group"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-stone-900 group-hover:text-amber-700 transition-colors">
-                    {course.topic}
-                  </h3>
-                  {course.course_code && (
-                    <p className="text-xs text-stone-400 mt-0.5">{course.course_code}</p>
-                  )}
-                </div>
-                <span className="text-xs text-stone-400">{moduleCount} modules</span>
-              </div>
+  return (
+    <div style={{ perspective: '1200px' }} className="h-28 w-full">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-pressed={flipped}
+        onClick={toggle}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggle();
+          }
+        }}
+        className="relative w-full h-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded-xl"
+        style={{
+          transformStyle: 'preserve-3d',
+          transition: 'transform 350ms ease',
+          transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+        }}
+      >
+        {/* Front: horizontal summary bar — full course name, never truncated */}
+        <div
+          className="absolute inset-0 bg-white border border-stone-200 rounded-xl shadow-sm px-5 py-3 flex items-center gap-4 hover:border-amber-300 hover:shadow-md transition-shadow"
+          style={{ backfaceVisibility: 'hidden' }}
+        >
+          <div className="flex-1">
+            <h3 className="text-base font-semibold text-stone-900 leading-snug">{course.topic}</h3>
+            {course.course_code && (
+              <p className="text-xs text-stone-400 mt-0.5">{course.course_code}</p>
+            )}
+          </div>
 
-              {/* Module color blocks with M1..Mn labels */}
-              <div className="flex gap-1">
+          <div className="shrink-0 flex flex-col items-end gap-1.5">
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1.5">
                 {blocks.map((level, i) => {
                   const color = MASTERY_COLORS[level] || MASTERY_COLORS.not_started;
-                  const moduleTitle = course.modules?.[i]?.title || `Module ${i + 1}`;
-                  return (
-                    <div
-                      key={i}
-                      title={`M${i + 1} · ${moduleTitle} — ${color.label}`}
-                      className="flex-1 min-w-0 cursor-help"
-                    >
-                      <div className={`h-3 rounded-sm ${color.bg} transition-colors`} />
-                      <p className="text-[10px] text-stone-400 text-center mt-0.5 select-none">M{i + 1}</p>
-                    </div>
-                  );
+                  return <div key={i} className={`w-2.5 h-2.5 rounded-full ${color.bg}`} />;
                 })}
               </div>
+              <span className="text-xs text-stone-400">{moduleCount} modules</span>
+            </div>
+            <p className="text-[10px] text-stone-300 select-none">Click to flip ↻</p>
+          </div>
+        </div>
 
-              {/* Legend */}
-              <div className="flex gap-4 mt-3">
-                {Object.entries(MASTERY_COLORS).map(([key, val]) => (
-                  <div key={key} className="flex items-center gap-1.5">
-                    <div className={`w-2 h-2 rounded-sm ${val.bg}`} />
-                    <span className="text-[10px] text-stone-400">{val.label}</span>
-                  </div>
-                ))}
-              </div>
-            </Link>
-          );
-        })}
+        {/* Back: module bars spread across the full width + open link */}
+        <div
+          className="absolute inset-0 bg-white border border-amber-200 rounded-xl shadow-sm px-5 py-3 flex items-center gap-5"
+          style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+        >
+          <div className="flex-1 flex gap-1.5 min-w-0">
+            {blocks.map((level, i) => {
+              const color = MASTERY_COLORS[level] || MASTERY_COLORS.not_started;
+              const moduleTitle = course.modules?.[i]?.title || `Module ${i + 1}`;
+              return (
+                <div
+                  key={i}
+                  title={`M${i + 1} · ${moduleTitle} — ${color.label}`}
+                  className="flex-1 min-w-0 cursor-help"
+                >
+                  <div className={`h-4 rounded-sm ${color.bg} transition-colors`} />
+                  <p className="text-[9px] text-stone-400 text-center mt-1 select-none">M{i + 1}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          <Link
+            to={`/course/${course.id}`}
+            onClick={e => e.stopPropagation()}
+            className="shrink-0 text-xs font-medium text-amber-700 hover:text-amber-800 whitespace-nowrap"
+          >
+            Open course →
+          </Link>
+        </div>
       </div>
-    )}
-  </div>
-);
+    </div>
+  );
+};
+
+const ProgressSection: React.FC<{ courses: CourseProgress[] }> = ({ courses }) => {
+  const [query, setQuery] = useState('');
+
+  const q = query.trim().toLowerCase();
+  const filtered = !q
+    ? courses
+    : courses.filter(c =>
+        c.topic.toLowerCase().includes(q) ||
+        (c.course_code || '').toLowerCase().includes(q) ||
+        (c.modules || []).some(m => (m.title || '').toLowerCase().includes(q))
+      );
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-serif font-semibold text-stone-900 mb-1">My Courses</h2>
+        <p className="text-xs text-stone-400">
+          Your learning progress across all enrolled courses.
+        </p>
+      </div>
+
+      {courses.length > 1 && (
+        <input
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search courses or module topics…"
+          className="w-full max-w-sm text-sm border border-stone-200 rounded-lg px-3 py-2 text-stone-700 bg-white placeholder-stone-300 focus:outline-none focus:border-amber-400"
+        />
+      )}
+
+      {courses.length === 0 ? (
+        <div className="bg-white border border-stone-200 rounded-xl shadow-sm p-10 flex flex-col items-center justify-center gap-3 text-center">
+          <span className="text-3xl">📚</span>
+          <p className="text-sm font-medium text-stone-500">No courses yet</p>
+          <p className="text-xs text-stone-400 max-w-xs">
+            Start interacting with a course — submit feedback or explore the Knowledge Graph —
+            and it will appear here.
+          </p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white border border-stone-200 rounded-xl shadow-sm p-10 flex flex-col items-center justify-center gap-2 text-center">
+          <span className="text-2xl">🔍</span>
+          <p className="text-sm text-stone-500">Nothing matches "{query}"</p>
+          <p className="text-xs text-stone-400">Try a course name, code, or a module topic like "tort".</p>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3">
+            {filtered.map(course => (
+              <CourseFlipCard key={course.id} course={course} />
+            ))}
+          </div>
+
+          {/* Shared mastery legend for all cards */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+            {Object.entries(MASTERY_COLORS).map(([key, val]) => (
+              <div key={key} className="flex items-center gap-1.5">
+                <div className={`w-2 h-2 rounded-sm ${val.bg}`} />
+                <span className="text-[10px] text-stone-400">{val.label}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 // ─── Learning Rhythm Section (self-view mirror — Direction B) ──────────────────
 
@@ -564,6 +644,161 @@ const RhythmSection: React.FC<{ courses: CourseProgress[]; email: string }> = ({
               {rhythm?.active_days} active day{rhythm?.active_days !== 1 ? 's' : ''} recorded
               {rhythm?.first_activity ? ` since ${new Date(rhythm.first_activity).toLocaleDateString()}` : ''}.
               Shades compare only against your own busiest hour.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Look Back Section (self-view mirror — retrospect card, 4.2) ───────────────
+
+interface RetrospectStatement {
+  id: string;
+  kind: string;
+  text: string;
+}
+
+interface RetrospectVerdict {
+  statement_id: string;
+  verdict: 'like_me' | 'not_me';
+}
+
+interface RetrospectData {
+  snapshot_id: number;
+  period: string;
+  statements: RetrospectStatement[];
+  verdicts: RetrospectVerdict[];
+  status: string;
+}
+
+const LookBackSection: React.FC<{ courses: CourseProgress[]; email: string }> = ({ courses, email }) => {
+  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(courses[0]?.id ?? null);
+  const [retro, setRetro] = useState<RetrospectData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [verdictMap, setVerdictMap] = useState<Record<string, 'like_me' | 'not_me'>>({});
+
+  // The mirror speaks only when spoken to: nothing loads until the student asks
+  useEffect(() => {
+    setRetro(null);
+    setVerdictMap({});
+  }, [selectedCourseId]);
+
+  const lookBack = () => {
+    if (!selectedCourseId || !email) return;
+    setLoading(true);
+    fetch(`/api/selfview/retrospect/${selectedCourseId}`, {
+      method: 'POST',
+      headers: { 'X-User-Email': email },
+    })
+      .then(r => r.json())
+      .then((d: RetrospectData) => {
+        setRetro(d);
+        const map: Record<string, 'like_me' | 'not_me'> = {};
+        (d.verdicts || []).forEach(v => { map[v.statement_id] = v.verdict; });
+        setVerdictMap(map);
+      })
+      .catch(() => setRetro(null))
+      .finally(() => setLoading(false));
+  };
+
+  const vote = (statementId: string, verdict: 'like_me' | 'not_me') => {
+    if (!retro) return;
+    setVerdictMap(prev => ({ ...prev, [statementId]: verdict }));
+    fetch('/api/selfview/verdict', {
+      method: 'POST',
+      headers: { 'X-User-Email': email, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snapshot_id: retro.snapshot_id, statement_id: statementId, verdict }),
+    }).catch(() => { /* optimistic UI; verdict is re-fetched next look-back */ });
+  };
+
+  return (
+    <div className="mt-8 space-y-4">
+      <div>
+        <h2 className="text-lg font-serif font-semibold text-stone-900 mb-1">Look Back</h2>
+        <p className="text-xs text-stone-400">
+          Patterns from your last few weeks — shown only when you ask. Only you can see this.
+        </p>
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-4">
+        {courses.length > 1 && (
+          <select
+            value={selectedCourseId ?? ''}
+            onChange={e => setSelectedCourseId(Number(e.target.value))}
+            className="text-sm border border-stone-200 rounded-lg px-3 py-1.5 text-stone-700 bg-white focus:outline-none focus:border-amber-400"
+          >
+            {courses.map(c => (
+              <option key={c.id} value={c.id}>{c.topic}</option>
+            ))}
+          </select>
+        )}
+
+        {!retro && !loading && (
+          <div className="py-6 flex flex-col items-center gap-3 text-center">
+            <button
+              onClick={lookBack}
+              className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-xl transition-colors"
+            >
+              Look back at your last few weeks
+            </button>
+            <p className="text-xs text-stone-400 max-w-xs">
+              Optional, and just for you — a few patterns your activity left behind.
+            </p>
+          </div>
+        )}
+
+        {loading && (
+          <p className="text-sm text-stone-400 py-6 text-center">Looking back…</p>
+        )}
+
+        {retro && retro.status === 'not_enough_data' && (
+          <div className="py-8 flex flex-col items-center gap-2 text-center">
+            <span className="text-2xl">🌱</span>
+            <p className="text-sm text-stone-500">Not much to look back on yet.</p>
+            <p className="text-xs text-stone-400 max-w-xs">
+              Spend a little more time in this course and patterns will start to appear here.
+            </p>
+          </div>
+        )}
+
+        {retro && retro.status !== 'not_enough_data' && (
+          <>
+            <ul className="space-y-3">
+              {retro.statements.map(s => {
+                const chosen = verdictMap[s.id];
+                return (
+                  <li key={s.id} className="flex items-start justify-between gap-4 p-3 rounded-xl bg-stone-50 border border-stone-100">
+                    <p className="text-sm text-stone-700 leading-relaxed">{s.text}</p>
+                    <div className="flex gap-1.5 shrink-0">
+                      <button
+                        onClick={() => vote(s.id, 'like_me')}
+                        className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                          chosen === 'like_me'
+                            ? 'bg-amber-600 border-amber-600 text-white'
+                            : 'bg-white border-stone-200 text-stone-500 hover:border-amber-400'
+                        }`}
+                      >
+                        Sounds like me
+                      </button>
+                      <button
+                        onClick={() => vote(s.id, 'not_me')}
+                        className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                          chosen === 'not_me'
+                            ? 'bg-stone-600 border-stone-600 text-white'
+                            : 'bg-white border-stone-200 text-stone-500 hover:border-stone-400'
+                        }`}
+                      >
+                        Not quite
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="text-[10px] text-stone-400">
+              You decide if it's true — your answer stays with you.
             </p>
           </>
         )}
@@ -1470,6 +1705,7 @@ const StudentProfilePage: React.FC = () => {
               <>
                 <ProgressSection courses={courses} />
                 <RhythmSection courses={courses} email={email} />
+                <LookBackSection courses={courses} email={email} />
               </>
             )}
             {activeSection === 'ai-settings' && (
