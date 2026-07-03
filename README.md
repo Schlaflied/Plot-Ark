@@ -39,7 +39,13 @@
 
 ---
 
-### 🆕 What's New (May 2026)
+### 🆕 What's New (July 2026)
+
+| Feature | Description |
+|---------|-------------|
+| 🪞 **Student Self-View (Mirror) Layer** | Students see their own behavioral data — a mirror, not a report card. **Attention footprint** overlays visited concepts on the knowledge graph (amber heat by visit depth, with a "Mastery / My footprint" fill toggle); **Learning Rhythm** renders a 7×24 heatmap of when you actually study, with pattern statements ("You tend to study most on Thursdays, usually around 9pm."). Pure SQL, zero LLM. Shades compare only against your own busiest hour — never against classmates. The institutional-scale port of [Cogito](https://github.com/Schlaflied/Cogito) Directions A & B. |
+
+### Earlier (May 2026)
 
 | Feature | Description |
 |---------|-------------|
@@ -55,7 +61,7 @@
 | Role | What You Get |
 |------|-------------|
 | **Instructors** | AI-generated course content grounded in pedagogy, xAPI analytics dashboard, three-layer HITL optimization suggestions, knowledge graph, exportable reports (PDF/DOCX/Excel/IMS) |
-| **Students** | Personalized learning profiles, one-sentence concept-gap diagnosis, narrative-anchored explanations (CP/OC), configurable AI model team, progress visualization |
+| **Students** | Personalized learning profiles, one-sentence concept-gap diagnosis, narrative-anchored explanations (CP/OC), configurable AI model team, progress visualization, self-view mirror (attention footprint + learning rhythm — visible only to you) |
 | **Developers** | Modular Flask + React codebase, Hive-style A2A agent architecture, Docker one-command setup, extensible model routing via OpenAI-compatible SDK |
 
 ---

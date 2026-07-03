@@ -118,7 +118,11 @@ course_analysis_snapshots           final report JSON
   at_risk_count / high_risk_count
 ```
 
-**Phase status:** All 4 agents are currently `sql-only`. Token fields in `NodeResult` are ready for Phase 2 LLM integration — `tokens_in / tokens_out / tokens_cache_read / tokens_cache_write`.
+**Post-pipeline agents (not shown above):** KGContextAnalyst injects a slim KG context for flagged modules, then CurriculumAgent reads Cold LTM history (`data/ltm/*.md`) to separate structural issues from one-off anomalies — full chain: BA → RD → CO → CC → KGContextAnalyst → CurriculumAgent.
+
+**Student Self-View (Mirror) layer:** `routes/selfview.py` serves each student their own xAPI-derived footprint (per-module visits/revisits projected onto KG concepts via `kg_mapper`) and 7×24 study rhythm. Personal endpoints filter strictly by the student's own `actor_email`; no class averages, rankings, or mastery scores are ever returned. Rendered as a GraphViewer fill layer ("My footprint") and a rhythm heatmap card on the Student Profile page.
+
+**Phase status:** All 6 agents are currently `sql-only`. Token fields in `NodeResult` are ready for Phase 2 LLM integration — `tokens_in / tokens_out / tokens_cache_read / tokens_cache_write`.
 
 ---
 
@@ -189,6 +193,9 @@ SharedMemory keys use namespace `a2a:{session_id}:{key}` in Redis (TTL 1h), with
 | `POST` | `/api/analytics/export/excel` | openpyxl spreadsheet |
 | `POST` | `/api/graph/query` | LightRAG NL query (Redis-cached) |
 | `POST` | `/api/materials/ingest` | LightRAG PDF/PPTX/DOCX ingestion |
+| `GET`  | `/api/selfview/footprint/<course_id>` | Student's own attention footprint: per-module visits/revisits/verbs + KG concept projection (X-User-Email) |
+| `GET`  | `/api/selfview/rhythm/<course_id>` | Student's own 7×24 study-rhythm matrix (X-User-Email) |
+| `GET`  | `/api/selfview/students/<course_id>` | Demo helper: list mock students with statement counts |
 
 ---
 

@@ -48,6 +48,7 @@ interface CourseProgress {
   course_code: string;
   module_count: number;
   module_mastery: Record<string, string>;
+  modules?: { index: number; title: string }[];
 }
 
 // ─── Mastery color mapping ────────────────────────────────────────────────────
@@ -413,16 +414,20 @@ const ProgressSection: React.FC<{ courses: CourseProgress[] }> = ({ courses }) =
                 <span className="text-xs text-stone-400">{moduleCount} modules</span>
               </div>
 
-              {/* Module color blocks */}
+              {/* Module color blocks with M1..Mn labels */}
               <div className="flex gap-1">
                 {blocks.map((level, i) => {
                   const color = MASTERY_COLORS[level] || MASTERY_COLORS.not_started;
+                  const moduleTitle = course.modules?.[i]?.title || `Module ${i + 1}`;
                   return (
                     <div
                       key={i}
-                      title={`Module ${i + 1}: ${color.label}`}
-                      className={`flex-1 h-3 rounded-sm ${color.bg} transition-colors`}
-                    />
+                      title={`M${i + 1} · ${moduleTitle} — ${color.label}`}
+                      className="flex-1 min-w-0 cursor-help"
+                    >
+                      <div className={`h-3 rounded-sm ${color.bg} transition-colors`} />
+                      <p className="text-[10px] text-stone-400 text-center mt-0.5 select-none">M{i + 1}</p>
+                    </div>
                   );
                 })}
               </div>
@@ -443,6 +448,129 @@ const ProgressSection: React.FC<{ courses: CourseProgress[] }> = ({ courses }) =
     )}
   </div>
 );
+
+// ─── Learning Rhythm Section (self-view mirror — Direction B) ──────────────────
+
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+interface RhythmData {
+  matrix: number[][];
+  total_statements: number;
+  active_days: number;
+  first_activity: string | null;
+  last_activity: string | null;
+}
+
+const formatHour = (h: number) => {
+  if (h === 0) return '12am';
+  if (h < 12) return `${h}am`;
+  if (h === 12) return '12pm';
+  return `${h - 12}pm`;
+};
+
+const RhythmSection: React.FC<{ courses: CourseProgress[]; email: string }> = ({ courses, email }) => {
+  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(courses[0]?.id ?? null);
+  const [rhythm, setRhythm] = useState<RhythmData | null>(null);
+  const [rhythmLoading, setRhythmLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedCourseId || !email) { setRhythm(null); return; }
+    setRhythmLoading(true);
+    fetch(`/api/selfview/rhythm/${selectedCourseId}`, { headers: { 'X-User-Email': email } })
+      .then(r => r.json())
+      .then(d => setRhythm(d.matrix ? d : null))
+      .catch(() => setRhythm(null))
+      .finally(() => setRhythmLoading(false));
+  }, [selectedCourseId, email]);
+
+  const matrix = rhythm?.matrix ?? [];
+  const maxCount = Math.max(1, ...matrix.flat());
+  const hasData = (rhythm?.total_statements ?? 0) > 0;
+
+  // Pattern statement — mirror voice: describes, never judges
+  let patternLine = '';
+  if (hasData && matrix.length === 7) {
+    const daySums = matrix.map(row => row.reduce((a, b) => a + b, 0));
+    const topDay = daySums.indexOf(Math.max(...daySums));
+    const hourSums = Array.from({ length: 24 }, (_, h) => matrix.reduce((a, row) => a + row[h], 0));
+    const topHour = hourSums.indexOf(Math.max(...hourSums));
+    patternLine = `You tend to study most on ${WEEKDAY_LABELS[topDay]}s, usually around ${formatHour(topHour)}.`;
+  }
+
+  return (
+    <div className="mt-8 space-y-4">
+      <div>
+        <h2 className="text-lg font-serif font-semibold text-stone-900 mb-1">Your Learning Rhythm</h2>
+        <p className="text-xs text-stone-400">
+          When you actually studied — a mirror, not a report card. Only you can see this.
+        </p>
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-4">
+        {courses.length > 1 && (
+          <select
+            value={selectedCourseId ?? ''}
+            onChange={e => setSelectedCourseId(Number(e.target.value))}
+            className="text-sm border border-stone-200 rounded-lg px-3 py-1.5 text-stone-700 bg-white focus:outline-none focus:border-amber-400"
+          >
+            {courses.map(c => (
+              <option key={c.id} value={c.id}>{c.topic}</option>
+            ))}
+          </select>
+        )}
+
+        {rhythmLoading ? (
+          <p className="text-sm text-stone-400 py-6 text-center">Loading your rhythm…</p>
+        ) : !hasData ? (
+          <div className="py-8 flex flex-col items-center gap-2 text-center">
+            <span className="text-2xl">🌙</span>
+            <p className="text-sm text-stone-500">No activity recorded here yet.</p>
+            <p className="text-xs text-stone-400 max-w-xs">
+              Once you start working through this course, your rhythm will show up here — for your eyes only.
+            </p>
+          </div>
+        ) : (
+          <>
+            {patternLine && <p className="text-sm text-stone-600">{patternLine}</p>}
+
+            {/* 7×24 heatmap — pure CSS grid, opacity scaled to own max */}
+            <div className="overflow-x-auto">
+              <div className="min-w-[560px]">
+                <div className="grid gap-[2px]" style={{ gridTemplateColumns: '36px repeat(24, 1fr)' }}>
+                  <div />
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <div key={h} className="text-[9px] text-stone-400 text-center">
+                      {h % 6 === 0 ? formatHour(h) : ''}
+                    </div>
+                  ))}
+                  {matrix.map((row, d) => (
+                    <React.Fragment key={d}>
+                      <div className="text-[10px] text-stone-400 pr-1.5 flex items-center justify-end">{WEEKDAY_LABELS[d]}</div>
+                      {row.map((count, h) => (
+                        <div
+                          key={h}
+                          title={count > 0 ? `${WEEKDAY_LABELS[d]} ${formatHour(h)} — ${count} action${count !== 1 ? 's' : ''}` : ''}
+                          className="h-4 rounded-[3px]"
+                          style={{ background: count > 0 ? `rgba(217, 119, 6, ${0.15 + 0.85 * (count / maxCount)})` : '#f5f5f4' }}
+                        />
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-stone-400">
+              {rhythm?.active_days} active day{rhythm?.active_days !== 1 ? 's' : ''} recorded
+              {rhythm?.first_activity ? ` since ${new Date(rhythm.first_activity).toLocaleDateString()}` : ''}.
+              Shades compare only against your own busiest hour.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // ─── Narrative Settings Section ───────────────────────────────────────────────
 
@@ -1339,7 +1467,10 @@ const StudentProfilePage: React.FC = () => {
               <NarrativeSettingsSection personaSets={personaSets} onSave={handlePersonaSave} allCourses={allCourses} />
             )}
             {activeSection === 'progress' && (
-              <ProgressSection courses={courses} />
+              <>
+                <ProgressSection courses={courses} />
+                <RhythmSection courses={courses} email={email} />
+              </>
             )}
             {activeSection === 'ai-settings' && (
               <AISettingsSection

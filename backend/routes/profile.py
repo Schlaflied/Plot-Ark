@@ -298,7 +298,7 @@ def get_student_courses():
         cur = conn.cursor()
         # Find courses from feedback + annotations, join with curricula for metadata
         cur.execute("""
-            SELECT DISTINCT c.id, c.topic, c.course_code, c.module_count
+            SELECT DISTINCT c.id, c.topic, c.course_code, c.module_count, c.modules
             FROM curricula c
             WHERE c.id IN (
                 SELECT DISTINCT course_id FROM student_feedback WHERE student_id = %s
@@ -329,12 +329,20 @@ def get_student_courses():
                 if priority.get(level, 0) > priority.get(current, 0):
                     module_mastery[mod] = level
 
+            # Module titles for bar labels/tooltips (index is 1-based, matching module_N keys)
+            raw_modules = row[4] or []
+            module_titles = [
+                {"index": i + 1, "title": (m.get("title") or f"Module {i + 1}") if isinstance(m, dict) else f"Module {i + 1}"}
+                for i, m in enumerate(raw_modules)
+            ]
+
             courses.append({
                 "id": course_id,
                 "topic": row[1] or "",
                 "course_code": row[2] or "",
                 "module_count": row[3] or 0,
                 "module_mastery": module_mastery,
+                "modules": module_titles,
             })
 
         cur.close()

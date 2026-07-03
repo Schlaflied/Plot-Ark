@@ -50,3 +50,4 @@ exports/
 # IDE Support
 .claude/
 kg_color_explainer.html
+backend/data/lightrag_storage/

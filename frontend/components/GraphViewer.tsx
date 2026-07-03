@@ -41,15 +41,25 @@ interface AnnotationData {
   total_students: number;
 }
 
+interface FootprintEntry { visits: number; revisits: number; }
+
 interface GraphViewerProps {
   initialCourseCode?: string;
   initialCourseTopic?: string;
   masteryMap?: Record<string, string>;  // concept_id | label_lower → mastery_level
+  footprintMap?: Record<string, FootprintEntry>;  // concept_id | label_lower → own visit counts
   role?: 'student' | 'professor';
   courseId?: number;
 }
 
-const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCourseTopic, masteryMap: masteryMapProp, role = 'student', courseId }) => {
+const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCourseTopic, masteryMap: masteryMapProp, footprintMap, role = 'student', courseId }) => {
+  // ---- Color layer: mastery ("what the system says I know") vs footprint ("where I've been") ----
+  const hasFootprint = !!footprintMap && Object.keys(footprintMap).length > 0;
+  const [colorLayer, setColorLayer] = useState<'mastery' | 'footprint'>('mastery');
+  const activeLayer = hasFootprint ? colorLayer : 'mastery';
+  const footprintMax = hasFootprint
+    ? Math.max(...Object.values(footprintMap!).map(f => f.visits), 1)
+    : 1;
   // ---- Mastery: use prop if provided, otherwise auto-fetch all ----
   const [masteryMapFetched, setMasteryMapFetched] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -358,13 +368,24 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
       );
       const isFilterFaded = isFilterActive && !nodeMatchesFilter;
 
-      // Fill: mastery color > gray
+      // Fill: active layer — footprint heat (own visits only) or mastery color > gray
       const effectiveFaded = isFaded || isFilterFaded;
       ctx.beginPath(); ctx.arc(nx, ny, r, 0, 2 * Math.PI);
-      const masteryColor = masteryLevel ? masteryToColor(masteryLevel) : '';
-      ctx.fillStyle = effectiveFaded
-        ? 'rgba(80,80,120,0.25)'
-        : (masteryColor || '#9ca3af');
+      if (effectiveFaded) {
+        ctx.fillStyle = 'rgba(80,80,120,0.25)';
+      } else if (activeLayer === 'footprint') {
+        const fp = footprintMap?.[nodeId] || footprintMap?.[nodeLabel];
+        if (fp) {
+          // Heat relative to the student's own max — never to peers
+          const t = Math.min(1, fp.visits / footprintMax);
+          ctx.fillStyle = `rgba(245, 158, 11, ${0.25 + t * 0.75})`;
+        } else {
+          ctx.fillStyle = 'rgba(120,113,108,0.3)';
+        }
+      } else {
+        const masteryColor = masteryLevel ? masteryToColor(masteryLevel) : '';
+        ctx.fillStyle = masteryColor || '#9ca3af';
+      }
       ctx.fill();
 
       // Border: layer color
@@ -420,7 +441,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
         ctx.fillStyle = effectiveFaded ? 'rgba(148,163,184,0.3)' : TEXT_PRIMARY;
         ctx.fillText(label, nx, ny + r + fontSize * 0.9);
       }
-    }, [highlightedIds, searchQuery, selectedNode, masteryMap, annotationData, myAnnotations, role, activeFilters]
+    }, [highlightedIds, searchQuery, selectedNode, masteryMap, annotationData, myAnnotations, role, activeFilters, activeLayer, footprintMap, footprintMax]
   );
 
   const nodePointerAreaPaint = useCallback((node: FGNodeObject, color: string, ctx: CanvasRenderingContext2D) => {
@@ -454,6 +475,23 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'transparent', border: '2px solid #d97706' }} /> Core</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'transparent', border: '2px solid #c084fc' }} /> Supplementary</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'transparent', border: '2px solid #60a5fa' }} /> Student Notes</span>
+          {hasFootprint && (
+            <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: TEXT_PRIMARY, fontWeight: 600, fontSize: '0.8rem' }}>Fill:</span>
+              {(['mastery', 'footprint'] as const).map(layer => (
+                <button
+                  key={layer}
+                  onClick={() => setColorLayer(layer)}
+                  className="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+                  style={activeLayer === layer
+                    ? { background: ACCENT, color: '#fff' }
+                    : { background: 'transparent', color: TEXT_MUTED, border: `1px solid ${BORDER_COLOR}` }}
+                >
+                  {layer === 'mastery' ? 'Mastery' : 'My footprint'}
+                </button>
+              ))}
+            </span>
+          )}
         </div>
       </div>
 
@@ -552,6 +590,13 @@ const GraphViewer: React.FC<GraphViewerProps> = ({ initialCourseCode, initialCou
           {(hoveredNode as FGNode).degree !== undefined && (
             <div style={{ color: TEXT_MUTED }}>{(hoveredNode as FGNode).degree} connection{(hoveredNode as FGNode).degree !== 1 ? 's' : ''}</div>
           )}
+          {activeLayer === 'footprint' && (() => {
+            const hn = hoveredNode as FGNode;
+            const fp = footprintMap?.[String(hn.id)] || footprintMap?.[(hn.label || '').toLowerCase()];
+            return fp
+              ? <div style={{ color: '#f59e0b', fontSize: '0.65rem' }}>visited {fp.visits} time{fp.visits !== 1 ? 's' : ''}, revisited {fp.revisits} day{fp.revisits !== 1 ? 's' : ''}</div>
+              : <div style={{ color: TEXT_MUTED, fontSize: '0.65rem' }}>not visited yet</div>;
+          })()}
         </div>
       )}
 

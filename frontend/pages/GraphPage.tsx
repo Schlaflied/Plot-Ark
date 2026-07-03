@@ -37,6 +37,22 @@ const GraphPage: React.FC = () => {
       .catch(() => {});
   }, [courseId]);
 
+  // Own attention footprint (student view only) — silently absent on failure
+  const [footprintMap, setFootprintMap] = useState<Record<string, { visits: number; revisits: number }>>({});
+  useEffect(() => {
+    if (!courseId || role !== 'student' || !auth?.email) return;
+    fetch(`/api/selfview/footprint/${courseId}`, { headers: { 'X-User-Email': auth.email } })
+      .then(r => r.json())
+      .then(d => {
+        const m: Record<string, { visits: number; revisits: number }> = {};
+        Object.entries(d.concepts || {}).forEach(([label, fp]: [string, any]) => {
+          m[label.toLowerCase()] = { visits: fp.visits || 0, revisits: fp.revisits || 0 };
+        });
+        setFootprintMap(m);
+      })
+      .catch(() => {});
+  }, [courseId, role, auth?.email]);
+
   const backTo = courseId ? `/course/${courseId}` : '/courses';
   const backLabel = courseId ? 'Back to course' : 'Back';
 
@@ -62,6 +78,7 @@ const GraphPage: React.FC = () => {
           initialCourseCode={state.courseCode}
           initialCourseTopic={state.courseTopic}
           masteryMap={masteryMap}
+          footprintMap={footprintMap}
           courseId={courseId ? Number(courseId) : undefined}
           role={role}
         />
