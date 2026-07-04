@@ -350,6 +350,8 @@ Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophisticat
 
 <img src="docs/Full agentic loop.png" alt="Full Agentic Loop" width="800"/>
 
+📐 **Full architecture, page-by-page data flows, database schema, red lines, and project structure → [ARCHITECTURE.md](ARCHITECTURE.md)**
+
 ---
 
 ## 🛠️ Tech Stack
@@ -408,129 +410,6 @@ The knowledge graph feature lets you ingest your own course materials (PDFs, PPT
 
 ---
 
-## 📁 Project Structure
-
-```
-plot-ark/
-├── docker-compose.yml
-├── .env.example
-├── docs/
-│   ├── Course generation.gif                    ← Demo: Agentic generation, syllabus import, module adjustment
-│   ├── AI suggestion within course generation.gif ← Demo: In-editor AI tutors and suggestions
-│   ├── Student panel with four buttons.gif      ← Demo: Per-module sentiment collection
-│   ├── xAPI student data analysis.gif           ← Demo: 5-node A2A agent pipeline and report export
-│   ├── Curriculum agent & xAPI rerun.gif        ← Demo: Human-in-the-loop module optimization
-│   └── LightRAG knowledge graph.gif             ← Demo: Force-directed knowledge graph from syllabus PDFs
-│
-├── backend/                             ← Flask (modular Blueprints)
-│   ├── app.py                           ← Entry point (~30 lines, registers Blueprints)
-│   ├── config.py                        ← Pure setup constants and environment variables
-│   ├── extensions.py                    ← Global service singletons (Flask app, AI, Redis)
-│   ├── async_loop.py                    ← Background event loop manager
-│   ├── db.py                            ← PostgreSQL operations
-│   ├── constants.py                     ← Bloom's taxonomy, session constraints, formats
-│   ├── routes/
-│   │   ├── curriculum.py                ← /api/curriculum/* (generate, skeleton, expand, save)
-│   │   ├── curriculum_agent_routes.py   ← /api/curriculum/ flags, suggestions, apply, redo, references/search, references/apply, auto-analyze
-│   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
-│   │   ├── sources.py                   ← Tavily source preview
-│   │   ├── graph.py                     ← KG data + RAG query + /api/graph/kg-mapping + /api/graph/courses
-│   │   ├── annotations.py               ← /api/kg/annotate + /api/kg/annotations/{course_id} (confusion · important · exam_focus)
-│   │   ├── mastery.py                   ← /api/mastery/* concept mastery map + sync trigger
-│   │   ├── xapi.py                      ← xAPI statements + seed generator
-│   │   ├── analytics.py                 ← A2A SSE analysis + export endpoints
-│   │   ├── feedback.py                  ← Student sentiment collection
-│   │   ├── syllabus.py                  ← PDF/DOCX parse + import
-│   │   └── materials.py                 ← LightRAG ingest
-│   ├── agents/
-│   │   ├── base.py                      ← BaseNode + SharedMemory + NodeResult
-│   │   ├── orchestrator.py              ← Multi-agent coordinator with SSE
-│   │   ├── behavior_analyst.py          ← xAPI verb/module engagement analysis
-│   │   ├── risk_detector.py             ← Multi-signal at-risk scoring
-│   │   ├── content_optimizer.py         ← Module performance cross-analysis
-│   │   ├── cohort_comparator.py         ← Student cohort grouping
-│   │   ├── kg_context_analyst.py        ← KG↔Module bridge: injects concept + confusion data into CurriculumAgent
-│   │   └── curriculum_agent.py          ← AI-driven curriculum optimization agent
-│   ├── services/
-│   │   ├── research.py                  ← Tavily search + credibility scoring
-│   │   ├── file_parser.py               ← PDF/PPTX/DOCX text extraction
-│   │   ├── prompt_builder.py            ← Centralized AI prompt templates
-│   │   ├── lightrag_service.py          ← LightRAG instance management
-│   │   ├── kg_mapper.py                 ← KG ↔ Module concept mapping (3-layer: regex + abbrev + reverse)
-│   │   ├── mastery_tracker.py           ← Per-concept mastery derived from xAPI verbs + student feedback
-│   │   ├── xapi_generator.py            ← Mock xAPI data (⚡ curriculum-aware, queries change_log)
-│   │   ├── ltm_writer.py                ← LTM Cold layer (.md YAML snapshots)
-│   │   ├── threshold_checker.py         ← Multi-signal module flag detection
-│   │   ├── report_exporter.py           ← Thin facade for report generation
-│   │   ├── chart_generator.py           ← Matplotlib charts + history trend chart
-│   │   ├── export_pdf.py                ← ReportLab PDF (6 sections incl. Analysis History)
-│   │   ├── export_docx.py               ← python-docx DOCX (6 sections incl. Analysis History)
-│   │   └── export_excel.py              ← openpyxl Excel spreadsheet builder
-│   ├── Dockerfile
-│   └── requirements.txt
-│
-├── frontend/                            ← React + TypeScript + Vite
-│   ├── App.tsx                          ← Router (React Router v7)
-│   ├── pages/
-│   │   ├── GeneratePage.tsx             ← Course generation form
-│   │   ├── CoursePage.tsx               ← Module editor + export
-│   │   ├── CoursesPage.tsx              ← Course dashboard
-│   │   ├── GraphPage.tsx                ← Knowledge graph viewer
-│   │   ├── StudentDataPage.tsx          ← A2A multi-agent analytics dashboard
-│   │   ├── StudentProfilePage.tsx       ← Student profile (4 tabs: Profile, Learning, Progress, AI Settings)
-│   │   └── SettingsPage.tsx             ← Professor settings (Profile, Preferences, Models, Prompts)
-│   ├── components/
-│   │   ├── ModelSelection.tsx           ← Shared multi-model Agent Team card (18 presets + custom models)
-│   │   ├── ui/
-│   │   │   ├── Select.tsx               ← Reusable dropdown
-│   │   │   ├── Input.tsx                ← Reusable text input
-│   │   │   ├── DraggableFab.tsx         ← Draggable floating action button (professor/student)
-│   │   │   └── ToolbarDropdown.tsx      ← Icon-trigger toolbar dropdown menu
-│   │   ├── dashboard/
-│   │   │   ├── CourseCard.tsx            ← Course card, special card, add card
-│   │   │   └── MiniCalendar.tsx          ← Compact monthly calendar widget
-│   │   ├── generate/
-│   │   │   ├── SyllabusUpload.tsx       ← Drag-and-drop syllabus upload
-│   │   │   ├── SourceReview.tsx         ← Review Tavily research sources
-│   │   │   └── SkeletonReview.tsx       ← Review course module skeleton
-│   │   ├── analytics/
-│   │   │   ├── ReportSections.tsx       ← A2A analytics report viewer component
-│   │   │   ├── TrendChart.tsx           ← SVG trend chart (mini + full-view modal)
-│   │   │   ├── KgMappingPanel.tsx       ← KG ↔ Module coverage sidebar (progress bar + stats)
-│   │   │   ├── CurriculumApplyModal.tsx ← AI suggestion apply confirmation modal
-│   │   │   ├── CurriculumDrawer.tsx     ← Professor slide-out drawer (three-layer HITL: Apply / Search References / Alert)
-│   │   │   ├── StudentChangesDrawer.tsx ← Student slide-out drawer (Go to Module)
-│   │   │   ├── AISuggestionsSection.tsx ← AI exclusive suggestions detail section
-│   │   │   ├── FlagBadge.tsx            ← Red/amber module issue flags
-│   │   │   └── FlagModal.tsx            ← Detailed flag description & signal source
-│   │   ├── ModuleCard.tsx               ← Individual curriculum module card
-│   │   ├── ModuleSidebar.tsx            ← Navigation sidebar for modules
-│   │   ├── GraphViewer.tsx              ← Core force-directed graph rendering
-│   │   ├── GraphToolbar.tsx             ← Subject tabs, node/course search
-│   │   ├── CourseBanner.tsx             ← Course pills, DnD, inline rename
-│   │   ├── NodeDetailPanel.tsx          ← Node detail floating sidebar
-│   │   ├── IngestPanel.tsx              ← File upload and lightrag pipeline
-│   │   ├── QueryPanel.tsx               ← RAG query input and history
-│   │   ├── YearSidebar.tsx              ← Year 1-4 lateral navigation
-│   │   └── Diagrams.tsx                 ← Mermaid diagram component
-│   ├── hooks/
-│   │   ├── useIngest.ts                 ← Upload polling logic and state
-│   │   ├── useQuery.ts                  ← RAG answer logic and history state
-│   │   └── useCourseManager.ts          ← Course CRUD and persistence
-│   ├── constants/
-│   │   ├── theme.ts                     ← Shared GraphViewer UI constants
-│   │   └── formOptions.ts               ← LEVELS, COURSE_TYPES, SESSION_DURATIONS
-│   ├── Dockerfile
-│   └── vite.config.ts
-│
-└── data/
-    ├── materials/                       ← Course PDFs/PPTXs (gitignored)
-    ├── ltm/                             ← LTM Cold layer .md snapshots (versioned YAML)
-    └── lightrag_storage*/               ← Knowledge graph data (gitignored, regenerate)
-```
-
----
-
 ## 🗺️ Roadmap
 
 - [x] KG ↔ Curriculum concept mapping — 3-layer matching (word-boundary + abbreviation + reverse lookup)
@@ -575,13 +454,21 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE)
 
 ## ⭐ Star History
 
-<a href="https://www.star-history.com/?repos=Schlaflied%2FPlot-Ark&type=date&legend=top-left">
+[![GitHub stars](https://img.shields.io/github/stars/Schlaflied/Plot-Ark?style=for-the-badge&logo=github&color=amber)](https://github.com/Schlaflied/Plot-Ark/stargazers) · [View the live chart on star-history.com →](https://www.star-history.com/#Schlaflied/Plot-Ark&Date)
+
+<!-- The chart embed is parked until the repo has enough stars to draw a curve
+     (with very few data points the rendered image is a blank axis).
+     Once stars grow, restore it with the official snippet:
+
+<a href="https://www.star-history.com/#Schlaflied/Plot-Ark&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=Schlaflied/Plot-Ark&type=date&theme=dark&legend=top-left&v=2" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=Schlaflied/Plot-Ark&type=date&legend=top-left&v=2" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=Schlaflied/Plot-Ark&type=date&legend=top-left&v=2" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Schlaflied/Plot-Ark&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Schlaflied/Plot-Ark&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Schlaflied/Plot-Ark&type=Date" />
  </picture>
 </a>
+-->
+
 
 ---
 

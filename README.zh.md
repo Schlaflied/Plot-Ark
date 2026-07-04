@@ -348,6 +348,8 @@ Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复�
 
 <img src="docs/Full agentic loop.png" alt="Full Agentic Loop" width="800"/>
 
+📐 **完整架构、逐页数据流、数据库 Schema、红线与项目结构 → [ARCHITECTURE.zh.md](ARCHITECTURE.zh.md)**
+
 ---
 
 ## 🛠️ 技术栈
@@ -408,129 +410,6 @@ docker compose up --build
 
 ---
 
-## 📁 项目结构
-
-```
-plot-ark/
-├── docker-compose.yml
-├── .env.example
-├── docs/
-│   ├── Course generation.gif                    ← 演示: 主动式课程生成、大纲导入与模块排序
-│   ├── AI suggestion within course generation.gif ← 演示: 课程编辑器中的 AI 助教建议
-│   ├── Student panel with four buttons.gif      ← 演示: 每模块学情情绪收集反馈
-│   ├── xAPI student data analysis.gif           ← 演示: 5 节点多 Agent 数据分析流水线
-│   ├── Curriculum agent & xAPI rerun.gif        ← 演示: 人在回路的课程内容动态优化闭环
-│   └── LightRAG knowledge graph.gif             ← 演示: 从大纲 PDF 构建的力导向知识图谱
-│
-├── backend/                             ← Flask（模块化 Blueprints）
-│   ├── app.py                           ← 入口文件（~30 行，注册 Blueprints）
-│   ├── config.py                        ← 纯环境常量与配置变量
-│   ├── extensions.py                    ← 全局单例服务（Flask app、AI 客户端、Redis）
-│   ├── async_loop.py                    ← 后台事件异步循环管理器
-│   ├── db.py                            ← PostgreSQL 操作
-│   ├── constants.py                     ← Bloom's 分类、会话约束、评估格式
-│   ├── routes/
-│   │   ├── curriculum.py                ← /api/curriculum/*（生成、验架、展开、保存）
-│   │   ├── curriculum_agent_routes.py   ← /api/curriculum/ 标记、建议、应用、撤销、references/search、references/apply、auto-analyze
-│   │   ├── history.py                   ← /api/history/* + /api/curriculum/export/docx
-│   │   ├── sources.py                   ← Tavily 源预览
-│   │   ├── graph.py                     ← 知识图谱 + RAG 查询 + /api/graph/kg-mapping + /api/graph/courses
-│   │   ├── annotations.py               ← /api/kg/annotate + /api/kg/annotations/{course_id}（困惑·重要·考试重点）
-│   │   ├── mastery.py                   ← /api/mastery/* 概念掌握度图 + 同步触发
-│   │   ├── xapi.py                      ← xAPI 语句 + 种子生成器
-│   │   ├── analytics.py                 ← A2A SSE 分析 + 导出接口
-│   │   ├── feedback.py                  ← 学生情绪反馈收集
-│   │   ├── syllabus.py                  ← PDF/DOCX 解析 + 导入
-│   │   └── materials.py                 ← LightRAG 材料摄入
-│   ├── agents/
-│   │   ├── base.py                      ← BaseNode + SharedMemory + NodeResult
-│   │   ├── orchestrator.py              ← 多 Agent 协调器（含 SSE）
-│   │   ├── behavior_analyst.py          ← xAPI 动词/模块参与度分析
-│   │   ├── risk_detector.py             ← 多信号风险评分
-│   │   ├── content_optimizer.py         ← 模块表现交叉分析
-│   │   ├── cohort_comparator.py         ← 学生群组对比
-│   │   ├── kg_context_analyst.py        ← KG↔Module 桥接：将概念 + 困惑度数据注入 CurriculumAgent
-│   │   └── curriculum_agent.py          ← AI 驱动的课程优化 Agent
-│   ├── services/
-│   │   ├── research.py                  ← Tavily 搜索 + 可信度评分
-│   │   ├── file_parser.py               ← PDF/PPTX/DOCX 文本提取
-│   │   ├── prompt_builder.py            ← 集中组装的 AI Prompt 模板
-│   │   ├── lightrag_service.py          ← LightRAG 实例管理
-│   │   ├── kg_mapper.py                 ← KG ↔ Module 概念映射（三层匹配：词边界 + 缩写剥离 + 反向查找）
-│   │   ├── mastery_tracker.py           ← 由 xAPI 动词 + 学生反馈推导每个概念的掌握度
-│   │   ├── xapi_generator.py            ← Mock xAPI 数据 + 噪声注入
-│   │   ├── ltm_writer.py                ← LTM (course_analysis_snapshots) 存档读取/写入
-│   │   ├── threshold_checker.py         ← 解析 agent 评估多级门限值
-│   │   ├── report_exporter.py           ← 用于报告生成的薄调度 Facade
-│   │   ├── chart_generator.py           ← Matplotlib 数据可视化与品牌颜色
-│   │   ├── export_pdf.py                ← ReportLab PDF 绘制逻辑
-│   │   ├── export_docx.py               ← python-docx Word 文档生成
-│   │   └── export_excel.py              ← openpyxl Excel 表格生成
-│   ├── Dockerfile
-│   └── requirements.txt
-│
-├── frontend/                            ← React + TypeScript + Vite
-│   ├── App.tsx                          ← 路由注册（React Router v7）
-│   ├── pages/
-│   │   ├── GeneratePage.tsx             ← 课程生成表单
-│   │   ├── CoursePage.tsx               ← 模块编辑器 + 导出
-│   │   ├── CoursesPage.tsx              ← 课程仪表板
-│   │   ├── GraphPage.tsx                ← 知识图谱查看器
-│   │   ├── StudentDataPage.tsx          ← A2A 多 Agent 分析仪表板
-│   │   ├── StudentProfilePage.tsx       ← 学生画像（4 标签页：Profile / Learning / Progress / AI Settings）
-│   │   └── SettingsPage.tsx             ← 教授设置（Profile / Preferences / Models / Prompts）
-│   ├── components/
-│   │   ├── ModelSelection.tsx           ← 共享多模型 Agent 团队卡片（18 预设 + 自定义模型）
-│   │   ├── ui/
-│   │   │   ├── Select.tsx               ← 可复用下拉选择
-│   │   │   ├── Input.tsx                ← 可复用文本输入框
-│   │   │   ├── DraggableFab.tsx         ← 可拖拽悬浮球（教授/学生通用）
-│   │   │   └── ToolbarDropdown.tsx      ← 工具栏图标下拉菜单
-│   │   ├── dashboard/
-│   │   │   ├── CourseCard.tsx            ← 课程卡片、特殊功能卡片、新建卡片
-│   │   │   └── MiniCalendar.tsx          ← 紧凑月历小组件
-│   │   ├── generate/
-│   │   │   ├── SyllabusUpload.tsx       ← 拖拽上传大纲解析
-│   │   │   ├── SourceReview.tsx         ← 审核 Tavily 检索的学术信源
-│   │   │   └── SkeletonReview.tsx       ← 审核课程模块骨架
-│   │   ├── analytics/
-│   │   │   ├── ReportSections.tsx       ← A2A 分析报告的展示组件
-│   │   │   ├── TrendChart.tsx           ← SVG 趋势图（迷你 + 全屏 Modal）
-│   │   │   ├── KgMappingPanel.tsx       ← KG ↔ Module 覆盖率侧边栏（进度条 + 统计摘要）
-│   │   │   ├── CurriculumApplyModal.tsx ← AI 建议应用确认弹窗
-│   │   │   ├── CurriculumDrawer.tsx     ← 教授端滑出抽屉（三层 HITL：Apply / Search References / Alert）
-│   │   │   ├── StudentChangesDrawer.tsx ← 学生端滑出抽屉（Go to Module）
-│   │   │   ├── AISuggestionsSection.tsx ← AI 专属建议详情展示区块
-│   │   │   ├── FlagBadge.tsx            ← 模块预警状态红色/琥珀色徽章
-│   │   │   └── FlagModal.tsx            ← 详细预警说明与信号来源模态框
-│   │   ├── ModuleCard.tsx               ← 拆分的单个课程模块卡片
-│   │   ├── ModuleSidebar.tsx            ← 课程模块侧边导航栏
-│   │   ├── GraphViewer.tsx              ← 核心力导向图渲染
-│   │   ├── GraphToolbar.tsx             ← 学科标签页、节点/课程搜索
-│   │   ├── CourseBanner.tsx             ← 课程药丸、拖拽、内联重命名
-│   │   ├── NodeDetailPanel.tsx          ← 节点详情悬浮面板
-│   │   ├── IngestPanel.tsx              ← 文件上传与 LightRAG 摄入逻辑
-│   │   ├── QueryPanel.tsx               ← RAG 查询输入与历史记录
-│   │   ├── YearSidebar.tsx              ← 学年 1-4 侧边导航
-│   │   └── Diagrams.tsx                 ← Mermaid 图表组件
-│   ├── hooks/
-│   │   ├── useIngest.ts                 ← 上传轮询逻辑与状态
-│   │   ├── useQuery.ts                  ← RAG 问答逻辑与历史状态
-│   │   └── useCourseManager.ts          ← 课程 CRUD 与持久化
-│   ├── constants/
-│   │   ├── theme.ts                     ← GraphViewer 共享 UI 常量
-│   │   └── formOptions.ts               ← LEVELS, COURSE_TYPES, SESSION_DURATIONS
-│   ├── Dockerfile
-│   └── vite.config.ts
-│
-└── data/
-    ├── materials/                       ← 课程 PDF/PPTX（已 gitignore）
-    ├── ltm/                             ← LTM Cold 层 .md 快照（版本化 YAML）
-    └── lightrag_storage*/               ← 知识图谱数据（已 gitignore，可重新生成）
-```
-
----
-
 ## 🗺️ 路线图
 
 - [x] KG ↔ Curriculum 概念映射 — 三层匹配引擎（词边界正则 + 缩写剥离 + 反向查找）
@@ -575,13 +454,19 @@ GNU Affero 通用公共许可证 v3.0 — 详见 [LICENSE](LICENSE)
 
 ## ⭐ Star 历史
 
-<a href="https://www.star-history.com/?repos=Schlaflied%2FPlot-Ark&type=date&legend=top-left">
+[![GitHub stars](https://img.shields.io/github/stars/Schlaflied/Plot-Ark?style=for-the-badge&logo=github&color=amber)](https://github.com/Schlaflied/Plot-Ark/stargazers) · [在 star-history.com 查看实时图表 →](https://www.star-history.com/#Schlaflied/Plot-Ark&Date)
+
+<!-- 图表嵌入暂时下架：star 数据点太少时渲染出来是空白坐标轴。
+     等 star 涨起来后用官方片段恢复：
+
+<a href="https://www.star-history.com/#Schlaflied/Plot-Ark&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=Schlaflied/Plot-Ark&type=date&theme=dark&legend=top-left&v=2" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=Schlaflied/Plot-Ark&type=date&legend=top-left&v=2" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=Schlaflied/Plot-Ark&type=date&legend=top-left&v=2" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Schlaflied/Plot-Ark&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Schlaflied/Plot-Ark&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Schlaflied/Plot-Ark&type=Date" />
  </picture>
 </a>
+-->
 
 ---
 
