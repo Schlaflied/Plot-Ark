@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { ChevronLeft, User, BarChart3, Check, Camera, Settings2, ChevronDown, Sparkles, Plus, Trash2, Star, X, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ModelConfig, DEFAULT_MODEL_CONFIG, MODEL_OPTIONS, AGENT_ROLES, ModelSelectionCard } from '../components/ModelSelection';
+import { AmberSelect } from '../components/ui/AmberSelect';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -588,15 +589,13 @@ const RhythmSection: React.FC<{ courses: CourseProgress[]; email: string }> = ({
 
       <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-4">
         {courses.length > 1 && (
-          <select
-            value={selectedCourseId ?? ''}
-            onChange={e => setSelectedCourseId(Number(e.target.value))}
-            className="text-sm border border-stone-200 rounded-lg px-3 py-1.5 text-stone-700 bg-white focus:outline-none focus:border-amber-400"
-          >
-            {courses.map(c => (
-              <option key={c.id} value={c.id}>{c.topic}</option>
-            ))}
-          </select>
+          <AmberSelect
+            className="max-w-xs"
+            value={String(selectedCourseId ?? '')}
+            onChange={v => setSelectedCourseId(Number(v))}
+            options={courses.map(c => ({ value: String(c.id), label: c.topic }))}
+            placeholder="— Select course —"
+          />
         )}
 
         {rhythmLoading ? (
@@ -724,15 +723,13 @@ const LookBackSection: React.FC<{ courses: CourseProgress[]; email: string }> = 
 
       <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 space-y-4">
         {courses.length > 1 && (
-          <select
-            value={selectedCourseId ?? ''}
-            onChange={e => setSelectedCourseId(Number(e.target.value))}
-            className="text-sm border border-stone-200 rounded-lg px-3 py-1.5 text-stone-700 bg-white focus:outline-none focus:border-amber-400"
-          >
-            {courses.map(c => (
-              <option key={c.id} value={c.id}>{c.topic}</option>
-            ))}
-          </select>
+          <AmberSelect
+            className="max-w-xs"
+            value={String(selectedCourseId ?? '')}
+            onChange={v => setSelectedCourseId(Number(v))}
+            options={courses.map(c => ({ value: String(c.id), label: c.topic }))}
+            placeholder="— Select course —"
+          />
         )}
 
         {!retro && !loading && (
