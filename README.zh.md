@@ -454,11 +454,6 @@ GNU Affero 通用公共许可证 v3.0 — 详见 [LICENSE](LICENSE)
 
 ## ⭐ Star 历史
 
-[![GitHub stars](https://img.shields.io/github/stars/Schlaflied/Plot-Ark?style=for-the-badge&logo=github&color=amber)](https://github.com/Schlaflied/Plot-Ark/stargazers) · [在 star-history.com 查看实时图表 →](https://www.star-history.com/#Schlaflied/Plot-Ark&Date)
-
-<!-- 图表嵌入暂时下架：star 数据点太少时渲染出来是空白坐标轴。
-     等 star 涨起来后用官方片段恢复：
-
 <a href="https://www.star-history.com/#Schlaflied/Plot-Ark&Date">
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Schlaflied/Plot-Ark&type=Date&theme=dark" />
@@ -466,7 +461,6 @@ GNU Affero 通用公共许可证 v3.0 — 详见 [LICENSE](LICENSE)
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Schlaflied/Plot-Ark&type=Date" />
  </picture>
 </a>
--->
 
 ---
 

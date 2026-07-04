@@ -454,12 +454,6 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE)
 
 ## ⭐ Star History
 
-[![GitHub stars](https://img.shields.io/github/stars/Schlaflied/Plot-Ark?style=for-the-badge&logo=github&color=amber)](https://github.com/Schlaflied/Plot-Ark/stargazers) · [View the live chart on star-history.com →](https://www.star-history.com/#Schlaflied/Plot-Ark&Date)
-
-<!-- The chart embed is parked until the repo has enough stars to draw a curve
-     (with very few data points the rendered image is a blank axis).
-     Once stars grow, restore it with the official snippet:
-
 <a href="https://www.star-history.com/#Schlaflied/Plot-Ark&Date">
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Schlaflied/Plot-Ark&type=Date&theme=dark" />
@@ -467,8 +461,6 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE)
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Schlaflied/Plot-Ark&type=Date" />
  </picture>
 </a>
--->
-
 
 ---
 
