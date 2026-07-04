@@ -5,6 +5,7 @@
 import React from 'react';
 import type { Module, Reading, Assignment } from '../utils/courseExport';
 import { MASTERY_COLORS } from '../constants/theme';
+import { AmberSelect } from './ui/AmberSelect';
 
 /** Strip "Module N:" or "Module N —" prefix from titles (added during generation) */
 const stripModulePrefix = (title: string): string =>
@@ -347,29 +348,33 @@ const ResourcesTab: React.FC<{
       {readings.map((r, ri) => (
         <div key={ri} className="bg-stone-50 rounded-xl p-5 border border-stone-200">
           <div className="flex items-center gap-2 mb-3">
-            <select
-              className="text-xs text-stone-500 bg-white border border-stone-200 rounded px-1.5 py-0.5 outline-none focus:border-amber-300 cursor-pointer"
+            <AmberSelect
+              compact
+              className="w-32"
               value={r.type || 'academic'}
-              onChange={e => updateReading(ri, { type: e.target.value })}
-            >
-              <option value="academic">📄 Academic</option>
-              <option value="video">🎬 Video</option>
-              <option value="news">📰 News</option>
-            </select>
+              onChange={v => updateReading(ri, { type: v })}
+              options={[
+                { value: 'academic', label: '📄 Academic' },
+                { value: 'video', label: '🎬 Video' },
+                { value: 'news', label: '📰 News' },
+              ]}
+            />
             <input
               className="text-xs text-stone-400 bg-transparent border-b border-transparent hover:border-stone-200 focus:border-amber-300 outline-none px-1 flex-1"
               value={r.estimated_time || ''}
               placeholder="estimated time"
               onChange={e => updateReading(ri, { estimated_time: e.target.value })}
             />
-            <select
-              className="text-xs text-stone-400 bg-transparent border border-stone-200 rounded px-1 py-0.5 outline-none"
+            <AmberSelect
+              compact
+              className="w-24"
               value={r.reading_type || 'optional'}
-              onChange={e => updateReading(ri, { reading_type: e.target.value as 'required' | 'optional' })}
-            >
-              <option value="required">Required</option>
-              <option value="optional">Optional</option>
-            </select>
+              onChange={v => updateReading(ri, { reading_type: v as 'required' | 'optional' })}
+              options={[
+                { value: 'required', label: 'Required' },
+                { value: 'optional', label: 'Optional' },
+              ]}
+            />
             <button onClick={() => removeReading(ri)} className="text-stone-300 hover:text-red-400 transition-colors text-xs ml-1" title="Remove reading">✕</button>
           </div>
           <input

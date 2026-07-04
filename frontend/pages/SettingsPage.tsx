@@ -272,78 +272,7 @@ const PromptSection: React.FC<{
 // ─── Preferences Section ──────────────────────────────────────────────────────
 
 import { LEVELS, LEVEL_GROUPS, COURSE_TYPES, SESSION_DURATIONS, DESIGN_APPROACHES } from '../constants/formOptions';
-
-/* Custom amber-themed dropdown — mirrors ModelSelect from P2 */
-const AmberSelect: React.FC<{
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  options: { value: string; label: string; group?: string }[];
-  groups?: readonly string[];
-}> = ({ value, onChange, placeholder, options, groups }) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-
-  const selected = options.find(o => o.value === value);
-
-  const renderOptions = (list: typeof options) =>
-    list.map(opt => (
-      <button
-        key={opt.value}
-        type="button"
-        onClick={() => { onChange(opt.value); setOpen(false); }}
-        className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center ${ 
-          value === opt.value ? 'bg-amber-50 text-amber-800 font-medium' : 'text-stone-700 hover:bg-stone-50'
-        }`}
-      >
-        {opt.label}
-      </button>
-    ));
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={`w-full flex items-center justify-between gap-2 bg-white border rounded-xl px-4 py-2.5 text-sm text-left outline-none transition-all cursor-pointer ${
-          open ? 'border-amber-400 ring-2 ring-amber-200/60 shadow-sm' : 'border-stone-200 hover:border-stone-300'
-        }`}
-      >
-        <span className={selected ? 'text-stone-700' : 'text-stone-400'}>{selected?.label || placeholder}</span>
-        <ChevronDown size={14} className={`text-stone-400 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg shadow-stone-900/8 overflow-hidden py-0.5 max-h-64 overflow-y-auto animate-selectOpen">
-          {groups ? (
-            <>
-              {/* Grouped rendering */}
-              {groups.map(g => {
-                const items = options.filter(o => o.group === g);
-                if (!items.length) return null;
-                return (
-                  <div key={g}>
-                    <div className="px-3 py-1.5 text-[10px] font-bold text-stone-400 uppercase tracking-wider bg-stone-50/80 sticky top-0">{g}</div>
-                    {renderOptions(items)}
-                  </div>
-                );
-              })}
-              {/* Ungrouped items at the end */}
-              {renderOptions(options.filter(o => !o.group || !groups.includes(o.group as any)))}
-            </>
-          ) : (
-            renderOptions(options)
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
+import { AmberSelect } from '../components/ui/AmberSelect';
 
 const PreferencesSection: React.FC<{
   saveStatus: 'idle' | 'saving' | 'saved';

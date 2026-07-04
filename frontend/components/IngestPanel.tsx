@@ -6,6 +6,7 @@
 import React, { useRef } from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { DARK_BG, PANEL_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_MUTED, ACCENT } from '../constants/theme';
+import { AmberSelect } from './ui/AmberSelect';
 
 export interface IngestFile {
   name: string;
@@ -246,39 +247,23 @@ const IngestPanel: React.FC<IngestPanelProps> = ({
           <label className="text-xs font-medium" style={{ color: TEXT_MUTED }}>
             Year <span style={{ color: '#f87171' }}>*</span>
           </label>
-          <select
-            value={ingestYear ?? ''}
-            onChange={e => {
-              const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+          <AmberSelect
+            value={ingestYear === null ? '' : String(ingestYear)}
+            onChange={v => {
+              const val = v === '' ? null : parseInt(v, 10);
               setIngestYear(val);
               if (val !== null) setIngestYearError(false);
             }}
             disabled={ingestRunning}
-            style={{
-              background: DARK_BG,
-              border: `1px solid ${ingestYearError ? '#f87171' : BORDER_COLOR}`,
-              color: ingestYear === null ? TEXT_MUTED : TEXT_PRIMARY,
-              borderRadius: '0.5rem',
-              padding: '0.35rem 0.6rem',
-              fontSize: '0.8rem',
-              outline: 'none',
-              transition: 'border-color 0.15s',
-              opacity: ingestRunning ? 0.6 : 1,
-              cursor: ingestRunning ? 'not-allowed' : 'pointer',
-              appearance: 'none',
-              WebkitAppearance: 'none',
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236b6560' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E")`,
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'right 0.6rem center',
-              paddingRight: '1.8rem',
-            }}
-          >
-            <option value="">Select year</option>
-            <option value="1">Year 1</option>
-            <option value="2">Year 2</option>
-            <option value="3">Year 3</option>
-            <option value="4">Year 4</option>
-          </select>
+            error={ingestYearError}
+            placeholder="Select year"
+            options={[
+              { value: '1', label: 'Year 1' },
+              { value: '2', label: 'Year 2' },
+              { value: '3', label: 'Year 3' },
+              { value: '4', label: 'Year 4' },
+            ]}
+          />
           {ingestYearError && (
             <span style={{ color: '#f87171', fontSize: '0.7rem' }}>Year is required</span>
           )}
@@ -289,32 +274,15 @@ const IngestPanel: React.FC<IngestPanelProps> = ({
           <label className="text-xs font-medium" style={{ color: TEXT_MUTED }}>
             Material Type
           </label>
-          <select
+          <AmberSelect
             value={ingestLayer}
-            onChange={e => setIngestLayer(e.target.value)}
+            onChange={setIngestLayer}
             disabled={ingestRunning}
-            style={{
-              background: DARK_BG,
-              border: `1px solid ${BORDER_COLOR}`,
-              color: TEXT_PRIMARY,
-              borderRadius: '0.5rem',
-              padding: '0.35rem 0.6rem',
-              fontSize: '0.8rem',
-              outline: 'none',
-              transition: 'border-color 0.15s',
-              opacity: ingestRunning ? 0.6 : 1,
-              cursor: ingestRunning ? 'not-allowed' : 'pointer',
-              appearance: 'none' as const,
-              WebkitAppearance: 'none' as const,
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236b6560' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E")`,
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'right 0.6rem center',
-              paddingRight: '1.8rem',
-            }}
-          >
-            <option value="hot">🟤 Core Material (PPT / Textbook)</option>
-            <option value="warm">🟣 Supplementary (Articles / Videos)</option>
-          </select>
+            options={[
+              { value: 'hot', label: '🟤 Core Material (PPT / Textbook)' },
+              { value: 'warm', label: '🟣 Supplementary (Articles / Videos)' },
+            ]}
+          />
         </div>
 
         {/* Drop zone */}
