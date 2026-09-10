@@ -427,7 +427,8 @@ docker compose up --build
 - [x] 多模型 Agent 团队 — 9 家 provider 的 18 个预设模型 + 自定义模型；★ 推荐标签、⚠ MoE 警告、动态 API Key
 - [x] 教授设置门户 — 个人信息、学术偏好、模型默认值、Prompt 模板；全部自动保存
 - [x] 按 Provider API Key — Fernet 加密存储、动态检测、掩码 GET 返回
-- [ ] 教授 Prompt 模板编辑器 — 数据库驱动的 Prompt 管理 + 版本控制 + 变量高亮
+- [x] 教授 Prompt 模板编辑器 — 数据库驱动的 Prompt 管理 + 版本控制 + 变量高亮
+- [x] 第一周加固 — API Key 加密失败即拒绝保存、移除浏览器端密钥、主应用 CI
 - [ ] 作业时间轴 + 截止日期计算器
 - [ ] A2A Phase 2 — CurriculumAgent 接入 LLM（必须 dense 模型）；其余 Agent 保持 sql-only
 - [ ] 渐进式摘要 — 学期级 LTM 摘要用于 LLM 上下文管理

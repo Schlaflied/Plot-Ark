@@ -1540,17 +1540,22 @@ const StudentProfilePage: React.FC = () => {
   const handleSave = useCallback(
     async (updates: Partial<StudentProfile> & { persona_sets?: PersonaSets }) => {
       try {
-        await fetch('/api/profile', {
+        const response = await fetch('/api/profile', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-User-Email': email },
           body: JSON.stringify(updates),
         });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || `Profile save failed (${response.status})`);
+        }
         const { persona_sets: _ps, ...profileUpdates } = updates;
         if (Object.keys(profileUpdates).length > 0) {
           setProfile(prev => ({ ...prev, ...profileUpdates }));
         }
       } catch (err) {
         console.warn('Profile save error:', err);
+        window.alert(err instanceof Error ? err.message : 'Profile save failed');
       }
     },
     [email]

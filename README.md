@@ -427,7 +427,8 @@ The knowledge graph feature lets you ingest your own course materials (PDFs, PPT
 - [x] Multi-model Agent Team — 18 preset models across 9 providers + custom model support; ★ recommended tags, ⚠ MoE warnings, dynamic API keys
 - [x] Professor Settings Portal — profile, academic preferences, model defaults, prompt templates; all with auto-save
 - [x] Per-provider API keys — Fernet-encrypted storage, dynamic detection, masked GET responses
-- [ ] Professor prompt template editor — DB-backed prompt management with version control and variable highlighting
+- [x] Professor prompt template editor — DB-backed prompt management with version control and variable highlighting
+- [x] Week 1 hardening — fail-closed encrypted BYOK storage, browser-secret removal, and main application CI
 - [ ] Assignment Timeline + Due Date calculator
 - [ ] A2A Phase 2 — LLM integration for CurriculumAgent (dense model required); other agents remain sql-only
 - [ ] Progressive summarization — semester-level LTM summaries for LLM context management

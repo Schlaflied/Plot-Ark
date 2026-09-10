@@ -7,6 +7,7 @@ import google.generativeai as genai
 from tavily import TavilyClient
 
 from config import AI_PROVIDER, OPENAI_API_KEY, GEMINI_API_KEY, TAVILY_API_KEY
+from services.secret_store import SecretStorageError, decrypt_secret
 
 # ---------------------------------------------------------------------------
 # Flask app
@@ -36,7 +37,10 @@ def _resolve(redis_key: str, env_fallback: str | None) -> str | None:
     if redis_client:
         stored = redis_client.get(_REDIS_PREFIX + redis_key)
         if stored:
-            return stored
+            try:
+                return decrypt_secret(stored)
+            except SecretStorageError as exc:
+                print(f"Stored {redis_key} ignored: {exc}")
     return env_fallback
 
 

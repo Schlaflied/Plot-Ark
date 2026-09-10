@@ -2,6 +2,7 @@
 
 from flask import Blueprint, request, jsonify
 from extensions import redis_client, reload_clients
+from services.secret_store import SecretStorageError, decrypt_secret, encrypt_secret
 
 settings_bp = Blueprint("settings", __name__)
 
@@ -30,8 +31,10 @@ def _set(field: str, value: str) -> None:
 
 def _get(field: str) -> str | None:
     if redis_client:
-        return redis_client.get(_REDIS_PREFIX + field)
-    return _mem_store.get(field)
+        value = redis_client.get(_REDIS_PREFIX + field)
+    else:
+        value = _mem_store.get(field)
+    return decrypt_secret(value) if field.endswith("_key") else value
 
 
 def _mask(value: str | None) -> str | None:
@@ -46,22 +49,29 @@ def _mask(value: str | None) -> str | None:
 def save_keys():
     data = request.get_json(silent=True) or {}
     updated = []
+    prepared = {}
 
-    for field in ALLOWED_FIELDS:
-        if field not in data:
-            continue
-        raw = data[field]
-        if not isinstance(raw, str):
-            continue
-        value = raw.strip()
+    try:
+        for field in ALLOWED_FIELDS:
+            if field not in data:
+                continue
+            raw = data[field]
+            if not isinstance(raw, str):
+                continue
+            value = raw.strip()
+            prepared[field] = encrypt_secret(value) if field.endswith("_key") else value
+    except SecretStorageError as exc:
+        return jsonify({"error": str(exc)}), 503
+
+    # Prepare every field before writing so a bad encryption setup cannot cause
+    # a partial settings update.
+    for field, value in prepared.items():
         if value:
             _set(field, value)
+        elif redis_client:
+            redis_client.delete(_REDIS_PREFIX + field)
         else:
-            # Empty string = clear the stored value
-            if redis_client:
-                redis_client.delete(_REDIS_PREFIX + field)
-            else:
-                _mem_store.pop(field, None)
+            _mem_store.pop(field, None)
         updated.append(field)
 
     if updated:
@@ -73,12 +83,15 @@ def save_keys():
 @settings_bp.route("/api/settings/keys", methods=["GET"])
 def get_keys():
     result = {}
-    for field in ALLOWED_FIELDS:
-        raw = _get(field)
-        if "key" in field:
-            result[field] = _mask(raw)
-        else:
-            result[field] = raw  # model names are not sensitive
+    try:
+        for field in ALLOWED_FIELDS:
+            raw = _get(field)
+            if field.endswith("_key"):
+                result[field] = _mask(raw)
+            else:
+                result[field] = raw  # model names are not sensitive
+    except SecretStorageError as exc:
+        return jsonify({"error": str(exc)}), 503
     return jsonify(result)
 
 
