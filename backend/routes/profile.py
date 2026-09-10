@@ -3,53 +3,22 @@
 import json
 from flask import Blueprint, request, jsonify
 from db import get_db
-from config import DEFAULT_MODEL_CONFIG, AVAILABLE_MODELS, API_KEY_ENCRYPTION_KEY
+from config import DEFAULT_MODEL_CONFIG, AVAILABLE_MODELS
+from services.secret_store import SecretStorageError, decrypt_secret, encrypt_secret
 
 profile_bp = Blueprint("profile", __name__)
 
 
 # ── API Key Encryption Helpers ────────────────────────────────────────────────
 
-def _get_fernet():
-    """Return a Fernet cipher if an encryption key is configured, else None."""
-    if not API_KEY_ENCRYPTION_KEY:
-        return None
-    try:
-        from cryptography.fernet import Fernet
-        return Fernet(API_KEY_ENCRYPTION_KEY.encode())
-    except Exception:
-        return None
-
-
 def _encrypt_api_keys(api_keys: dict) -> dict:
-    """Encrypt API key values before storing in DB. Skips empty strings."""
-    f = _get_fernet()
-    if not f:
-        return api_keys  # No encryption key configured — store as-is
-    result = {}
-    for provider, key in api_keys.items():
-        if key:
-            result[provider] = f.encrypt(key.encode()).decode()
-        else:
-            result[provider] = ""
-    return result
+    """Encrypt API key values before storing in DB; fail closed if unavailable."""
+    return {provider: encrypt_secret(key) for provider, key in api_keys.items()}
 
 
 def _decrypt_api_keys(api_keys: dict) -> dict:
     """Decrypt API key values after reading from DB."""
-    f = _get_fernet()
-    if not f:
-        return api_keys
-    result = {}
-    for provider, key in api_keys.items():
-        if key:
-            try:
-                result[provider] = f.decrypt(key.encode()).decode()
-            except Exception:
-                result[provider] = key  # Already plaintext or corrupted
-        else:
-            result[provider] = ""
-    return result
+    return {provider: decrypt_secret(key) or "" for provider, key in api_keys.items()}
 
 
 def _mask_api_keys(api_keys: dict) -> dict:
@@ -265,10 +234,16 @@ def update_profile():
         cur.close()
         conn.close()
         return jsonify({"status": "ok"}), 200
+    except SecretStorageError as e:
+        print(f"[profile] secure storage unavailable: {e}")
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": str(e)}), 503
     except Exception as e:
         print(f"[profile] update error: {e}")
+        conn.rollback()
         conn.close()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Profile update failed"}), 500
 
 
 @profile_bp.route("/api/profile/models", methods=["GET"])

@@ -25,25 +25,28 @@ async function fetchBackendKeys(): Promise<Record<string, string | null>> {
 }
 
 async function postKeys(payload: Record<string, string>): Promise<void> {
-  try {
-    await fetch(API_KEYS, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-  } catch (e) { console.warn('Settings: backend unreachable', e); }
+  const response = await fetch(API_KEYS, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `Settings save failed (${response.status})`);
+  }
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SidebarSection = 'profile' | 'ai-models' | 'prompt' | 'preferences';
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 // ─── AI Models Section ────────────────────────────────────────────────────────
 
 const AiModelsSection: React.FC<{
   mc: ModelConfig;
   onMcChange: (next: ModelConfig) => void;
-  saveStatus: 'idle' | 'saving' | 'saved';
-  onStatusChange: (s: 'idle' | 'saving' | 'saved') => void;
+  saveStatus: SaveStatus;
+  onStatusChange: (s: SaveStatus) => void;
 }> = ({ mc, onMcChange, saveStatus, onStatusChange }) => {
   const [tavilyKey, setTavilyKey] = useState('');
   const [tavilyVisible, setTavilyVisible] = useState(false);
@@ -51,9 +54,10 @@ const AiModelsSection: React.FC<{
   const tavilyInit = useRef(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem('plotark_tavily_key') ?? '';
-    setTavilyKey(stored);
-    tavilyInit.current = true;
+    fetchBackendKeys().then(data => {
+      setTavilyKey(data.tavily_key || '');
+      tavilyInit.current = true;
+    });
   }, []);
 
   // Auto-save Tavily key on change
@@ -62,12 +66,16 @@ const AiModelsSection: React.FC<{
     clearTimeout(tavilyDebounce.current);
     tavilyDebounce.current = setTimeout(() => {
       const v = tavilyKey.trim();
-      if (v) localStorage.setItem('plotark_tavily_key', v);
-      else localStorage.removeItem('plotark_tavily_key');
-      postKeys({ tavily_key: v });
       onStatusChange('saving');
-      setTimeout(() => onStatusChange('saved'), 300);
-      setTimeout(() => onStatusChange('idle'), 1800);
+      postKeys({ tavily_key: v })
+        .then(() => {
+          onStatusChange('saved');
+          setTimeout(() => onStatusChange('idle'), 1500);
+        })
+        .catch(err => {
+          console.warn('Settings save failed', err);
+          onStatusChange('error');
+        });
     }, 800);
     return () => clearTimeout(tavilyDebounce.current);
   }, [tavilyKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -83,9 +91,10 @@ const AiModelsSection: React.FC<{
         </div>
         <span className={`text-xs font-medium transition-all duration-300 ${
           saveStatus === 'saving' ? 'text-amber-500' :
-          saveStatus === 'saved' ? 'text-green-500' : 'text-transparent'
+          saveStatus === 'saved' ? 'text-green-500' :
+          saveStatus === 'error' ? 'text-red-600' : 'text-transparent'
         }`}>
-          {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : '·'}
+          {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : saveStatus === 'error' ? 'Save failed — check encryption key' : '·'}
         </span>
       </div>
 
@@ -188,7 +197,7 @@ const PromptSection: React.FC<{
   templates: Record<string, TemplateData>;
   onUpdate: (key: string, value: string) => void;
   onReset: (key: string) => void;
-  saveStatus: 'idle' | 'saving' | 'saved';
+  saveStatus: SaveStatus;
 }> = ({ templates, onUpdate, onReset, saveStatus }) => (
   <div className="space-y-6">
     <div className="flex items-center justify-between">
@@ -275,8 +284,8 @@ import { LEVELS, LEVEL_GROUPS, COURSE_TYPES, SESSION_DURATIONS, DESIGN_APPROACHE
 import { AmberSelect } from '../components/ui/AmberSelect';
 
 const PreferencesSection: React.FC<{
-  saveStatus: 'idle' | 'saving' | 'saved';
-  onStatusChange: (s: 'idle' | 'saving' | 'saved') => void;
+  saveStatus: SaveStatus;
+  onStatusChange: (s: SaveStatus) => void;
 }> = ({ saveStatus, onStatusChange }) => {
   const [level, setLevel] = useState(() => localStorage.getItem('plotark_pref_level') ?? '');
   const [courseType, setCourseType] = useState(() => localStorage.getItem('plotark_pref_coursetype') ?? '');
@@ -402,8 +411,8 @@ const DELIVERY_MODES = [
 
 const ProfileSection: React.FC<{
   email: string;
-  saveStatus: 'idle' | 'saving' | 'saved';
-  onStatusChange: (s: 'idle' | 'saving' | 'saved') => void;
+  saveStatus: SaveStatus;
+  onStatusChange: (s: SaveStatus) => void;
   onProfileChange: (name: string, avatar: string) => void;
 }> = ({ email, saveStatus, onStatusChange, onProfileChange }) => {
   const [displayName, setDisplayName] = useState(() => localStorage.getItem('plotark_prof_name') ?? '');
@@ -599,7 +608,7 @@ const SettingsPage: React.FC = () => {
 
   // ── Model config state (synced with backend via /api/settings/keys) ────────
   const [mc, setMc] = useState<ModelConfig>({ ...DEFAULT_MODEL_CONFIG, use_own_key: true });
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const mcDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
   const mcInit = useRef(true);
 
@@ -637,7 +646,7 @@ const SettingsPage: React.FC = () => {
     setMc(next);
     if (mcInit.current) { mcInit.current = false; return; }
     clearTimeout(mcDebounce.current);
-    mcDebounce.current = setTimeout(() => {
+    mcDebounce.current = setTimeout(async () => {
       setSaveStatus('saving');
       // Map ModelConfig → backend fields
       const payload: Record<string, string> = {};
@@ -653,9 +662,14 @@ const SettingsPage: React.FC = () => {
       if (openaiModel) payload.openai_model = openaiModel;
       if (claudeModel) payload.claude_model = claudeModel;
       if (geminiModel) payload.gemini_model = geminiModel;
-      postKeys(payload);
-      setTimeout(() => setSaveStatus('saved'), 300);
-      setTimeout(() => setSaveStatus('idle'), 1800);
+      try {
+        await postKeys(payload);
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 1500);
+      } catch (err) {
+        console.warn('Settings save failed', err);
+        setSaveStatus('error');
+      }
     }, 800);
   }, []);
 
