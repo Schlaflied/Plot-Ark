@@ -6,7 +6,8 @@
  */
 
 import React, { useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import {
   AlertTriangle,
   ArrowRight,
@@ -14,13 +15,13 @@ import {
   BookOpenCheck,
   Check,
   CheckCircle2,
-  ChevronLeft,
   CircleGauge,
   Clock3,
   FileArchive,
   FileSpreadsheet,
   FileText,
   Lightbulb,
+  LogOut,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -62,6 +63,13 @@ const SUGGESTIONS: Suggestion[] = [
     impact: 'Medium impact · medium effort',
   },
 ];
+
+const PULSE_OPTIONS = [
+  ['understood', 'I understand this', 'I can explain and apply the key idea.'],
+  ['partial', 'I partly understand', 'Some parts are clear, but I still have questions.'],
+  ['unlocated', 'Something is unclear', 'I know I am stuck, but I cannot locate the exact issue.'],
+  ['not-reviewed', 'I have not reviewed this yet', 'This keeps non-engagement separate from misunderstanding.'],
+] as const;
 
 const MetricCard: React.FC<{
   label: string;
@@ -106,8 +114,11 @@ const SourceCard: React.FC<{
 );
 
 const EnterprisePage: React.FC = () => {
+  const { auth, logout } = useAuth();
+  const navigate = useNavigate();
   const [statuses, setStatuses] = useState<Record<number, SuggestionStatus>>({});
   const [notice, setNotice] = useState('');
+  const [pulse, setPulse] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const acceptedCount = useMemo(
@@ -124,18 +135,71 @@ const EnterprisePage: React.FC = () => {
     setStatuses(previous => ({ ...previous, [id]: status }));
   };
 
+  const signOut = () => {
+    logout();
+    navigate('/login');
+  };
+
+  if (auth?.role === 'enterprise_user') {
+    return (
+      <div className="min-h-screen bg-[#F6F4EF] text-stone-900">
+        <header className="border-b border-stone-200 bg-white">
+          <div className="mx-auto flex max-w-5xl items-center px-6 py-3">
+            <span className="font-serif text-lg font-semibold">Plot Ark</span>
+            <span className="ml-3 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">Enterprise user</span>
+            <button type="button" onClick={signOut} className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-stone-500 hover:text-stone-900">
+              <LogOut size={15} /> Sign out
+            </button>
+          </div>
+        </header>
+        <main className="mx-auto max-w-3xl px-6 py-12">
+          <div className="text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Learner pulse</p>
+            <h1 className="mt-3 font-serif text-4xl">How is this module landing?</h1>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-stone-500">Data Privacy &amp; Security · Module 4: Handling customer data</p>
+          </div>
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            {PULSE_OPTIONS.map(([value, title, detail]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setPulse(value)}
+                aria-pressed={pulse === value}
+                className={`rounded-2xl border p-5 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                  pulse === value ? 'border-amber-400 bg-amber-50' : 'border-stone-200 bg-white hover:border-amber-200 hover:shadow-md'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div><p className="font-semibold text-stone-900">{title}</p><p className="mt-2 text-sm leading-6 text-stone-500">{detail}</p></div>
+                  {pulse === value ? <CheckCircle2 size={20} className="shrink-0 text-amber-600" /> : null}
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">
+            <div className="flex items-start gap-3"><ShieldCheck size={19} className="mt-0.5 shrink-0" /><p>Your response supports course improvement. It is shown to L&amp;D at cohort level and is not used to rank individual employees.</p></div>
+          </div>
+          <button
+            type="button"
+            disabled={!pulse}
+            onClick={() => setNotice('Thank you. Your learning pulse has been recorded for this preview.')}
+            className="mt-6 w-full rounded-xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Submit learning pulse
+          </button>
+          {notice ? <p role="status" className="mt-3 text-center text-sm font-medium text-emerald-700">{notice}</p> : null}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F6F4EF] text-stone-900">
       <input ref={fileInputRef} type="file" className="hidden" aria-label="Upload learning source" />
 
       <header className="sticky top-0 z-20 border-b border-stone-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1440px] items-center gap-4 px-6 py-3">
-          <Link
-            to="/courses"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-stone-500 transition hover:text-stone-900"
-          >
-            <ChevronLeft size={16} /> Dashboard
-          </Link>
+          <span className="font-serif text-lg font-semibold">Plot Ark</span>
           <div className="h-5 w-px bg-stone-200" />
           <div className="flex min-w-0 items-center gap-2">
             <span className="font-serif text-lg font-semibold">Enterprise L&D</span>
@@ -146,6 +210,9 @@ const EnterprisePage: React.FC = () => {
           <div className="ml-auto flex items-center gap-2 text-xs text-stone-500">
             <ShieldCheck size={15} className="text-emerald-600" />
             Synthetic demo data
+            <button type="button" onClick={signOut} className="ml-3 inline-flex items-center gap-1.5 border-l border-stone-200 pl-4 text-sm font-medium text-stone-500 hover:text-stone-900">
+              <LogOut size={15} /> Sign out
+            </button>
           </div>
         </div>
       </header>
