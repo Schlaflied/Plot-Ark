@@ -65,6 +65,19 @@ class EnterpriseAnalysisTests(unittest.TestCase):
         self.assertEqual(payload["privacy"]["learner_identifiers_in_report"], False)
         self.assertNotIn("learner_ref", json.dumps(payload))
 
+    def test_suggestion_contract_carries_persistable_status(self):
+        rows = [{
+            "module_id": "m1", "module_title": "Risky module", "learners": 10,
+            "events": 10, "completion_rate": 0.4, "average_score": 55,
+            "median_duration_seconds": 900, "average_attempts": 2,
+            "learner_refs": [f"l{i}" for i in range(10)],
+        }]
+        report = build_enterprise_report(_program(), rows, {})
+        self.assertGreater(len(report["suggestions"]), 0)
+        self.assertNotIn("status", report["suggestions"][0])
+        # Persistence assigns status and latest-analysis overlays it from the
+        # source-of-truth enterprise_suggestions row after a human decision.
+
 
 if __name__ == "__main__":
     unittest.main()

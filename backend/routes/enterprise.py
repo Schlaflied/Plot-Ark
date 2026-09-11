@@ -326,13 +326,27 @@ def latest_analysis(program_id: int):
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT report FROM enterprise_analysis_runs
+            SELECT id, report FROM enterprise_analysis_runs
             WHERE program_id = %s ORDER BY created_at DESC LIMIT 1
         """, (program_id,))
         row = cur.fetchone()
         if not row:
             return jsonify({"error": "No analysis found"}), 404
-        return jsonify(row[0])
+        run_id, report = row
+        cur.execute("""
+            SELECT id, module_id, title, detail, evidence, impact, confidence, status
+            FROM enterprise_suggestions
+            WHERE analysis_run_id = %s ORDER BY id
+        """, (run_id,))
+        report["suggestions"] = [
+            {
+                "id": item[0], "module_id": item[1], "title": item[2],
+                "detail": item[3], "evidence": item[4], "impact": item[5],
+                "confidence": item[6], "status": item[7],
+            }
+            for item in cur.fetchall()
+        ]
+        return jsonify(report)
     finally:
         conn.close()
 
