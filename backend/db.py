@@ -436,6 +436,55 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS idx_enterprise_events_scope
                     ON enterprise_learning_events(organization_id, program_id, cohort_id, module_id)
                 """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_pulses (
+                        id BIGSERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL REFERENCES organizations(id),
+                        program_id INTEGER NOT NULL REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        cohort_id INTEGER NOT NULL REFERENCES enterprise_cohorts(id) ON DELETE CASCADE,
+                        learner_ref TEXT NOT NULL,
+                        module_id TEXT NOT NULL,
+                        state TEXT NOT NULL CHECK (state IN ('understood', 'partial', 'unlocated', 'not-reviewed')),
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_enterprise_pulses_scope
+                    ON enterprise_pulses(program_id, cohort_id, module_id, state)
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_analysis_runs (
+                        id BIGSERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL REFERENCES organizations(id),
+                        program_id INTEGER NOT NULL REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        cohort_id INTEGER NOT NULL REFERENCES enterprise_cohorts(id) ON DELETE CASCADE,
+                        content_version INTEGER NOT NULL DEFAULT 1,
+                        previous_run_id BIGINT REFERENCES enterprise_analysis_runs(id),
+                        report JSONB NOT NULL DEFAULT '{}',
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_enterprise_runs_scope
+                    ON enterprise_analysis_runs(organization_id, program_id, cohort_id, created_at DESC)
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_suggestions (
+                        id BIGSERIAL PRIMARY KEY,
+                        analysis_run_id BIGINT NOT NULL REFERENCES enterprise_analysis_runs(id) ON DELETE CASCADE,
+                        program_id INTEGER NOT NULL REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        cohort_id INTEGER NOT NULL REFERENCES enterprise_cohorts(id) ON DELETE CASCADE,
+                        module_id TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        detail TEXT NOT NULL,
+                        evidence TEXT NOT NULL,
+                        impact TEXT NOT NULL,
+                        confidence TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
+                        decided_at TIMESTAMPTZ,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
                 conn.commit()
                 cur.close()
                 conn.close()

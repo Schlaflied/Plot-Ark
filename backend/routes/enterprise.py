@@ -12,6 +12,8 @@ from services.enterprise_ingest import (
     parse_enterprise_source,
     validate_upload_batch,
 )
+from services.enterprise_analysis import analyze_enterprise_program
+from services.enterprise_ltm import write_enterprise_cold_snapshot
 from services.lightrag_service import slug
 
 
@@ -243,6 +245,119 @@ def upload_sources(program_id: int):
             """, (json.dumps(modules), len(modules), engine_course_id))
         conn.commit()
         return jsonify({"program_id": program_id, "sources": response_sources}), 201
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/pulse", methods=["POST"])
+def submit_pulse(program_id: int):
+    data = request.get_json(silent=True) or {}
+    state = str(data.get("state", "")).strip()
+    module_id = str(data.get("module_id", "course")).strip() or "course"
+    learner_ref = str(data.get("learner_ref", "anonymous")).strip() or "anonymous"
+    if state not in {"understood", "partial", "unlocated", "not-reviewed"}:
+        return jsonify({"error": "Invalid pulse state"}), 400
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT p.organization_id, c.id
+            FROM enterprise_programs p JOIN enterprise_cohorts c ON c.program_id = p.id
+            WHERE p.id = %s ORDER BY c.created_at DESC LIMIT 1
+        """, (program_id,))
+        scope = cur.fetchone()
+        if not scope:
+            return jsonify({"error": "Program not found"}), 404
+        organization_id, cohort_id = scope
+        cur.execute("""
+            INSERT INTO enterprise_pulses
+                (organization_id, program_id, cohort_id, learner_ref, module_id, state)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, created_at
+        """, (
+            organization_id, program_id, cohort_id,
+            _learner_token(organization_id, learner_ref), module_id, state,
+        ))
+        pulse_id, created_at = cur.fetchone()
+        conn.commit()
+        return jsonify({"id": pulse_id, "state": state, "created_at": created_at.isoformat()}), 201
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/analyze", methods=["POST"])
+def analyze_program(program_id: int):
+    data = request.get_json(silent=True) or {}
+    cohort_id = data.get("cohort_id")
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        run_id, report = analyze_enterprise_program(conn, program_id, cohort_id)
+        conn.commit()
+    except LookupError as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 404
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+    try:
+        report["ltm"] = {"status": "saved", "path": write_enterprise_cold_snapshot(report)}
+    except Exception as exc:
+        report["ltm"] = {"status": "warning", "message": str(exc)}
+    return jsonify(report), 201
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/analysis/latest", methods=["GET"])
+def latest_analysis(program_id: int):
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT report FROM enterprise_analysis_runs
+            WHERE program_id = %s ORDER BY created_at DESC LIMIT 1
+        """, (program_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "No analysis found"}), 404
+        return jsonify(row[0])
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/suggestions/<int:suggestion_id>", methods=["PATCH"])
+def decide_suggestion(suggestion_id: int):
+    data = request.get_json(silent=True) or {}
+    status = str(data.get("status", "")).strip()
+    if status not in {"accepted", "rejected"}:
+        return jsonify({"error": "status must be accepted or rejected"}), 400
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE enterprise_suggestions
+            SET status = %s, decided_at = NOW()
+            WHERE id = %s RETURNING id, status, decided_at
+        """, (status, suggestion_id))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Suggestion not found"}), 404
+        conn.commit()
+        return jsonify({"id": row[0], "status": row[1], "decided_at": row[2].isoformat()})
     except Exception as exc:
         conn.rollback()
         return jsonify({"error": str(exc)}), 500
