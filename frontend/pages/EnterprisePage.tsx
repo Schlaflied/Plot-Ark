@@ -40,6 +40,38 @@ interface Suggestion {
   impact: string;
 }
 
+interface UploadRule {
+  label: string;
+  accept: string;
+  formats: string;
+  maxFiles: number;
+  maxMb: number;
+}
+
+const GENERAL_UPLOAD: UploadRule = {
+  label: 'learning source',
+  accept: '.zip,.pdf,.pptx,.docx,.xlsx,.csv',
+  formats: 'SCORM ZIP, PDF, PPTX, DOCX, XLSX, CSV',
+  maxFiles: 10,
+  maxMb: 50,
+};
+
+const CONTENT_UPLOAD: UploadRule = {
+  label: 'training content',
+  accept: '.zip,.pdf,.pptx,.docx',
+  formats: 'SCORM ZIP, PDF, PPTX, DOCX',
+  maxFiles: 10,
+  maxMb: 50,
+};
+
+const REPORT_UPLOAD: UploadRule = {
+  label: 'LMS report',
+  accept: '.xlsx,.csv',
+  formats: 'XLSX, CSV',
+  maxFiles: 5,
+  maxMb: 25,
+};
+
 const SUGGESTIONS: Suggestion[] = [
   {
     id: 1,
@@ -120,15 +152,35 @@ const EnterprisePage: React.FC = () => {
   const [notice, setNotice] = useState('');
   const [pulse, setPulse] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadRuleRef = useRef<UploadRule>(GENERAL_UPLOAD);
 
   const acceptedCount = useMemo(
     () => Object.values(statuses).filter(status => status === 'accepted').length,
     [statuses],
   );
 
-  const chooseFile = (kind: string) => {
-    setNotice(`Choose a ${kind} file. This preview keeps uploads local until analysis is started.`);
-    fileInputRef.current?.click();
+  const chooseFile = (rule: UploadRule) => {
+    uploadRuleRef.current = rule;
+    if (fileInputRef.current) {
+      fileInputRef.current.accept = rule.accept;
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFilesSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    const rule = uploadRuleRef.current;
+    const oversized = files.find(file => file.size > rule.maxMb * 1024 * 1024);
+
+    if (files.length > rule.maxFiles) {
+      setNotice(`Too many files. ${rule.label} accepts up to ${rule.maxFiles} files per upload.`);
+    } else if (oversized) {
+      setNotice(`${oversized.name} is over the ${rule.maxMb} MB per-file limit.`);
+    } else if (files.length > 0) {
+      setNotice(`${files.length} ${rule.label} file${files.length === 1 ? '' : 's'} selected. Preview formats: ${rule.formats}.`);
+    }
+
+    event.currentTarget.value = '';
   };
 
   const updateSuggestion = (id: number, status: SuggestionStatus) => {
@@ -195,7 +247,15 @@ const EnterprisePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F6F4EF] text-stone-900">
-      <input ref={fileInputRef} type="file" className="hidden" aria-label="Upload learning source" />
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept={GENERAL_UPLOAD.accept}
+        onChange={handleFilesSelected}
+        className="hidden"
+        aria-label="Upload learning source"
+      />
 
       <header className="sticky top-0 z-20 border-b border-stone-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1440px] items-center gap-4 px-6 py-3">
@@ -241,12 +301,15 @@ const EnterprisePage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => chooseFile('training content')}
+                  onClick={() => chooseFile(GENERAL_UPLOAD)}
                   className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-medium text-stone-200 transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30"
                 >
                   <Upload size={15} /> Upload your own
                 </button>
               </div>
+              <p className="mt-3 text-xs text-stone-400">
+                SCORM ZIP, PDF, PPTX, DOCX, XLSX, CSV · up to 10 files · 50 MB each
+              </p>
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
@@ -291,8 +354,8 @@ const EnterprisePage: React.FC = () => {
             </p>
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
-            <SourceCard title="Training content" detail="PDF, PPTX, DOCX, or a read-only SCORM package." meta="SCORM indexed · 82% readable" icon={<FileArchive size={20} />} onUpload={() => chooseFile('course or SCORM')} />
-            <SourceCard title="LMS report" detail="Map completion, score, time, attempts, and module columns from CSV." meta="248 learner rows mapped" icon={<FileSpreadsheet size={20} />} onUpload={() => chooseFile('CSV')} />
+            <SourceCard title="Training content" detail="SCORM ZIP, PDF, PPTX, DOCX · up to 10 files · 50 MB each." meta="SCORM indexed · 82% readable" icon={<FileArchive size={20} />} onUpload={() => chooseFile(CONTENT_UPLOAD)} />
+            <SourceCard title="LMS report" detail="XLSX or CSV · up to 5 files · 25 MB each. Map completion, score, time, attempts, and module columns." meta="248 learner rows mapped" icon={<FileSpreadsheet size={20} />} onUpload={() => chooseFile(REPORT_UPLOAD)} />
             <SourceCard title="Learner pulse" detail="A lightweight link captures four distinct learning states outside the LMS." meta="162 anonymous responses" icon={<BookOpenCheck size={20} />} onUpload={() => setNotice('Learner Pulse preview: a shareable link would be generated for this program.')} />
           </div>
         </section>
