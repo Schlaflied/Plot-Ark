@@ -1,6 +1,6 @@
 [English](README.md) | [中文](README.zh.md)
 
-# Plot Ark — Generate · Track · Optimize
+# Plot Ark — Observe · Remember · Improve
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![GitHub stars](https://img.shields.io/github/stars/Schlaflied/Plot-Ark?style=social&cacheSeconds=1)](https://github.com/Schlaflied/Plot-Ark/stargazers)
@@ -27,264 +27,60 @@
   👉 <a href="https://schlaflied.github.io/Plot-Ark/">Visit the Official Landing Page</a> 👈
 </h3>
 
-**An open-source agentic curriculum and learning-content observability platform. Plot Ark combines an academic dual portal (instructor + student) with an Enterprise L&D Preview, connecting course structure, learner evidence, and human-governed revision decisions without requiring xAPI as a starting point.**
+**Plot Ark is an open-source long-term memory for course improvement. It connects each course version to the evidence that prompted a change, the human decision that followed, and the results observed in the next learning cycle.**
 
-> **Generate** — A Tavily research agent queries academic, video, and news sources before any content is written. Bloom's Taxonomy alignment, Krashen's i+1 difficulty progression, and Cognitive Load Theory are built into the generation pipeline, so the curriculum structure is grounded in how learning actually works. No hallucinated citations.
+Most learning platforms show what happened once: completion, time spent, scores, or feedback. Plot Ark is built for the question that comes next:
 
-> **Track** — Every student interaction produces xAPI statements. A 5-node A2A multi-agent pipeline (BehaviorAnalyst · RiskDetector · ContentOptimizer · CohortComparator) analyzes engagement patterns, flags at-risk learners, and surfaces underperforming modules — with a full analytics dashboard and exportable reports.
+> **We changed the course. Did it actually get better?**
 
-> **Optimize** — The Curriculum Agent translates analytics findings into targeted module edits. Instructors review each suggestion with a before/after preview and approve or reject changes individually. Approved edits feed back into the next xAPI data cycle — the loop closes.
+Plot Ark keeps that answer traceable across repeated analysis runs:
 
-> **Personalize** — Students build learning profiles with discipline preferences, multi-character persona sets with relationship-mapped narrative anchors, and custom AI instructions. A configurable Agent Team (18 preset models + custom model support across 9 providers) lets users choose their own LLM stack. A template-driven diagnosis engine provides gentle, one-sentence concept-gap guidance — no scores, no rankings, just a map of where to look next.
+1. collect course structure, learner behavior, and learner voice;
+2. diagnose where learning friction is concentrated;
+3. let a human accept, reject, or revise the recommendation;
+4. persist the evidence and decision in long-term memory (LTM);
+5. compare the next course version and cohort against the earlier run.
 
-> **Transfer to workplace learning** — Enterprise Admins can explore a synthetic compliance-training diagnosis that joins content structure, LMS-style spreadsheet evidence, and Plot Ark's four-state Learner Pulse. Enterprise Users receive a private, non-ranking pulse interface. The current Enterprise workspace is a frontend product preview; real SCORM parsing, CSV field mapping, uploads, and exports remain roadmap work.
+```mermaid
+flowchart LR
+    A[Course version] --> B[Learning evidence]
+    B --> C[Friction diagnosis]
+    C --> D[Human decision]
+    D --> E[(LTM snapshot)]
+    E --> F[Next course version]
+    F --> G[Next learning cycle]
+    G --> B
+```
 
----
+### Two workspaces, one improvement loop
 
-### 🆕 What's New (September 2026)
+| | Academic | Enterprise L&D |
+|---|---|---|
+| **Primary question** | Where are students struggling, and how should the course change? | Where does training lose people, and what should the next version fix? |
+| **People** | Professor / Student | Admin / User |
+| **Typical inputs** | Syllabus, course materials, xAPI events, concept annotations, student feedback | SCORM/PDF/PPTX/DOCX materials, LMS CSV/XLSX exports, Learner Pulse; xAPI optional |
+| **Evidence level** | Individual self-view plus privacy-safe cohort analysis | Cohort-level diagnosis; no employee ranking |
+| **Human control** | Instructor reviews curriculum suggestions | L&D owner reviews revision recommendations |
+| **Memory** | Analysis snapshots preserve course changes across teaching cycles | The same LTM model is intended to compare training versions and later business evidence |
+| **Current state** | Functional end-to-end backend and UI | Product preview with synthetic data; server-side ingestion and parsing are roadmap work |
 
-| Feature | Description |
-|---------|-------------|
-| 🏢 **Enterprise L&D Preview** | A new workplace-learning workspace demonstrates the full product story: connect training sources → diagnose learning friction → inspect the evidence chain → accept or reject revision suggestions. All included enterprise metrics and materials are clearly marked as synthetic demo data. |
-| 🔀 **Workspace-aware login** | Choose **Academic** (Professor / Student) or **Enterprise** (Admin / User) before signing in. Route guards keep both workspaces isolated; Enterprise Admin opens the diagnosis console while Enterprise User opens the Learner Pulse. |
-| 📦 **Practical source intake** | xAPI is optional. The preview starts with formats L&D teams already use: SCORM ZIP, PDF, PPTX, DOCX, XLSX, and CSV. The selector documents and validates preview limits (content: 10 files at 50 MB each; reports: 5 files at 25 MB each). Static SCORM extraction and server-side ingestion are not implemented yet. |
-| 🧭 **Evidence before automation** | Findings expose content structure, observed behavior, learner voice, and evidence strength; suggestions remain human-governed. Plot Ark states likely relationships without presenting them as proven causality. |
-
-### Earlier (July 2026)
-
-| Feature | Description |
-|---------|-------------|
-| 🪞 **Student Self-View (Mirror) Layer** | Students see their own behavioral data — a mirror, not a report card. **Attention footprint** overlays visited concepts on the knowledge graph (amber heat by visit depth, with a "Mastery / My footprint" fill toggle); **Learning Rhythm** renders a 7×24 heatmap of when you actually study, with pattern statements ("You tend to study most on Thursdays, usually around 9pm."). Pure SQL, zero LLM. Shades compare only against your own busiest hour — never against classmates. The institutional-scale port of [Cogito](https://github.com/Schlaflied/Cogito) Directions A & B. |
-| 🔍 **Look Back Card — a mirror you can veto** | On demand only — nothing appears until the student asks. Template pattern statements ("You came back to Legal Systems on 4 different days — revisiting is your brain asking to consolidate."), each with a **"Sounds like me / Not quite"** verdict button. *You decide if it's true — your answer stays with you.* Verdicts persist to a student-only LTM (`selfview_snapshots`) that no instructor endpoint can read — the only ground-truth signal in the system, reserved for future personalization. |
-| 🗂️ **My Courses, redesigned** | xAPI activity now counts as enrollment (not just feedback). Full-width flip cards — front: course name + mastery dots; back: labeled M1–Mn module bars with per-module tooltips. Keyword search across course names, codes, and module titles. |
-
-### Earlier (May 2026)
-
-| Feature | Description |
-|---------|-------------|
-| 🤖 **Multi-Model Agent Team** | 18 preset models across 9 providers (OpenAI, Anthropic, Google, DeepSeek, Mistral, xAI, Groq, MiniMax, GLM) + custom model support for any OpenAI-compatible API. ★ Recommended tags, MoE ⚠ architecture warnings, dynamic API key detection. |
-| 👤 **Student Profile System** | 4-tab profile (Profile, Customized Learning, My Progress, AI Settings) with avatar, discipline selector, CP/OC narrative anchors, multi-persona sets with relationship tags, and custom AI instructions. |
-| 🎓 **Professor Settings Portal** | Full settings page with profile, academic preferences (level, course type, session duration, design approach), custom AmberSelect dropdowns, model defaults, and prompt templates — all with auto-save. |
-| 🔐 **Per-Provider API Keys** | Bring your own key — dynamic key inputs appear only for providers currently in use. Fernet-encrypted storage on backend. |
-
----
-
-### 👥 Who Is This For?
-
-| Role | What You Get |
-|------|-------------|
-| **Instructors** | AI-generated course content grounded in pedagogy, xAPI analytics dashboard, three-layer HITL optimization suggestions, knowledge graph, exportable reports (PDF/DOCX/Excel/IMS) |
-| **Students** | Personalized learning profiles, one-sentence concept-gap diagnosis, narrative-anchored explanations (CP/OC), configurable AI model team, progress visualization, self-view mirror (attention footprint + learning rhythm — visible only to you) |
-| **Enterprise L&D Admins** | A content-observability preview for connecting training sources, reviewing cohort-level friction evidence, and governing next-version revision suggestions without replacing the LMS |
-| **Enterprise Learners** | A private four-state Learner Pulse that keeps “not reviewed” separate from misunderstanding and never ranks individual employees |
-| **Developers** | Modular Flask + React codebase, Hive-style A2A agent architecture, Docker one-command setup, extensible model routing via OpenAI-compatible SDK |
+The two workspaces are not separate products. They share the same core: **evidence → diagnosis → human decision → LTM → next version**.
 
 ---
 
-## 🧭 Design Philosophy
+## Explore Plot Ark
 
-Most EdTech AI tools treat artificial intelligence as a threat to be monitored — detecting whether students used AI, flagging "inauthentic" work, enforcing originality.
-
-Plot Ark takes the opposite position.
-
-**AI is a cognitive tool, not a threat.** A student who uses AI to draft an answer, then understands it, refines it, and can explain it in their own words — that student has learned. Copy-paste without comprehension is a student deceiving themselves, not a system to be policed.
-
-Plot Ark has no AI detection mechanism. It never will. The question it asks is not *"did you use AI?"* but *"did learning happen?"* — and it answers that through Bloom's Taxonomy alignment, i+1 difficulty progression, and xAPI learner behavior tracking.
-
-The curriculum engine itself is built the same way: AI generates the structure, pedagogy constrains the output, and the instructor stays in the loop. The tool thinks; the human decides.
-
-This system was built so that no one gets left behind by the system. The author was one of those people who were ignored by the system.
-
-Anthropic's Economic Index (Jan 2026) found r = 0.925 between prompt sophistication and response sophistication — the deeper you engage it, the deeper it responds.
-
-**The same principle runs through [Cogito](https://github.com/Schlaflied/Cogito)** — the author's personal-scale version of this problem. Cogito extracts git diffs and note content from a personal knowledge vault, embeds them semantically, and surfaces cognitive patterns the person wasn't aware of. xAPI is the same methodology at institutional scale: behavioral traces → semantic analysis → patterns formal records miss. A note is a final state. A diff is a decision. An xAPI statement is a moment of engagement. None of these are in the transcript.
+| Area | What it contains |
+|---|---|
+| [Academic workspace](docs/ACADEMIC.md) | Course generation, xAPI evidence, LightRAG knowledge graph, learner self-view, A2A diagnosis, LTM, and instructor-governed revision |
+| [Enterprise L&D workspace](docs/ENTERPRISE.md) | LMS/HCM-adjacent workflow, practical file inputs, Learner Pulse, privacy boundary, current preview, and planned ingestion backend |
+| [Full system architecture](ARCHITECTURE.md) | Page flows, services, database schema, privacy red lines, and project structure |
+| [Interactive landing page](https://schlaflied.github.io/Plot-Ark/) | Visual product overview and demos |
+| [Releases](https://github.com/Schlaflied/Plot-Ark/releases) | Version history and shipped changes |
 
 ---
-
-## 🎬 Demo
-
-**Course generation** — agentic source retrieval, syllabus import, and interactive module adjustment
-
-![Course generation](docs/Course%20generation.gif)
-
-**AI suggestion within course generation** — AI tutors and teaching suggestions directly within the curriculum editor
-
-![AI suggestion within course generation](docs/AI%20suggestion%20within%20course%20generation.gif)
-
-**Student panel with four buttons** — per-module sentiment collection feeding into the analytics loop
-
-![Student panel with four buttons](docs/Student%20panel%20with%20four%20buttons.gif)
-
-**xAPI student data analysis** — 5-node A2A agent pipeline simulating and detecting learner risk
-
-![xAPI student data analysis](docs/xAPI%20student%20data%20analysis.gif)
-
-**Curriculum agent & xAPI rerun** — human-in-the-loop module optimization based on learner data
-
-![Curriculum agent & xAPI rerun](docs/Curriculum%20agent%20%26%20xAPI%20rerun.gif)
-
-**Knowledge Graph RAG** — LightRAG extracts interconnected concepts from your syllabus PDFs into a visual, queryable force-directed network
-
-![LightRAG knowledge graph](docs/LightRAG%20knowledge%20graph.gif)
-
-▶ [Full demo video (Google Drive)](https://drive.google.com/file/d/14SLOJFImW9TqyyXipJL1wumkptir7WuU/view?usp=sharing)
-
-▶ [xAPI + A2A Analytics demo (Google Drive)](https://drive.google.com/file/d/1CVrWfrJ1gGUDf-VD1E9p443-7DKJs5MM/view?usp=drive_link)
-
----
-
-## ✨ Features
-
-<details>
-<summary><strong>🧠 Curriculum Generation</strong></summary>
-
-- **Agentic source research** — Tavily agent runs multi-type queries across academic (JSTOR, Springer, ResearchGate…), video (TED, Coursera, YouTube), and news (HBR, Economist, NYT) domains before generation begins
-- **Grounded citations** — verified real URLs injected into the prompt; sources panel shows full titles, type badges (📄/🎬/📰), and estimated read/watch time
-- **Structure self-check** — after generation, validates complexity_level progression and module count; auto-retries once if structure is invalid
-- **Bloom's Taxonomy alignment** — course code (e.g. ACCT 301) automatically maps to the correct cognitive level (Remember → Create)
-- **i+1 difficulty progression** — complexity_level increases across modules so each one builds on the last
-- **Cognitive Load constraints** — max 2 readings per module, each with explicit pedagogical rationale
-- **Course typology** — project-based, essay, debate/roleplay, lab/simulation, or mixed assessment formats
-- **SSE streaming** — content streams token-by-token; research agent status shown before generation starts
-- **Syllabus import** — upload PDF or DOCX; GPT extracts topic, course code, level, audience, module count, and required readings to pre-fill the form
-- **Course narrative** — a 2–3 sentence "story of the course" generated at the skeleton phase; professor-editable, student read-only
-
-</details>
-
-<details>
-<summary><strong>✏️ Module Editor</strong></summary>
-
-- **Single-card navigation** — left/right arrows through modules, or click the sidebar index
-- **Drag-and-drop reordering** — restructure the sequence without regenerating
-- **Inline editing** — edit every field across all three tabs (Objectives, Resources, Assessment)
-- **Add / remove items** — learning objectives, readings, assignments all editable
-- **Resource cards** — each reading shows type badge, estimated time, and links directly to the source
-- **LocalStorage persistence** — edits survive page refresh
-- **Course narrative editing** — professor can edit the course-level narrative inline; students see read-only version
-
-</details>
-
-<details>
-<summary><strong>📦 Export</strong></summary>
-
-- **IMS Common Cartridge (.imscc)** — direct import into Canvas, Moodle, D2L
-- **PDF export** — client-side jsPDF; readings listed as inline titles per module, full citations collected in a References section at the end
-- **DOCX export** — python-docx backend; same structure as PDF
-- **Markdown export** — full curriculum with readings and assignments as a .md file
-- **Citation format selector** — APA / MLA / Chicago, applied across all export formats
-- **Copy to clipboard** — paste into any editor
-
-</details>
-
-<details>
-<summary><strong>🕸️ Knowledge Graph (LightRAG)</strong></summary>
-
-- **Material ingestion** — right-side panel always visible; drag-and-drop PDF/PPTX upload (max 15 files, 50MB each); per-file progress tracking; Build Graph button triggers LightRAG ingestion
-- **Undergraduate year sidebar** — Year 1–4 + All Courses navigation; courses organized by academic year
-- **Course management** — course banner with pill navigation per year; add/delete/rename/drag-reorder course pills; each course has an editable full name tag; changes auto-saved to localStorage
-- **Dynamic subject tabs** — add/delete/rename/drag-reorder subject tabs; tab state persists across sessions
-- **Force-directed visualization** — interactive 2D graph with dual-channel color encoding: **fill color = mastery level** (green/yellow/red/gray), **border color = knowledge layer** (amber=Core, purple=Supplementary, blue=Student Notes); node size scales with connection count
-- **Mastery overlay** — concept mastery derived from xAPI verbs + student feedback; synced automatically after every xAPI analysis run; all untracked concepts shown as unified gray ("Not Learned")
-- **Node detail panel** — click any concept to see its definition and connection count
-- **Fullscreen mode** — fullscreen toggle with ESC key support
-- **Course search** — search courses by name or code across all years; auto-navigates to correct year
-- **Concept search** — filter and highlight matching nodes across the graph
-- **Knowledge query** — ask natural language questions against the graph; Redis-cached answers (persistent cache)
-- **Query history** — starred + deletable history of past questions with subject tags
-- **Persistent event loop** — LightRAG async engine runs on a dedicated background thread; no cold-start penalty after first query
-
-</details>
-
-<details>
-<summary><strong>👤 Student Profile & AI Settings</strong></summary>
-
-- **4-tab profile** — Profile (avatar + display name), Customized Learning, My Progress, AI Settings
-- **Discipline selector** — 5 academic disciplines (Humanities, Social Science, Business, STEM, Health Science) with dynamic example switching; STEM surfaces derivation-focused pedagogy
-- **Multi-persona sets** — define multiple character groups with per-character gender, personality descriptions, fandom, relationship tags (Trust, Rivalry, Mentorship, etc.), and linked courses; collapsible panels with default group starring
-- **CP/OC narrative system** — students define character pairs (Coupling & Original Character); LLM uses relationship dynamics as semantic anchors for concept explanations
-- **My Progress** — color-block mastery overview per course (green/yellow/red/gray); zero numeric values displayed (UX red line)
-- **Custom AI instructions** — persistent `custom_prompt` field for students to provide context to the LLM ("I learn best with real-world examples")
-- **Prompt ideas library** — clickable example prompts that append directly to the textarea with one click
-- **Auto-save** — debounced 800ms save for all profile fields via `PUT /api/profile`
-- **One-sentence diagnosis** — template-driven engine (`student_diagnosis.py`) generates gentle concept-gap guidance per course; warm amber/green card on CoursePage with "Jump to Module" navigation
-- **Privacy red lines** — no numeric scores, no class comparisons, no rankings; professors cannot see student profiles
-
-</details>
-
-<details>
-<summary><strong>🤖 Multi-Model Agent Team (NEW)</strong></summary>
-
-- **18 preset models** across 9 providers: OpenAI (GPT-4o, GPT-4o Mini), Anthropic (Sonnet 4.6, Haiku 4.5, Opus 4.7), Google (Gemini 2.5 Flash, Gemini 3 Flash), DeepSeek (V3, R1), Mistral (Large, Small), xAI (Grok 3, Grok 3 Mini), Groq (Llama 3.3 70B), MiniMax (MiniMax-01), GLM/Zhipu (GLM-4 Flash, GLM-4 Plus)
-- **3 agent roles** — 🧠 Primary Explainer, 🔍 Fact Checker, 📝 Style Adapter; each with independent model selection
-- **★ Recommended tags** — dense architecture models marked as recommended for Explainer role
-- **⚠ MoE warnings** — Mixture-of-Experts models show architecture warning on Explainer role ("may produce inconsistent structured output")
-- **Custom model support** — `+ Add custom model` at dropdown bottom; configure name, model_id, base_url, API key, and cost for any OpenAI-compatible endpoint (Ollama, vLLM, local deployments)
-- **Dynamic API keys** — key input fields appear only for providers currently selected; per-provider required/not-used indicators
-- **Cost estimation** — per-role `~$X.XX/gen` and total `💰 Estimated cost per generation` bar
-- **Fernet-encrypted storage** — API keys encrypted at rest; GET returns masked values (`••••••••xxxx`)
-
-</details>
-
-<details>
-<summary><strong>🎓 Professor Settings Portal (NEW)</strong></summary>
-
-- **Profile** — avatar, display name, multi-select disciplines, multi-select delivery modes, auto-save with sidebar sync
-- **Academic Preferences** — default level (14 grouped options), course type, session duration, design approach, export format; all using custom AmberSelect dropdowns matching the P2 design system
-- **Model Defaults** — same ModelSelectionCard as student side; configures course-level default models for the Agent Team
-- **Prompt Templates** — custom AI instructions for course generation with clickable idea library
-- **Unified auto-save** — 600ms debounce across all fields with visual save status indicators
-
-</details>
-
-<details>
-<summary><strong>🤖 A2A Multi-Agent Analytics</strong></summary>
-
-- **5-node pipeline** — `Orchestrator → [BehaviorAnalyst ‖ RiskDetector ‖ ContentOptimizer ‖ CohortComparator] → aggregate → LTM snapshot`. All agents are currently sql-only (Phase 2 = LLM integration pending).
-- **PII anonymisation** — student names/emails are anonymised before agent processing; real identities are restored only in the final aggregated report for the professor.
-- **xAPI mock data engine** — 4 noise levels (5%/10%/15%/20%) seeded from frontend UI; realistic 6-week timestamp distribution with `HOUR_WEIGHTS` and profile-based student spread (high_performer / average / struggling / disengaged). **Curriculum-aware**: queries `change_log` for applied modules and uses `IMPROVED_VERB_DIST` to simulate realistic post-optimization improvement.
-- **Hive-style node architecture** — each agent inherits `BaseNode` with reflexion/retry (max 3), L3 JSON Schema validation, and SQL fallback
-- **SharedMemory (Redis)** — agents communicate through Redis-backed shared memory (`a2a:{session_id}:{key}`) with local dict fallback
-- **Token usage tracking** — `NodeResult` carries `tokens_in / tokens_out / tokens_cache_read / tokens_cache_write`. Orchestrator prints a token summary table to backend log after each run; report JSON includes a `token_summary` block. Frontend sidebar shows a Token Usage panel (currently all zero — sql-only Phase 1).
-- **LTM 3-layer architecture** — Hot (Redis, pipeline runtime), Warm (PostgreSQL `course_analysis_snapshots`, persisted per-run), Cold (`data/ltm/*.md` YAML+Markdown, versioned with course codes)
-- **Historical trend visualization** — `TrendChart.tsx` (pure SVG) shows at-risk % and completion rate over time; mini mode + full-screen modal with date labels, larger data points, and summary stat cards
-- **SSE real-time streaming** — analysis progress streams via Server-Sent Events; frontend shows live agent status
-- **Student Data dashboard** — dedicated full-page analytics view with resizable sidebar, section navigation, noise-level selector, and Token Usage panel
-- **Risk detection** — 6 signals; thresholds: medium ≥ 4, high ≥ 7; inactivity windows: 14 / 21 days
-- **Cohort comparison** — students grouped into high_performers / average / at_risk / disengaged with avg completion and struggle rates
-- **6-section report export** — PDF (Anthropic-style cover), DOCX, Excel. Sections: Behavior Analysis, Risk Assessment, Content Optimization, Cohort Comparison, **Analysis History** (table + matplotlib trend chart), Overview & Recommended Actions. Filenames include course slug + noise label.
-
-</details>
-
-<details>
-<summary><strong>🎯 Curriculum Agent — Agentic Curriculum Optimization</strong></summary>
-
-- **Three-layer HITL design** — suggestions are classified into three action tiers based on signal severity and change scope:
-  - **Layer 1 — Objectives (AI applies directly)**: amber badge; one-click Apply writes updated learning objectives + reduces complexity_level; before/after confirmation modal; Redo restores original
-  - **Layer 2 — References (human-triggered search)**: violet badge; "Search References" button fires a Tavily query against module objectives, returns deduplicated candidates (domain-level dedup vs existing readings); professor selects and adds references directly to `recommended_readings`
-  - **Layer 3 — Assignments (AI alert only)**: blue badge; read-only info box summarizing what changed and what the professor should manually review; no Apply button — professor decides
-- **Professor Notification Bar** — persistent amber bar on CoursePage alerts professors when suggestions are available, with "Dismiss" and "Review →" buttons
-- **Professor Slide-out Drawer** — clicking "Review" opens a 400px drawer with Pending Suggestions (Apply/Search) and Applied Changes (Redo) sections grouped by layer badge
-- **Student Notification Bar** — blue bar shows "N modules updated — based on instructor optimization" with Dismiss and Review buttons
-- **Student Slide-out Drawer** — clicking "Review" opens a blue-themed drawer listing updated modules with "Go to Module" navigation buttons
-- **Draggable Floating Action Button (FAB)** — after dismissing either banner, a draggable floating ball (🤖 amber / ✨ blue) appears at bottom-right; click opens the drawer directly without restoring the banner; hover reveals ✕ to permanently dismiss; supports free-drag to any screen position
-- **Auto-analyze on generation** — every new course triggers a background structural analysis immediately after save; generates all three change_type entries so suggestions are ready without waiting for an xAPI run
-- **Redo (Undo Apply)** — applied changes store original module data as backup; clicking "Redo" restores the module to its pre-apply state and moves the suggestion back to Pending
-- **Module Flags** — `module_flags` table stores flagged modules with signal sources, flag levels (yellow / orange), and detailed metrics
-- **Change Log** — `change_log` table records all recommendations with `change_type` (objective_update / reference_suggestion / assignment_alert), status tracking (pending → applied → dismissed), and backup_data for redo
-- **Analytics redirect** — "View Full Analytics →" in the professor drawer navigates to the Student Data analytics page
-
-</details>
-
-<details>
-<summary><strong>📦 Export Formats</strong></summary>
-
-- **IMS Common Cartridge (.imscc)** for LMS integration (Canvas, Moodle, D2L).
-- **PDF, DOCX, and Markdown** with dynamically formatted citations (APA/MLA/Chicago).
-
-</details>
 
 ## 🏗️ Architecture
-
 **System Architecture**
 
 ```

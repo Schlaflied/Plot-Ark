@@ -1,6 +1,6 @@
 [English](README.md) | 中文
 
-# Plot Ark — 生成 · 追踪 · 优化
+# Plot Ark — 观察 · 记忆 · 改进
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![GitHub stars](https://img.shields.io/github/stars/Schlaflied/Plot-Ark?style=social&cacheSeconds=1)](https://github.com/Schlaflied/Plot-Ark/stargazers)
@@ -27,264 +27,60 @@
   👉 <a href="https://schlaflied.github.io/Plot-Ark/">访问精美的互动式官方主页</a> 👈
 </h3>
 
-**一款开源的主动式课程与学习内容可观测平台。Plot Ark 在学术双端（教授 + 学生）之外新增 Enterprise L&D Preview，将课程结构、学习证据与人在回路的修改决策连接起来，并且不再把 xAPI 作为企业使用的起点。**
+**Plot Ark 是一套开源的课程改进长期记忆系统。它把每一版课程、促成修改的学习证据、人的最终决定，以及下一轮学习结果连接起来。**
 
-> **生成（Generate）** — Tavily 研究 Agent 在内容生成前检索经验证的学术、视频与新闻来源。布鲁姆认知分类法、Krashen 的 i+1 难度递进和认知负荷理论内置于生成流水线，确保课程结构符合真实学习规律。不会出现幻觉引用。
+大多数学习平台只能展示一次结果：完成率、学习时长、分数或反馈。Plot Ark 想回答的是后面那个更重要的问题：
 
-> **追踪（Track）** — 学生的每一次交互均生成 xAPI 语句。一条 5 节点 A2A 多 Agent 流水线（行为分析师 · 风险检测器 · 内容优化器 · 群组对比器）分析学习参与模式、标记高风险学习者、识别表现欠佳的模块，并提供完整的分析仪表板与可导出报告。
+> **我们改了课程。它后来真的变好了吗？**
 
-> **优化（Optimize）** — 课程 Agent 将分析结果转化为具体的模块修改建议。教师通过修改前后对比预览逐一审阅并批准或拒绝每条 AI 建议。已批准的修改回流至下一轮学习数据周期——闭环完成。
+Plot Ark 会在多轮分析之间保存完整线索：
 
-> **个性化（Personalize）** — 学生可以建立学习画像：学科偏好、多角色人设组（含关系映射的叙事锚点）、自定义 AI 指令。可配置 Agent 团队（18 个预设模型 + 自定义模型，覆盖 9 家 provider）让用户自选 LLM 组合。模板驱动的诊断引擎提供温和的一句话概念差距指引——无分数、无排名，只有"去哪里看"的地图。
+1. 收集课程结构、学习行为与学习者反馈；
+2. 找出学习摩擦集中在哪里；
+3. 由人接受、拒绝或调整修改建议；
+4. 将证据与决定存入长期记忆（LTM）；
+5. 在下一版课程和下一轮学习数据出现后，与之前的结果进行比较。
 
-> **迁移到企业学习（Workplace Learning）** — Enterprise Admin 可以体验一个合成的合规培训诊断：将内容结构、LMS 风格表格证据与 Plot Ark 四状态 Learner Pulse 连接起来；Enterprise User 则进入私密、无排名的反馈界面。当前企业工作区仍是前端产品预览，真实 SCORM 解析、CSV 字段映射、后端上传和导出仍属于路线图。
+```mermaid
+flowchart LR
+    A[当前课程版本] --> B[学习证据]
+    B --> C[学习摩擦诊断]
+    C --> D[人的修改决定]
+    D --> E[(LTM 长期记忆)]
+    E --> F[下一版课程]
+    F --> G[下一轮学习]
+    G --> B
+```
 
----
+### 两个工作区，同一个改进循环
 
-### 🆕 最近更新（2026 年 9 月）
+| | Academic 高校版 | Enterprise 企业 L&D 版 |
+|---|---|---|
+| **核心问题** | 学生卡在哪里，课程应该怎么改？ | 培训在哪些地方流失学习者，下一版应该修什么？ |
+| **角色** | Professor / Student | Admin / User |
+| **常见输入** | 教学大纲、课程资料、xAPI 行为、概念标注、学生反馈 | SCORM/PDF/PPTX/DOCX 资料、LMS CSV/XLSX 报表、Learner Pulse；xAPI 可选 |
+| **证据层级** | 学生私密自见 + 隐私安全的班级分析 | 群组级诊断，不对员工个人排名 |
+| **人的控制** | 教师审核课程修改建议 | L&D 负责人审核培训修改建议 |
+| **长期记忆** | 保存跨学期的课程分析与修改记录 | 使用同一套 LTM 比较培训版本，并为以后连接业务结果保留基础 |
+| **当前状态** | 后端与界面已经形成完整闭环 | 使用合成数据的产品预览；服务端摄取与解析仍在路线图中 |
 
-| 功能 | 说明 |
-|------|------|
-| 🏢 **Enterprise L&D Preview** | 新增职场学习工作区，演示完整产品叙事：连接培训资料 → 诊断学习摩擦 → 查看证据链 → 接受或拒绝修改建议。企业指标与材料均明确标记为合成演示数据。 |
-| 🔀 **工作区登录分流** | 登录前选择 **Academic**（Professor / Student）或 **Enterprise**（Admin / User）。路由权限隔离两个工作区；Enterprise Admin 进入诊断台，Enterprise User 进入 Learner Pulse。 |
-| 📦 **现实的数据入口** | xAPI 为可选项。预览版从 L&D 已有格式开始：SCORM ZIP、PDF、PPTX、DOCX、XLSX、CSV。选择器会显示并校验预览限制（内容：最多 10 份、每份 50 MB；报表：最多 5 份、每份 25 MB）。静态 SCORM 提取与服务端摄取尚未实现。 |
-| 🧭 **证据先于自动化** | 诊断明确展示内容结构、观察行为、学习者声音和证据强度；建议始终由人审批。Plot Ark 会把先修问题标为“可能关系”，而不是宣称已经证明因果。 |
-
-### 更早（2026 年 7 月）
-
-| 功能 | 说明 |
-|------|------|
-| 🪞 **学生自见层（镜子层）** | 学生看见自己的行为数据——是镜子，不是成绩单。**注意力足迹**将去过的概念叠加在知识图谱上（琥珀色热度随访问深度加深，"Mastery / My footprint" 填色切换）；**学习节律**以 7×24 热力图呈现你真实的学习时间，配模式陈述（"你通常在周四晚 9 点左右学习最多"）。纯 SQL 零 LLM。色深只与你自己最忙的时段比较——永远不与同学比较。这是 [Cogito](https://github.com/Schlaflied/Cogito) Direction A & B 方法论的机构规模移植。 |
-| 🔍 **回望卡——可以被否决的镜子** | 只在学生主动点击时出现。模板化模式陈述（"你在 Legal Systems 上回访了 4 天——回访是大脑在要求巩固"），每条配 **"像我 / 不太像"** 投票按钮。*真不真由你决定——你的回答只属于你。* 投票持久化到学生专属 LTM（`selfview_snapshots`），任何教授端点永远读不到——这是全系统唯一的 ground truth 信号，留给未来的个性化。 |
-| 🗂️ **My Courses 改版** | xAPI 学习行为即算 enrolled（不再只认 feedback）。全宽翻转卡片——正面：课程名 + 掌握度圆点；背面：带标注的 M1–Mn 模块条 + 逐模块 tooltip。关键词搜索覆盖课程名、课号、模块标题。 |
-
-### 更早（2026 年 5 月）
-
-| 功能 | 说明 |
-|------|------|
-| 🤖 **多模型 Agent 团队** | 9 家 provider 的 18 个预设模型（OpenAI、Anthropic、Google、DeepSeek、Mistral、xAI、Groq、MiniMax、GLM）+ 自定义模型支持任意 OpenAI 兼容 API。★ 推荐标签、MoE ⚠ 架构警告、动态 API Key 检测。 |
-| 👤 **学生画像系统** | 4 标签页画像（Profile、Customized Learning、My Progress、AI Settings），含头像、学科选择、CP/OC 叙事锚点、多角色人设组（含关系标签）、自定义 AI 指令。 |
-| 🎓 **教授设置门户** | 完整设置页：个人信息、学术偏好（难度级别、课程类型、课时、教学设计、导出格式）、自定义 AmberSelect 下拉、模型默认值、Prompt 模板——全部自动保存。 |
-| 🔐 **按 Provider 的 API Key** | 自带密钥——仅显示当前使用的 provider 的密钥输入框。后端 Fernet 加密存储。 |
-
----
-
-### 👥 目标用户
-
-| 角色 | 你将获得 |
-|------|---------|
-| **教师** | 基于教学理论的 AI 课程生成、xAPI 分析仪表板、三层人在回路优化建议、知识图谱、可导出报告（PDF/DOCX/Excel/IMS） |
-| **学生** | 个性化学习画像、一句话概念差距诊断、叙事锚定解释（CP/OC）、可配置 AI 模型团队、进度可视化、自见镜子层（注意力足迹 + 学习节律——只有你自己可见） |
-| **企业 L&D 管理员** | 在不替换现有 LMS 的前提下连接培训资料、查看群组级学习摩擦证据，并审核下一版本的内容修改建议 |
-| **企业学习者** | 私密的四状态 Learner Pulse，将“尚未学习”与“不理解”分开，并且不对员工个人排名 |
-| **开发者** | 模块化 Flask + React 代码库、Hive 风格 A2A Agent 架构、Docker 一键启动、通过 OpenAI 兼容 SDK 的可扩展模型路由 |
+高校版和企业版不是两套产品。它们共用同一个核心：**证据 → 诊断 → 人的决定 → LTM → 下一版本**。
 
 ---
 
-## 🧭 设计理念
+## 进一步了解 Plot Ark
 
-大多数 EdTech AI 工具将人工智能视为需要监控的威胁——检测学生是否使用了 AI，标记"非原创"作品，强制要求原创性。
-
-Plot Ark 持完全相反的立场。
-
-**AI 是认知工具，不是威胁。** 一个用 AI 起草答案、然后真正理解它、完善它、并能用自己的语言解释它的学生——这个学生学到了东西。不加理解地复制粘贴，是学生在欺骗自己，而不是需要被系统惩罚的问题。
-
-Plot Ark 没有 AI 检测机制，也永远不会有。它问的不是"你用了 AI 吗？"，而是"学习发生了吗？"——并通过布鲁姆认知分类法对齐、i+1 难度递进和 xAPI 学习行为追踪来回答这个问题。
-
-课程引擎本身也遵循同样的逻辑：AI 生成结构，教学理论约束输出，教师始终掌握最终决策权。工具负责思考；人负责决定。
-
-这个系统的设计初衷，是让没有人被系统漏掉。作者本人，就是那个曾经被漏掉的人。
-
-Anthropic 经济指数报告（2026年1月）发现，prompt 复杂度与回复复杂度之间的相关系数 r = 0.925 —— 你投入的思考越深，它给出的回应越深。
-
-**同样的方法论贯穿于 [Cogito](https://github.com/Schlaflied/Cogito)** —— 作者对这个问题的个人规模版本。Cogito 从个人知识库中提取 git diff 和笔记内容，进行语义嵌入，浮现出本人未曾意识到的认知模式。xAPI 是同一套方法论在机构规模上的实现：行为痕迹 → 语义分析 → 正式记录遗漏的模式。笔记是最终状态。diff 是一次决定。xAPI 语句是一个参与的瞬间。这些都不在成绩单上。
+| 内容 | 包含什么 |
+|---|---|
+| [Academic 高校工作区](docs/ACADEMIC.zh.md) | 课程生成、xAPI 证据、LightRAG 知识图谱、学生自见、A2A 诊断、LTM 与教师审核修改 |
+| [Enterprise 企业 L&D 工作区](docs/ENTERPRISE.zh.md) | LMS/HCM 旁路工作流、现实文件入口、Learner Pulse、隐私边界、当前预览和计划中的摄取后端 |
+| [完整系统架构](ARCHITECTURE.zh.md) | 页面数据流、服务、数据库 Schema、隐私红线和项目结构 |
+| [互动式官方主页](https://schlaflied.github.io/Plot-Ark/) | 产品视觉介绍与演示 |
+| [版本发布记录](https://github.com/Schlaflied/Plot-Ark/releases) | 已发布版本与变更历史 |
 
 ---
-
-## 🎬 演示
-
-**课程生成 (Course generation)** — 主动式信源检索、大纲导入与交互式模块调整
-
-![Course generation](docs/Course%20generation.gif)
-
-**生成过程中的 AI 建议 (AI suggestion)** — 将 AI 助教与教学建议直接嵌入课程编辑器
-
-![AI suggestion within course generation](docs/AI%20suggestion%20within%20course%20generation.gif)
-
-**带四按钮的学生面板 (Student panel)** — 每模块情绪收集，数据回流到分析闭环
-
-![Student panel with four buttons](docs/Student%20panel%20with%20four%20buttons.gif)
-
-**xAPI 学生数据分析 (Data analysis)** — 5 节点 A2A 分析流水线，模拟并检测学习者预警风险
-
-![xAPI student data analysis](docs/xAPI%20student%20data%20analysis.gif)
-
-**课程 Agent 与 xAPI 重演 (Curriculum agent & xAPI rerun)** — 基于学习者数据的、人在回路的模块内容优化
-
-![Curriculum agent & xAPI rerun](docs/Curriculum%20agent%20%26%20xAPI%20rerun.gif)
-
-**知识图谱 RAG (Knowledge Graph RAG)** — LightRAG 从大纲 PDF 中抽取相互关联的概念，构建可视化、可查询的力导向知识网络
-
-![LightRAG knowledge graph](docs/LightRAG%20knowledge%20graph.gif)
-
-▶ [完整演示视频（Google Drive）](https://drive.google.com/file/d/14SLOJFImW9TqyyXipJL1wumkptir7WuU/view?usp=sharing)
-
-▶ [xAPI + A2A 分析演示视频（Google Drive）](https://drive.google.com/file/d/1CVrWfrJ1gGUDf-VD1E9p443-7DKJs5MM/view?usp=drive_link)
-
----
-
-## ✨ 功能特性
-
-<details>
-<summary><strong>🧠 课程生成</strong></summary>
-
-- **主动式信源检索** — Tavily Agent 在生成前跨多种领域发起检索：学术（JSTOR、Springer、ResearchGate…）、视频（TED、Coursera、YouTube）以及新闻（HBR、Economist、NYT）
-- **可信引用** — 经验证的真实 URL 直接注入提示词；信源面板显示完整标题、类型标签（📄/🎬/📰）及预计阅读/观看时长
-- **结构自检** — 生成完成后自动验证 complexity_level 递进关系与模块数量；结构无效时自动重试一次
-- **布鲁姆认知分类法对齐** — 课程代码（如 ACCT 301）自动映射到对应认知层级（记忆 → 创造）
-- **i+1 难度递进** — complexity_level 在各模块间递增，每个模块都建立在前一个基础之上
-- **认知负荷约束** — 每个模块最多 2 篇阅读材料，每篇均附有明确的教学理论依据
-- **课程类型** — 支持项目制、论文、辩论/角色扮演、实验/模拟，或混合评估形式
-- **SSE 流式生成** — 内容逐 token 流式输出；生成开始前显示研究 Agent 状态
-- **大纲导入** — 上传 PDF 或 DOCX；GPT 自动提取主题、课程代码、难度级别、目标受众、模块数量及必读材料，预填充表单
-- **课程叙事** — 在骨架生成阶段自动生成 2–3 句话的"课程故事"；教授可编辑，学生只读
-
-</details>
-
-<details>
-<summary><strong>✏️ 模块编辑器</strong></summary>
-
-- **单卡片导航** — 左右箭头逐模块切换，或点击侧边栏索引直接跳转
-- **拖拽排序** — 无需重新生成即可调整模块顺序
-- **内联编辑** — 三个标签页（学习目标、资源、评估）中的每个字段均可直接编辑
-- **增删条目** — 学习目标、阅读材料、作业均可自由增删
-- **资源卡片** — 每条阅读材料展示类型标签、预计时长，并直接链接到原始信源
-- **LocalStorage 持久化** — 编辑内容在页面刷新后仍然保留
-- **课程叙事编辑** — 教授可直接内联编辑课程级别的叙事文本；学生端仅展示只读版本
-
-</details>
-
-<details>
-<summary><strong>📦 导出</strong></summary>
-
-- **IMS Common Cartridge（.imscc）** — 可直接导入 Canvas、Moodle、D2L
-- **PDF 导出** — 客户端 jsPDF；每模块显示阅读材料标题，完整引用汇总至结尾 References 部分
-- **DOCX 导出** — python-docx 后端；结构与 PDF 导出一致
-- **Markdown 导出** — 将含阅读材料与作业的完整课程导出为 .md 文件
-- **引用格式选择器** — APA / MLA / Chicago，适用于所有导出格式
-- **复制到剪贴板** — 一键粘贴到任意编辑器
-
-</details>
-
-<details>
-<summary><strong>🕸️ 知识图谱（LightRAG）</strong></summary>
-
-- **材料导入面板** — 右侧常驻面板；拖拽上传 PDF/PPTX（最多 15 个文件，每个 50MB）；逐文件进度追踪；Build Graph 按钮触发 LightRAG 导入
-- **学年侧边栏** — Year 1–4 + All Courses 导航；课程按学年分类展示
-- **课程管理** — 每个学年有课程横幅与 pill 导航；支持增删/重命名/拖拽排序 course pill；每门课有可编辑的完整课程名标签；修改自动保存至 localStorage
-- **动态学科标签页** — 支持增删/重命名/拖拽排序学科标签；标签状态跨 session 持久化
-- **力导向可视化** — 交互式 2D 图谱，双通道颜色编码：**填充色 = 掌握度**（绿/黄/红/灰），**描边色 = 知识层级**（琥珀=Core、紫=Supplementary、蓝=Student Notes）；节点大小随连接数缩放
-- **掌握度叠加层** — 概念掌握度由 xAPI 动词 + 学生反馈推导；每次 xAPI 分析后自动同步；无数据概念统一显示为灰色（"Not Learned"）
-- **节点详情面板** — 点击任意概念节点查看其定义与连接数
-- **全屏模式** — 全屏切换，支持 ESC 键退出
-- **课程搜索** — 按名称或课程代码跨学年搜索；自动定位到对应学年
-- **概念搜索** — 在图谱中筛选并高亮匹配节点
-- **知识查询** — 用自然语言对图谱提问；Redis 缓存答案（持久化缓存）
-- **查询历史** — 可收藏和删除的历史记录，附学科标签
-- **持久事件循环** — LightRAG 异步引擎运行于独立后台线程；首次查询后不再有冷启动延迟
-
-</details>
-
-<details>
-<summary><strong>👤 学生画像与 AI 设置</strong></summary>
-
-- **4 标签页画像** — Profile（头像 + 显示名）、Customized Learning、My Progress、AI Settings
-- **学科选择器** — 5 个学术领域（人文、社科、商科、STEM、健康科学），动态示例切换；STEM 自动突出推导类教学法
-- **多角色人设组** — 定义多组角色对，每组含性别、性格描述、fandom、关系标签（信任、对抗、师徒等）及关联课程；可折叠面板 + 默认组收藏
-- **CP/OC 叙事系统** — 学生定义角色对（Coupling & Original Character）；LLM 使用关系动态作为概念解释的语义锚点
-- **My Progress** — 按课程显示颜色块掌握度（绿/黄/红/灰）；不显示任何数值（UX 红线）
-- **自定义 AI 指令** — 持久化 `custom_prompt` 文本框，学生可以为 LLM 提供学习偏好上下文
-- **Prompt 灵感库** — 可点击的示例 prompt，一键追加到文本框
-- **自动保存** — 800ms 防抖保存所有画像字段
-- **一句话诊断** — 模板驱动引擎（`student_diagnosis.py`）生成温和的概念差距指引；CoursePage 内琥珀/绿色诊断卡片 + "Jump to Module" 导航
-- **隐私红线** — 无数值分数、无班级对比、无排名；教授不可查看学生画像
-
-</details>
-
-<details>
-<summary><strong>🤖 多模型 Agent 团队（新功能）</strong></summary>
-
-- **18 个预设模型**，覆盖 9 家 provider：OpenAI（GPT-4o、GPT-4o Mini）、Anthropic（Sonnet 4.6、Haiku 4.5、Opus 4.7）、Google（Gemini 2.5 Flash、Gemini 3 Flash）、DeepSeek（V3、R1）、Mistral（Large、Small）、xAI（Grok 3、Grok 3 Mini）、Groq（Llama 3.3 70B）、MiniMax（MiniMax-01）、GLM/智谱（GLM-4 Flash、GLM-4 Plus）
-- **3 个 Agent 角色** — 🧠 主讲解员、🔍 事实核查员、📝 风格适配器；各自独立选模型
-- **★ 推荐标签** — Dense 架构模型在 Explainer 角色标记为推荐
-- **⚠ MoE 警告** — MoE 模型在 Explainer 角色显示架构警告（"可能产生不一致的结构化输出"）
-- **自定义模型** — 下拉底部 `+ Add custom model`；配置名称、model_id、base_url、API Key、成本，支持任意 OpenAI 兼容端点（Ollama、vLLM、本地部署）
-- **动态 API Key** — 仅显示当前选用 provider 的密钥输入框；逐 provider 显示 required / not used
-- **成本估算** — 每角色 `~$X.XX/gen` + 总计 `💰 Estimated cost per generation` 条
-- **Fernet 加密存储** — API Key 静态加密；GET 返回掩码值（`••••••••xxxx`）
-
-</details>
-
-<details>
-<summary><strong>🎓 教授设置门户（新功能）</strong></summary>
-
-- **个人信息** — 头像、显示名、多选学科、多选教学模式，自动保存并同步侧边栏
-- **学术偏好** — 默认难度级别（14 个分组选项）、课程类型、课时时长、教学设计方法、导出格式；全部使用自定义 AmberSelect 下拉组件
-- **模型默认值** — 与学生端相同的 ModelSelectionCard；配置 Agent 团队的课程级默认模型
-- **Prompt 模板** — 课程生成的自定义 AI 指令 + 可点击灵感库
-- **统一自动保存** — 所有字段 600ms 防抖 + 可视化保存状态指示器
-
-</details>
-
-<details>
-<summary><strong>🤖 A2A 多 Agent 分析系统</strong></summary>
-
-- **5 节点流水线** — `Orchestrator → [BehaviorAnalyst ‖ RiskDetector ‖ ContentOptimizer ‖ CohortComparator] → aggregate → LTM snapshot`。当前所有 Agent 均为 sql-only（Phase 2 = LLM 集成待开发）。
-- **PII 匿名化** — 学生姓名/邮箱在进入 Agent 前全部匿名化；真实身份仅在最终报告聚合后恢复，供教授查看。
-- **xAPI Mock 数据引擎** — 支持 4 种噪声级别（5%/10%/15%/20%），通过前端 UI 选择；基于 `HOUR_WEIGHTS` 的真实 6 周时间戳分布；按学生画像分布（高绩效/普通/挣扎/脱离）。**课程感知模式**：查询 `change_log` 表中已批准的模块，使用 `IMPROVED_VERB_DIST` 模拟优化后改善效果。
-- **Hive 风格节点架构** — 每个 Agent 继承 `BaseNode`，支持 reflexion/重试（最多 3 次）、L3 JSON Schema 校验、SQL Fallback
-- **SharedMemory (Redis)** — Agent 间通过 `a2a:{session_id}:{key}` 键名在 Redis 共享内存通信，支持本地 dict 降级
-- **Token 用量追踪** — `NodeResult` 携带 `tokens_in / tokens_out / tokens_cache_read / tokens_cache_write` 字段；Orchestrator 在每次运行后向后端日志打印 Token 汇总表。
-- **LTM 三层架构** — Hot（Redis，流水线运行时）、Warm（PostgreSQL `course_analysis_snapshots`，每次分析快照）、Cold（`data/ltm/*.md` YAML+Markdown，版本化归档）
-- **历史趋势可视化** — `TrendChart.tsx`（纯 SVG）显示 at-risk % 与 completion rate 随时间变化；迷你模式 + 全屏 Modal（日期标签、更大数据点、概览数据卡片）
-- **SSE 实时流式反馈** — 分析进度通过 Server-Sent Events 流式传输；前端实时显示 Agent 状态
-- **Student Data 仪表板** — 独立全页分析视图，可拖拽侧边栏、分区导航、噪声级别选择器、Token Usage 面板
-- **风险检测** — 6 个信号；阈值：中风险 ≥ 4，高风险 ≥ 7；不活跃窗口：14 / 21 天
-- **群组对比** — 学生分为 high_performers / average / at_risk / disengaged 四个群组，含平均完成率与困难率
-- **6 分区报告导出** — PDF（Anthropic 风格封面）、DOCX、Excel。包含：行为分析、风险评估、内容优化、群组对比、**分析历史**（表格 + matplotlib 趋势图）、总览与建议。文件名含课程 slug + 噪声标签。
-
-</details>
-
-<details>
-<summary><strong>🎯 课程 Agent — 主动式课程优化</strong></summary>
-
-- **三层人在回路（HITL）设计** — 建议按信号强度和变更范围分为三个操作层级：
-  - **第一层 — 学习目标（AI 直接改）**：琥珀色徽章；一键 Apply 写入更新后的 learning objectives 并降低 complexity_level；弹出修改前后对比确认框；支持 Redo 还原
-  - **第二层 — 参考资料（用户触发搜索）**：紫色徽章；”Search References”按钮基于模块学习目标调用 Tavily 搜索，返回去重候选项（按域名去重，排除已有 readings）；教授勾选后直接写入 `recommended_readings`
-  - **第三层 — 作业（AI 只提醒）**：蓝色徽章；只读提示框说明变更背景和建议教授手动核查的内容；没有 Apply 按钮，教授自行决定
-- **教授通知栏** — CoursePage 顶部琰琥色持久通知栏，当 AI 生成的课程建议可用时提醒教授，附带”Dismiss”和”Review →”按钮
-- **教授滑出抽屉** — 点击”Review”从右侧滑出 400px 建议抽屉，按徽章层级分组展示待处理建议（Apply / Search）与已应用变更（Redo）
-- **学生通知栏** — 蓝色横幅显示”N 个模块已更新 — 基于教师优化”，附带 Dismiss 和 Review 按钮
-- **学生滑出抽屉** — 点击”Review”打开蓝色主题抽屉，列出更新的模块并带有”Go to Module”导航按钮
-- **可拖拽悬浮球（FAB）** — 关闭通知栏后，右下角出现可拖拽的悬浮球（🤖 琰琥色 / ✨ 蓝色）；点击直接打开抽屉（不恢复 banner）；hover 显示 ✕ 可彻底关闭；支持自由拖拽到屏幕任意位置
-- **生成后自动分析** — 每门新课保存后立即触发后台结构分析，生成全部三种 change_type 建议条目，无需等待 xAPI 运行即可看到建议
-- **Redo（撤销 Apply）** — 应用的变更会备份原始模块数据；点击”Redo”恢复模块到应用前状态，并将建议移回待处理
-- **模块标记** — `module_flags` 表存储被标记的模块，包含信号来源、标记级别及详细指标
-- **变更日志** — `change_log` 表记录所有建议，含 `change_type` 字段（objective_update / reference_suggestion / assignment_alert）、状态追踪（pending → applied → dismissed）及 backup_data
-- **分析跳转** — 教授抽屉中的”View Full Analytics →”按钮直接导航到 Student Data 分析页面
-
-</details>
-
-<details>
-<summary><strong>📦 导出格式</strong></summary>
-
-- **IMS Common Cartridge (.imscc)** 无缝对接主流 LMS (Canvas, Moodle, D2L)。
-- **PDF、DOCX 及 Markdown** 并支持自适应引用格式切换 (APA/MLA/Chicago)。
-
-</details>
 
 ## 🏗️ 架构
-
 **系统架构**
 
 ```
