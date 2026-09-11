@@ -15,6 +15,8 @@ import SettingsPage from './pages/SettingsPage';
 import StudentProfilePage from './pages/StudentProfilePage';
 import LoginPage from './pages/LoginPage';
 
+const EnterprisePage = React.lazy(() => import('./pages/EnterprisePage'));
+
 // ─── Route guards ─────────────────────────────────────────────────────────────
 
 /** Requires a valid session. Professor-only routes redirect students to /courses. */
@@ -58,6 +60,19 @@ const AppRoutes: React.FC = () => {
       <Route path="/generate"     element={<ProtectedRoute element={<GeneratePage />}     professorOnly />} />
       <Route path="/student-data" element={<ProtectedRoute element={<StudentDataPage />}  professorOnly />} />
       <Route path="/settings"     element={<ProtectedRoute element={<SettingsPage />}     professorOnly />} />
+      <Route
+        path="/enterprise"
+        element={(
+          <ProtectedRoute
+            professorOnly
+            element={(
+              <React.Suspense fallback={<div className="min-h-screen bg-[#F6F4EF] p-8 text-sm text-stone-500">Loading Enterprise L&amp;D…</div>}>
+                <EnterprisePage />
+              </React.Suspense>
+            )}
+          />
+        )}
+      />
 
       {/* Student only */}
       <Route path="/profile"      element={<ProtectedRoute element={<StudentProfilePage />} studentOnly />} />

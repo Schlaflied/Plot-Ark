@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { Globe, Moon, Sun, Settings, Network, LogOut, User } from 'lucide-react';
+import { BriefcaseBusiness, Globe, Moon, Sun, Settings, Network, LogOut, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // ─── Extracted components ─────────────────────────────────────────────────────
@@ -326,6 +326,14 @@ const CoursesPage: React.FC = () => {
               icon={<Network size={18} />}
               to={isStudent ? '/graph?view=student' : '/graph'}
             />
+            {!isStudent && (
+              <SpecialCard
+                title="Enterprise L&D"
+                description="Diagnose training friction and review evidence-backed content improvements"
+                icon={<BriefcaseBusiness size={18} />}
+                to="/enterprise"
+              />
+            )}
             {!isStudent && (
               <SpecialCard
                 title="Student Data"
