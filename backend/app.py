@@ -22,6 +22,7 @@ from routes.annotations import annotations_bp
 from routes.profile import profile_bp
 from routes.prompts import prompts_bp
 from routes.selfview import selfview_bp
+from routes.enterprise import enterprise_bp
 
 app.register_blueprint(curriculum_bp)
 app.register_blueprint(curriculum_agent_bp)
@@ -40,6 +41,7 @@ app.register_blueprint(annotations_bp)
 app.register_blueprint(profile_bp)
 app.register_blueprint(prompts_bp)
 app.register_blueprint(selfview_bp)
+app.register_blueprint(enterprise_bp)
 
 # Initialize database and seed mock data
 init_db()
