@@ -27,7 +27,7 @@
   👉 <a href="https://schlaflied.github.io/Plot-Ark/">Visit the Official Landing Page</a> 👈
 </h3>
 
-**An open-source, dual-portal (instructor + student) agentic platform that closes the curriculum loop — generate evidence-based course content, track real learner behavior via xAPI, and continuously optimize modules through AI agents with human-in-the-loop control.**
+**An open-source agentic curriculum and learning-content observability platform. Plot Ark combines an academic dual portal (instructor + student) with an Enterprise L&D Preview, connecting course structure, learner evidence, and human-governed revision decisions without requiring xAPI as a starting point.**
 
 > **Generate** — A Tavily research agent queries academic, video, and news sources before any content is written. Bloom's Taxonomy alignment, Krashen's i+1 difficulty progression, and Cognitive Load Theory are built into the generation pipeline, so the curriculum structure is grounded in how learning actually works. No hallucinated citations.
 
@@ -37,9 +37,20 @@
 
 > **Personalize** — Students build learning profiles with discipline preferences, multi-character persona sets with relationship-mapped narrative anchors, and custom AI instructions. A configurable Agent Team (18 preset models + custom model support across 9 providers) lets users choose their own LLM stack. A template-driven diagnosis engine provides gentle, one-sentence concept-gap guidance — no scores, no rankings, just a map of where to look next.
 
+> **Transfer to workplace learning** — Enterprise Admins can explore a synthetic compliance-training diagnosis that joins content structure, LMS-style spreadsheet evidence, and Plot Ark's four-state Learner Pulse. Enterprise Users receive a private, non-ranking pulse interface. The current Enterprise workspace is a frontend product preview; real SCORM parsing, CSV field mapping, uploads, and exports remain roadmap work.
+
 ---
 
-### 🆕 What's New (July 2026)
+### 🆕 What's New (September 2026)
+
+| Feature | Description |
+|---------|-------------|
+| 🏢 **Enterprise L&D Preview** | A new workplace-learning workspace demonstrates the full product story: connect training sources → diagnose learning friction → inspect the evidence chain → accept or reject revision suggestions. All included enterprise metrics and materials are clearly marked as synthetic demo data. |
+| 🔀 **Workspace-aware login** | Choose **Academic** (Professor / Student) or **Enterprise** (Admin / User) before signing in. Route guards keep both workspaces isolated; Enterprise Admin opens the diagnosis console while Enterprise User opens the Learner Pulse. |
+| 📦 **Practical source intake** | xAPI is optional. The preview starts with formats L&D teams already use: SCORM ZIP, PDF, PPTX, DOCX, XLSX, and CSV. The selector documents and validates preview limits (content: 10 files at 50 MB each; reports: 5 files at 25 MB each). Static SCORM extraction and server-side ingestion are not implemented yet. |
+| 🧭 **Evidence before automation** | Findings expose content structure, observed behavior, learner voice, and evidence strength; suggestions remain human-governed. Plot Ark states likely relationships without presenting them as proven causality. |
+
+### Earlier (July 2026)
 
 | Feature | Description |
 |---------|-------------|
@@ -64,6 +75,8 @@
 |------|-------------|
 | **Instructors** | AI-generated course content grounded in pedagogy, xAPI analytics dashboard, three-layer HITL optimization suggestions, knowledge graph, exportable reports (PDF/DOCX/Excel/IMS) |
 | **Students** | Personalized learning profiles, one-sentence concept-gap diagnosis, narrative-anchored explanations (CP/OC), configurable AI model team, progress visualization, self-view mirror (attention footprint + learning rhythm — visible only to you) |
+| **Enterprise L&D Admins** | A content-observability preview for connecting training sources, reviewing cohort-level friction evidence, and governing next-version revision suggestions without replacing the LMS |
+| **Enterprise Learners** | A private four-state Learner Pulse that keeps “not reviewed” separate from misunderstanding and never ranks individual employees |
 | **Developers** | Modular Flask + React codebase, Hive-style A2A agent architecture, Docker one-command setup, extensible model routing via OpenAI-compatible SDK |
 
 ---
@@ -393,6 +406,13 @@ docker compose up --build
 | Frontend | http://localhost:5173 |
 | Backend | http://localhost:5000 |
 
+The login screen offers two workspaces:
+
+- **Academic** — Professor / Student
+- **Enterprise** — Admin / User
+
+The Enterprise workspace ships with synthetic data for product evaluation. Its file selector currently performs client-side format, file-count, and size validation; it does not yet upload or parse the selected files on the backend.
+
 ---
 
 ## 🕸️ Using the Knowledge Graph
@@ -429,6 +449,9 @@ The knowledge graph feature lets you ingest your own course materials (PDFs, PPT
 - [x] Per-provider API keys — Fernet-encrypted storage, dynamic detection, masked GET responses
 - [x] Professor prompt template editor — DB-backed prompt management with version control and variable highlighting
 - [x] Week 1 hardening — fail-closed encrypted BYOK storage, browser-secret removal, and main application CI
+- [x] Enterprise L&D Preview — workspace-aware Admin/User login, synthetic compliance-training diagnosis, evidence chain, Learner Pulse, and HITL revision review
+- [x] Enterprise source-intake contract — SCORM ZIP/PDF/PPTX/DOCX/XLSX/CSV selector with explicit client-side count and size limits; xAPI remains optional
+- [ ] Enterprise ingestion backend — safe static SCORM manifest/content extraction, persisted uploads, CSV/XLSX field mapping, evidence coverage, and revision-brief export
 - [ ] Assignment Timeline + Due Date calculator
 - [ ] A2A Phase 2 — LLM integration for CurriculumAgent (dense model required); other agents remain sql-only
 - [ ] Progressive summarization — semester-level LTM summaries for LLM context management
