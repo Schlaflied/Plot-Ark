@@ -5,7 +5,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
-export type Role = 'professor' | 'student';
+export type Role = 'professor' | 'student' | 'enterprise_admin' | 'enterprise_user';
 export type Theme = 'light' | 'dark';
 
 export interface AuthState {

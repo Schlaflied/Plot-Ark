@@ -9,6 +9,19 @@ import { Sun, Moon, Github } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import type { Role } from '../context/AuthContext';
 
+type Workspace = 'academic' | 'enterprise';
+
+const ROLE_OPTIONS: Record<Workspace, { value: Role; label: string }[]> = {
+  academic: [
+    { value: 'professor', label: 'Professor' },
+    { value: 'student', label: 'Student' },
+  ],
+  enterprise: [
+    { value: 'enterprise_admin', label: 'Admin' },
+    { value: 'enterprise_user', label: 'User' },
+  ],
+};
+
 const LoginPage: React.FC = () => {
   const { login, theme, toggleTheme } = useAuth();
   const navigate = useNavigate();
@@ -16,6 +29,7 @@ const LoginPage: React.FC = () => {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole]         = useState<Role>('professor');
+  const [workspace, setWorkspace] = useState<Workspace>('academic');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
 
@@ -32,7 +46,12 @@ const LoginPage: React.FC = () => {
     // Simulated auth delay — any credentials pass
     await new Promise(r => setTimeout(r, 500));
     login(email.trim(), role);
-    navigate('/courses');
+    navigate(workspace === 'enterprise' ? '/enterprise' : '/courses');
+  };
+
+  const selectWorkspace = (next: Workspace) => {
+    setWorkspace(next);
+    setRole(ROLE_OPTIONS[next][0].value);
   };
 
   return (
@@ -56,21 +75,23 @@ const LoginPage: React.FC = () => {
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
-        {/* Professor / Student role selector */}
+        {/* Academic / Enterprise workspace selector */}
         <div className={`flex rounded-lg p-0.5 ${isDark ? 'bg-stone-800' : 'bg-stone-200'}`}>
-          {(['professor', 'student'] as Role[]).map(r => (
+          {(['academic', 'enterprise'] as Workspace[]).map(option => (
             <button
-              key={r}
-              onClick={() => setRole(r)}
+              key={option}
+              type="button"
+              onClick={() => selectWorkspace(option)}
+              aria-pressed={workspace === option}
               className={`px-3 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${
-                role === r
+                workspace === option
                   ? 'bg-amber-500 text-white shadow-sm'
                   : isDark
                     ? 'text-stone-400 hover:text-stone-200'
                     : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              {r}
+              {option}
             </button>
           ))}
         </div>
@@ -131,9 +152,36 @@ const LoginPage: React.FC = () => {
             className="text-sm font-light max-w-xs mx-auto leading-relaxed"
             style={{ color: isDark ? '#a8a29e' : '#78716c' }}
           >
-            Agentic curriculum engine — pedagogy-grounded course design
-            powered by Bloom's Taxonomy and evidence-based research.
+            {workspace === 'academic'
+              ? "Agentic curriculum engine — pedagogy-grounded course design powered by Bloom's Taxonomy and evidence-based research."
+              : 'Learning content observability — connect training evidence, diagnose friction, and improve the next version.'}
           </p>
+        </div>
+
+        {/* Workspace-specific role selector */}
+        <div className="mb-4 text-center">
+          <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-stone-500' : 'text-stone-400'}`}>
+            {workspace === 'academic' ? 'Academic access' : 'Enterprise access'}
+          </p>
+          <div className={`inline-flex rounded-xl p-1 ${isDark ? 'bg-stone-800' : 'bg-stone-200/80'}`}>
+            {ROLE_OPTIONS[workspace].map(option => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setRole(option.value)}
+                aria-pressed={role === option.value}
+                className={`min-w-24 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                  role === option.value
+                    ? 'bg-white text-amber-700 shadow-sm'
+                    : isDark
+                      ? 'text-stone-400 hover:text-stone-200'
+                      : 'text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Login card */}
@@ -196,8 +244,10 @@ const LoginPage: React.FC = () => {
 
         {/* Role hint */}
         <p className={`mt-4 text-xs ${isDark ? 'text-stone-500' : 'text-stone-400'}`}>
-          Signing in as{' '}
-          <span className="font-semibold text-amber-500 capitalize">{role}</span>
+          Signing in to <span className="font-semibold text-stone-500 capitalize">{workspace}</span> as{' '}
+          <span className="font-semibold text-amber-500">
+            {ROLE_OPTIONS[workspace].find(option => option.value === role)?.label}
+          </span>
         </p>
       </div>
     </div>

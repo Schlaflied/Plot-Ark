@@ -27,7 +27,7 @@
   👉 <a href="https://schlaflied.github.io/Plot-Ark/">访问精美的互动式官方主页</a> 👈
 </h3>
 
-**一款开源的双端（教授 + 学生）主动式课程平台，完整覆盖课程闭环：基于教学理论生成课程内容、通过 xAPI 追踪真实学习行为，并借助 AI Agent 在人在回路控制下持续优化课程模块。**
+**一款开源的主动式课程与学习内容可观测平台。Plot Ark 在学术双端（教授 + 学生）之外新增 Enterprise L&D Preview，将课程结构、学习证据与人在回路的修改决策连接起来，并且不再把 xAPI 作为企业使用的起点。**
 
 > **生成（Generate）** — Tavily 研究 Agent 在内容生成前检索经验证的学术、视频与新闻来源。布鲁姆认知分类法、Krashen 的 i+1 难度递进和认知负荷理论内置于生成流水线，确保课程结构符合真实学习规律。不会出现幻觉引用。
 
@@ -37,9 +37,20 @@
 
 > **个性化（Personalize）** — 学生可以建立学习画像：学科偏好、多角色人设组（含关系映射的叙事锚点）、自定义 AI 指令。可配置 Agent 团队（18 个预设模型 + 自定义模型，覆盖 9 家 provider）让用户自选 LLM 组合。模板驱动的诊断引擎提供温和的一句话概念差距指引——无分数、无排名，只有"去哪里看"的地图。
 
+> **迁移到企业学习（Workplace Learning）** — Enterprise Admin 可以体验一个合成的合规培训诊断：将内容结构、LMS 风格表格证据与 Plot Ark 四状态 Learner Pulse 连接起来；Enterprise User 则进入私密、无排名的反馈界面。当前企业工作区仍是前端产品预览，真实 SCORM 解析、CSV 字段映射、后端上传和导出仍属于路线图。
+
 ---
 
-### 🆕 最近更新（2026 年 7 月）
+### 🆕 最近更新（2026 年 9 月）
+
+| 功能 | 说明 |
+|------|------|
+| 🏢 **Enterprise L&D Preview** | 新增职场学习工作区，演示完整产品叙事：连接培训资料 → 诊断学习摩擦 → 查看证据链 → 接受或拒绝修改建议。企业指标与材料均明确标记为合成演示数据。 |
+| 🔀 **工作区登录分流** | 登录前选择 **Academic**（Professor / Student）或 **Enterprise**（Admin / User）。路由权限隔离两个工作区；Enterprise Admin 进入诊断台，Enterprise User 进入 Learner Pulse。 |
+| 📦 **现实的数据入口** | xAPI 为可选项。预览版从 L&D 已有格式开始：SCORM ZIP、PDF、PPTX、DOCX、XLSX、CSV。选择器会显示并校验预览限制（内容：最多 10 份、每份 50 MB；报表：最多 5 份、每份 25 MB）。静态 SCORM 提取与服务端摄取尚未实现。 |
+| 🧭 **证据先于自动化** | 诊断明确展示内容结构、观察行为、学习者声音和证据强度；建议始终由人审批。Plot Ark 会把先修问题标为“可能关系”，而不是宣称已经证明因果。 |
+
+### 更早（2026 年 7 月）
 
 | 功能 | 说明 |
 |------|------|
@@ -64,6 +75,8 @@
 |------|---------|
 | **教师** | 基于教学理论的 AI 课程生成、xAPI 分析仪表板、三层人在回路优化建议、知识图谱、可导出报告（PDF/DOCX/Excel/IMS） |
 | **学生** | 个性化学习画像、一句话概念差距诊断、叙事锚定解释（CP/OC）、可配置 AI 模型团队、进度可视化、自见镜子层（注意力足迹 + 学习节律——只有你自己可见） |
+| **企业 L&D 管理员** | 在不替换现有 LMS 的前提下连接培训资料、查看群组级学习摩擦证据，并审核下一版本的内容修改建议 |
+| **企业学习者** | 私密的四状态 Learner Pulse，将“尚未学习”与“不理解”分开，并且不对员工个人排名 |
 | **开发者** | 模块化 Flask + React 代码库、Hive 风格 A2A Agent 架构、Docker 一键启动、通过 OpenAI 兼容 SDK 的可扩展模型路由 |
 
 ---
@@ -391,6 +404,13 @@ docker compose up --build
 | 前端 | http://localhost:5173 |
 | 后端 | http://localhost:5000 |
 
+登录页提供两个工作区：
+
+- **Academic** — Professor / Student
+- **Enterprise** — Admin / User
+
+Enterprise 工作区附带合成数据，用于产品体验和 QA。当前文件选择器只执行前端格式、数量和大小校验；尚未把所选文件上传到后端或进行真实解析。
+
 
 ---
 
@@ -429,6 +449,9 @@ docker compose up --build
 - [x] 按 Provider API Key — Fernet 加密存储、动态检测、掩码 GET 返回
 - [x] 教授 Prompt 模板编辑器 — 数据库驱动的 Prompt 管理 + 版本控制 + 变量高亮
 - [x] 第一周加固 — API Key 加密失败即拒绝保存、移除浏览器端密钥、主应用 CI
+- [x] Enterprise L&D Preview — 工作区 Admin/User 登录分流、合成合规培训诊断、证据链、Learner Pulse 与 HITL 修改审核
+- [x] 企业数据入口契约 — SCORM ZIP/PDF/PPTX/DOCX/XLSX/CSV 选择器与明确的前端数量/大小限制；xAPI 保持可选
+- [ ] 企业摄取后端 — 安全的 SCORM manifest/内容静态提取、持久化上传、CSV/XLSX 字段映射、证据覆盖率与修改简报导出
 - [ ] 作业时间轴 + 截止日期计算器
 - [ ] A2A Phase 2 — CurriculumAgent 接入 LLM（必须 dense 模型）；其余 Agent 保持 sql-only
 - [ ] 渐进式摘要 — 学期级 LTM 摘要用于 LLM 上下文管理
