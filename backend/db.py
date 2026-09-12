@@ -359,6 +359,83 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS idx_selfview_snapshots_lookup
                     ON selfview_snapshots(email, course_id, created_at DESC)
                 """)
+
+                # ── Enterprise L&D domain facade ────────────────────────────
+                # The shared engine still uses curricula/course_id internally.
+                # These tables add organization and cohort boundaries without
+                # duplicating the Academic analysis stack.
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS organizations (
+                        id SERIAL PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        slug TEXT UNIQUE NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_programs (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL REFERENCES organizations(id),
+                        engine_course_id INTEGER NOT NULL UNIQUE REFERENCES curricula(id),
+                        name TEXT NOT NULL,
+                        description TEXT DEFAULT '',
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_enterprise_programs_org
+                    ON enterprise_programs(organization_id, created_at DESC)
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_cohorts (
+                        id SERIAL PRIMARY KEY,
+                        program_id INTEGER NOT NULL REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        label TEXT NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        UNIQUE(program_id, label)
+                    )
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_sources (
+                        id SERIAL PRIMARY KEY,
+                        program_id INTEGER NOT NULL REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        cohort_id INTEGER REFERENCES enterprise_cohorts(id) ON DELETE SET NULL,
+                        filename TEXT NOT NULL,
+                        source_kind TEXT NOT NULL,
+                        size_bytes BIGINT NOT NULL DEFAULT 0,
+                        metadata JSONB NOT NULL DEFAULT '{}',
+                        extracted_text TEXT DEFAULT '',
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_enterprise_sources_program
+                    ON enterprise_sources(program_id, created_at DESC)
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_learning_events (
+                        id BIGSERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL REFERENCES organizations(id),
+                        program_id INTEGER NOT NULL REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        cohort_id INTEGER REFERENCES enterprise_cohorts(id) ON DELETE SET NULL,
+                        source_id INTEGER REFERENCES enterprise_sources(id) ON DELETE SET NULL,
+                        learner_ref TEXT NOT NULL,
+                        module_id TEXT NOT NULL,
+                        module_title TEXT DEFAULT '',
+                        event_type TEXT NOT NULL,
+                        completion BOOLEAN NOT NULL DEFAULT FALSE,
+                        score NUMERIC,
+                        duration_seconds NUMERIC,
+                        attempts INTEGER NOT NULL DEFAULT 1,
+                        occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        raw_payload JSONB NOT NULL DEFAULT '{}',
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_enterprise_events_scope
+                    ON enterprise_learning_events(organization_id, program_id, cohort_id, module_id)
+                """)
                 conn.commit()
                 cur.close()
                 conn.close()
