@@ -50,7 +50,7 @@
 | 学生视图：每模块四按钮反馈 | `POST /api/feedback` | `student_feedback` 表 + Redis 实时缓存（`feedback:<course>:<module>`） |
 | 学生视图：一句话诊断卡 | `GET /api/profile/diagnosis/<course_id>` | `student_diagnosis.py` —— 模板驱动、暖语气、零数字（红线 R1/R5） |
 | 学生视图：蓝色"模块已更新"栏 + 抽屉 | `GET /api/curriculum/changes/<course_id>` | `change_log` 中已应用的条目 |
-| 导出 | 客户端 jsPDF / `POST /api/curriculum/export/*` | PDF、DOCX、Markdown、IMS Common Cartridge |
+| 导出 | 客户端 jsPDF / `POST /api/curriculum/export/*` | PDF、DOCX、Markdown（IMS Common Cartridge：开发中，尚未实现） |
 
 #### StudentDataPage（`/student-data`）—— A2A 分析仪表板
 
@@ -271,8 +271,8 @@ course_analysis_snapshots          ← 教授端 Warm LTM
 | Excel | openpyxl | 每节一张原始数据表 |
 | PDF（课程） | jsPDF（客户端） | 阅读材料行内展示，末尾 References 汇总 |
 | DOCX（课程） | python-docx | 与课程 PDF 结构一致 |
-| IMS Common Cartridge | Python zip | 直接导入 Canvas / Moodle / D2L |
-| Markdown | 纯文本 | 完整课程含阅读材料与作业 |
+| IMS Common Cartridge | Python zip | **开发中——计划功能，尚未实现。** 目标：直接导入 Canvas / Moodle / D2L |
+| Markdown | 纯文本 | 摘要：模块标题、学习目标、阅读材料与作业标题——不含作业描述与交付物 |
 
 ---
 
