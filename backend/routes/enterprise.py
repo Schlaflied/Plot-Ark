@@ -12,6 +12,7 @@ from services.enterprise_ingest import (
     parse_enterprise_source,
     validate_upload_batch,
 )
+from services import measurement_plan as mplan
 from services.lightrag_service import slug
 
 
@@ -246,5 +247,162 @@ def upload_sources(program_id: int):
     except Exception as exc:
         conn.rollback()
         return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+# ── Measurement plans (versioned per program) ──────────────────────────────
+
+def _plan_row(row) -> dict:
+    return {
+        "version": row[0],
+        "status": row[1],
+        "plan": row[2] or {},
+        "approved_at": row[3].isoformat() if row[3] else None,
+        "created_at": row[4].isoformat() if row[4] else None,
+    }
+
+
+_PLAN_COLS = "version, status, plan, approved_at, created_at"
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/measurement-plans", methods=["GET"])
+def list_measurement_plans(program_id: int):
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT {_PLAN_COLS} FROM enterprise_measurement_plans "
+            "WHERE program_id = %s ORDER BY version DESC", (program_id,))
+        return jsonify({"plans": [_plan_row(r) for r in cur.fetchall()]})
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/measurement-plans", methods=["POST"])
+def create_measurement_plan(program_id: int):
+    """Create the next plan version. Without a ``plan`` body it starts from a
+    copy of the previous version's plan."""
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM enterprise_programs WHERE id = %s FOR UPDATE", (program_id,))
+        if not cur.fetchone():
+            return jsonify({"error": "Program not found"}), 404
+        cur.execute(
+            "SELECT version, plan FROM enterprise_measurement_plans "
+            "WHERE program_id = %s ORDER BY version DESC LIMIT 1", (program_id,))
+        previous = cur.fetchone()
+        try:
+            if "plan" in data:
+                plan = mplan.normalize_plan(data["plan"])
+            else:
+                plan = mplan.copy_plan_for_new_version(previous[1] if previous else None)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        version = (previous[0] + 1) if previous else 1
+        cur.execute(
+            "INSERT INTO enterprise_measurement_plans (program_id, version, status, plan) "
+            f"VALUES (%s, %s, %s, %s) RETURNING {_PLAN_COLS}",
+            (program_id, version, mplan.STATUS_DRAFT, json.dumps(plan)))
+        row = cur.fetchone()
+        conn.commit()
+        return jsonify(_plan_row(row)), 201
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/measurement-plans/<int:version>", methods=["PUT"])
+def update_measurement_plan(program_id: int, version: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        plan = mplan.normalize_plan(data.get("plan"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT status FROM enterprise_measurement_plans "
+            "WHERE program_id = %s AND version = %s FOR UPDATE", (program_id, version))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Plan version not found"}), 404
+        if not mplan.can_edit(row[0]):
+            return jsonify({"error": "Approved plans are frozen; start a new version"}), 409
+        cur.execute(
+            "UPDATE enterprise_measurement_plans SET plan = %s "
+            f"WHERE program_id = %s AND version = %s RETURNING {_PLAN_COLS}",
+            (json.dumps(plan), program_id, version))
+        result = _plan_row(cur.fetchone())
+        conn.commit()
+        return jsonify(result)
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/measurement-plans/<int:version>/approve", methods=["POST"])
+def approve_measurement_plan(program_id: int, version: int):
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT status FROM enterprise_measurement_plans "
+            "WHERE program_id = %s AND version = %s FOR UPDATE", (program_id, version))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Plan version not found"}), 404
+        if row[0] == mplan.STATUS_APPROVED:
+            return jsonify({"error": "Plan version is already approved"}), 409
+        cur.execute(
+            "UPDATE enterprise_measurement_plans SET status = %s, approved_at = NOW() "
+            f"WHERE program_id = %s AND version = %s RETURNING {_PLAN_COLS}",
+            (mplan.STATUS_APPROVED, program_id, version))
+        result = _plan_row(cur.fetchone())
+        conn.commit()
+        return jsonify(result)
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/measurement-plans/<int:version>/comparison", methods=["GET"])
+def compare_measurement_plan(program_id: int, version: int):
+    """Planned versus collected evidence, listing planned sources with none."""
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT {_PLAN_COLS} FROM enterprise_measurement_plans "
+            "WHERE program_id = %s AND version = %s", (program_id, version))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Plan version not found"}), 404
+        cur.execute(
+            "SELECT DISTINCT source_kind FROM enterprise_sources WHERE program_id = %s",
+            (program_id,))
+        kinds = [r[0] for r in cur.fetchall()]
+        result = _plan_row(row)
+        result["comparison"] = mplan.compare_plan_to_evidence(result["plan"], kinds)
+        return jsonify(result)
     finally:
         conn.close()
