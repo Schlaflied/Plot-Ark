@@ -9,8 +9,16 @@ from flask import Blueprint, jsonify, request
 
 from db import get_db
 from services.enterprise_ingest import (
+    ParsedSource,
     parse_enterprise_source,
     validate_upload_batch,
+)
+from services.enterprise_mapping import (
+    MappingError,
+    list_presets,
+    map_report,
+    propose_mapping,
+    read_table,
 )
 from services.lightrag_service import slug
 
@@ -163,6 +171,55 @@ def _learner_token(organization_id: int, learner_ref: str) -> str:
     return "learner_" + hashlib.sha256(material).hexdigest()[:16]
 
 
+@enterprise_bp.route("/api/enterprise/mapping/presets", methods=["GET"])
+def mapping_presets():
+    return jsonify({"presets": list_presets()})
+
+
+@enterprise_bp.route("/api/enterprise/mapping/preview", methods=["POST"])
+def mapping_preview():
+    """Propose a column mapping for one LMS export without storing anything."""
+    upload = request.files.get("file")
+    if upload is None:
+        return jsonify({"error": "file is required"}), 400
+    filename = upload.filename or "unknown"
+    content = upload.read()
+    try:
+        validate_upload_batch([(filename, content)], "lms_report")
+        headers, rows = read_table(filename, content)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    proposal = propose_mapping(headers, request.form.get("platform"))
+    proposal["row_count"] = len(rows)
+    return jsonify(proposal)
+
+
+def _parse_mapped_report(filename: str, content: bytes) -> ParsedSource:
+    platform = request.form.get("platform")
+    raw_mapping = request.form.get("mapping")
+    overrides = None
+    if raw_mapping:
+        try:
+            overrides = json.loads(raw_mapping)
+        except ValueError as exc:
+            raise MappingError("mapping must be valid JSON") from exc
+        if not isinstance(overrides, dict):
+            raise MappingError("mapping must be a JSON object of field -> column")
+    proposal, events, final = map_report(filename, content, platform, overrides)
+    return ParsedSource(
+        filename=filename,
+        source_kind="lms_report",
+        metadata={
+            "row_count": len(events),
+            "columns": proposal["columns"],
+            "platform": proposal["platform"],
+            "mapping": final,
+            "unmatched_columns": [c for c in proposal["columns"] if c not in final.values()],
+        },
+        events=events,
+    )
+
+
 @enterprise_bp.route("/api/enterprise/programs/<int:program_id>/sources", methods=["POST"])
 def upload_sources(program_id: int):
     source_kind = request.form.get("source_kind", "training_content").strip()
@@ -172,7 +229,10 @@ def upload_sources(program_id: int):
     files = [(upload.filename or "unknown", upload.read()) for upload in uploads]
     try:
         validate_upload_batch(files, source_kind)
-        parsed_sources = [parse_enterprise_source(name, content, source_kind) for name, content in files]
+        if source_kind == "lms_report" and (request.form.get("platform") or request.form.get("mapping")):
+            parsed_sources = [_parse_mapped_report(name, content) for name, content in files]
+        else:
+            parsed_sources = [parse_enterprise_source(name, content, source_kind) for name, content in files]
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 

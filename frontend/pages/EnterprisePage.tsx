@@ -72,6 +72,26 @@ const REPORT_UPLOAD: UploadRule = {
   maxMb: 25,
 };
 
+interface MappingProposal {
+  platform: string | null;
+  platform_label: string | null;
+  manual_required: boolean;
+  mapping: Record<string, string>;
+  ambiguous: Record<string, string[]>;
+  unmatched_columns: string[];
+  columns: string[];
+  row_count: number;
+  fields: { field: string; label: string; required: boolean }[];
+}
+
+const PLATFORM_CHOICES: [string, string][] = [
+  ['auto', 'Detect automatically'],
+  ['workday_learning', 'Workday Learning'],
+  ['d2l_brightspace', 'D2L Brightspace'],
+  ['canvas', 'Canvas'],
+  ['manual', 'Other / map manually'],
+];
+
 const SUGGESTIONS: Suggestion[] = [
   {
     id: 1,
@@ -152,6 +172,10 @@ const EnterprisePage: React.FC = () => {
   const [notice, setNotice] = useState('');
   const [pulse, setPulse] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [reportFile, setReportFile] = useState<File | null>(null);
+  const [platform, setPlatform] = useState('auto');
+  const [proposal, setProposal] = useState<MappingProposal | null>(null);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
   const uploadRuleRef = useRef<UploadRule>(GENERAL_UPLOAD);
 
   const acceptedCount = useMemo(
@@ -167,6 +191,33 @@ const EnterprisePage: React.FC = () => {
     }
   };
 
+  const loadProposal = async (file: File, chosenPlatform: string) => {
+    const body = new FormData();
+    body.append('file', file);
+    body.append('platform', chosenPlatform);
+    try {
+      const res = await fetch('/api/enterprise/mapping/preview', { method: 'POST', body });
+      const data = await res.json();
+      if (!res.ok) {
+        setProposal(null);
+        setNotice(data.error ?? 'Could not read this LMS export.');
+        return;
+      }
+      setProposal(data);
+      setMapping(data.mapping);
+    } catch {
+      setProposal(null);
+      setNotice('Mapping preview is unavailable right now. Check that the backend is running.');
+    }
+  };
+
+  const missingFields = proposal
+    ? [
+        ...(['learner_ref', 'completion'] as const).filter(f => !mapping[f]).map(f => proposal.fields.find(x => x.field === f)?.label ?? f),
+        ...(!mapping.module_id && !mapping.module_title ? ['Module / content ID or title'] : []),
+      ]
+    : [];
+
   const handleFilesSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.currentTarget.files ?? []);
     const rule = uploadRuleRef.current;
@@ -176,6 +227,11 @@ const EnterprisePage: React.FC = () => {
       setNotice(`Too many files. ${rule.label} accepts up to ${rule.maxFiles} files per upload.`);
     } else if (oversized) {
       setNotice(`${oversized.name} is over the ${rule.maxMb} MB per-file limit.`);
+    } else if (files.length > 0 && rule === REPORT_UPLOAD) {
+      setReportFile(files[0]);
+      setPlatform('auto');
+      setNotice(files.length > 1 ? 'Mapping review shows the first file; map each LMS report separately.' : '');
+      void loadProposal(files[0], 'auto');
     } else if (files.length > 0) {
       setNotice(`${files.length} ${rule.label} file${files.length === 1 ? '' : 's'} selected. Preview formats: ${rule.formats}.`);
     }
@@ -334,6 +390,71 @@ const EnterprisePage: React.FC = () => {
               <X size={15} />
             </button>
           </div>
+        )}
+
+        {reportFile && proposal && (
+          <section aria-label="Map LMS report columns" className="mt-5 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">Map LMS report</p>
+                <p className="mt-1 text-sm text-stone-600">
+                  {reportFile.name} · {proposal.row_count} rows ·{' '}
+                  {proposal.platform_label ? `Proposed preset: ${proposal.platform_label}` : 'No preset matched — map columns manually'}
+                </p>
+              </div>
+              <select
+                aria-label="LMS platform"
+                value={platform}
+                onChange={e => { setPlatform(e.target.value); void loadProposal(reportFile, e.target.value); }}
+                className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm"
+              >
+                {PLATFORM_CHOICES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {proposal.fields.map(({ field, label, required }) => (
+                <label key={field} className="text-xs text-stone-500">
+                  {label}{required ? ' *' : ''}
+                  <select
+                    value={mapping[field] ?? ''}
+                    onChange={e => setMapping(prev => ({ ...prev, [field]: e.target.value }))}
+                    className="mt-1 block w-full rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-900"
+                  >
+                    <option value="">— not mapped —</option>
+                    {proposal.columns.map(column => <option key={column} value={column}>{column}</option>)}
+                  </select>
+                  {proposal.ambiguous[field] && (
+                    <span className="mt-1 block text-amber-700">Also matched: {proposal.ambiguous[field].join(', ')}</span>
+                  )}
+                </label>
+              ))}
+            </div>
+            {(() => {
+              const used = new Set(Object.values(mapping));
+              const unmatched = proposal.columns.filter(c => !used.has(c));
+              return unmatched.length > 0 ? (
+                <p className="mt-4 text-xs leading-5 text-stone-500">
+                  <span className="font-semibold text-stone-700">Unmatched columns (not imported):</span> {unmatched.join(', ')}
+                </p>
+              ) : null;
+            })()}
+            {missingFields.length > 0 && (
+              <p role="alert" className="mt-3 text-sm text-red-700">Missing required field(s): {missingFields.join(', ')}.</p>
+            )}
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                disabled={missingFields.length > 0}
+                onClick={() => { setNotice('Mapping confirmed for this preview. No data was stored.'); setReportFile(null); setProposal(null); }}
+                className="rounded-xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Confirm mapping
+              </button>
+              <button type="button" onClick={() => { setReportFile(null); setProposal(null); }} className="text-sm font-medium text-stone-500 hover:text-stone-900">
+                Cancel
+              </button>
+            </div>
+          </section>
         )}
 
         <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Program metrics">
