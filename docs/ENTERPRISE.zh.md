@@ -50,14 +50,14 @@ flowchart LR
 - 由人审核课程修改建议。
 - 面向员工的私密、无排名四状态 Learner Pulse。
 - 对 SCORM ZIP、PDF、PPTX、DOCX、XLSX 和 CSV 执行浏览器端上传校验。
+- 后端摄取基础（`/api/enterprise/programs`、`.../sources`）：服务端上传校验、带 zip-slip 防护的 SCORM manifest/文本静态提取、基于列名别名的 CSV/XLSX 规范化与持久化，并有 `backend/tests/test_enterprise_ingest.py` 测试覆盖。**尚未接入企业版界面**，界面仍展示合成数据。
 
 ## 目前还没有实现的部分
 
-当前 Enterprise 工作区是产品预览，不是可投入生产的数据摄取服务。以下内容仍在路线图中：
+当前 Enterprise 工作区是产品预览，不是可投入生产的数据摄取服务。以下内容仍在开发或路线图中：
 
-- 安全的服务端文件上传和持久化；
-- SCORM manifest 与静态内容提取；
-- 不同 LMS 导出 CSV/XLSX 的字段映射；
+- 将企业版界面接入摄取 API；
+- 用户可配置的 CSV/XLSX 字段映射（目前仅有内置列名别名）；
 - 真实企业分析运行与 LTM 快照；
 - 多租户身份认证和组织边界；
 - 修改简报导出与业务指标连接器。

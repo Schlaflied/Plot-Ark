@@ -50,14 +50,14 @@ flowchart LR
 - Human review of revision recommendations.
 - A private, non-ranking four-state Learner Pulse for employees.
 - Client-side upload validation for SCORM ZIP, PDF, PPTX, DOCX, XLSX, and CSV.
+- Backend ingestion foundation (`/api/enterprise/programs`, `.../sources`): server-side upload validation, static SCORM manifest/text extraction with zip-slip protection, CSV/XLSX normalization via column aliases, and persistence, covered by `backend/tests/test_enterprise_ingest.py`. It is **not yet connected to the Enterprise UI**, which still shows synthetic data.
 
 ## Not implemented yet
 
-The current Enterprise workspace is a product preview, not a production ingestion service. The following remain roadmap work:
+The current Enterprise workspace is a product preview, not a production ingestion service. The following remain in development or roadmap work:
 
-- secure server-side file upload and persistence;
-- static SCORM manifest and content extraction;
-- CSV/XLSX field mapping for different LMS exports;
+- connecting the Enterprise UI to the ingestion API;
+- user-configurable CSV/XLSX field mapping (only built-in column aliases today);
 - real enterprise analysis runs and LTM snapshots;
 - multi-tenant authentication and organization boundaries;
 - revision-brief export and downstream business-metric connectors.

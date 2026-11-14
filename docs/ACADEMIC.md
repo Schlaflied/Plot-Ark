@@ -44,7 +44,7 @@ flowchart LR
 
 ### 3. Observe learning evidence
 
-- Capture xAPI 1.0.3 events through the included mini-LRS.
+- Capture xAPI-style statements through the included minimal statement endpoints (not a certified LRS).
 - Keep four learner states distinct: understood, partly understood, difficulty not localized, and not reviewed.
 - Analyze behavior, risk signals, content friction, and cohort differences with a five-node A2A pipeline.
 - Stream analysis progress to the interface through SSE.
@@ -66,7 +66,7 @@ flowchart LR
 
 ### 6. Export and integrate
 
-- Export curricula as IMS Common Cartridge, PDF, DOCX, or Markdown.
+- Export curricula as PDF, DOCX, or Markdown. IMS Common Cartridge export is in development (not yet implemented).
 - Export analysis reports as PDF, DOCX, or Excel.
 - Use configurable OpenAI-compatible models while encrypting provider API keys on the backend.
 
