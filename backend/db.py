@@ -333,6 +333,21 @@ def init_db():
                 cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS custom_prompt TEXT DEFAULT ''")
                 cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS model_config JSONB DEFAULT '{}'")
 
+                # ── lti_users (LTI 1.3 launches: matched by issuer + sub, never email) ──
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS lti_users (
+                        issuer TEXT NOT NULL,
+                        sub TEXT NOT NULL,
+                        email TEXT UNIQUE NOT NULL,
+                        role TEXT NOT NULL,
+                        display_name TEXT DEFAULT '',
+                        contact_email TEXT DEFAULT '',
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        last_launch_at TIMESTAMPTZ DEFAULT NOW(),
+                        PRIMARY KEY (issuer, sub)
+                    )
+                """)
+
                 # ── prompt_templates (professor-editable prompt instructions) ──
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS prompt_templates (
@@ -442,6 +457,33 @@ def init_db():
                 cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_enterprise_events_scope
                     ON enterprise_learning_events(organization_id, program_id, cohort_id, module_id)
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_measurement_plans (
+                        id SERIAL PRIMARY KEY,
+                        program_id INTEGER NOT NULL REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        version INTEGER NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'draft',
+                        plan JSONB NOT NULL DEFAULT '{}',
+                        approved_at TIMESTAMPTZ,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        UNIQUE(program_id, version)
+                    )
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_confidence_responses (
+                        id BIGSERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL REFERENCES organizations(id),
+                        program_id INTEGER NOT NULL REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        cohort_id INTEGER REFERENCES enterprise_cohorts(id) ON DELETE SET NULL,
+                        program_version TEXT NOT NULL DEFAULT 'v1',
+                        phase TEXT NOT NULL CHECK (phase IN ('pre', 'post')),
+                        learner_ref TEXT NOT NULL,
+                        answers JSONB NOT NULL,
+                        duration_seconds NUMERIC,
+                        submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        UNIQUE(program_id, cohort_id, program_version, phase, learner_ref)
+                    )
                 """)
                 conn.commit()
                 cur.close()

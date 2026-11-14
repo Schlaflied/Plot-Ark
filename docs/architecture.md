@@ -25,7 +25,7 @@ flowchart TD
     LLM -->|"SSE stream"| UI
     BE -->|"保存"| DB
 
-    UI -->|"Export .imscc"| CANVAS
+    UI -.->|"Export .imscc (planned, in development)"| CANVAS
     STUDENT -->|"学习"| CANVAS
     CANVAS -->|"xAPI statements\n(watched/completed/skipped)"| LRS
     LRS -->|"POST /api/xapi/statement"| BE

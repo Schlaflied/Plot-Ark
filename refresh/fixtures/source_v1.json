@@ -1,0 +1,21 @@
+{
+  "source_id": "ca-privacy-guidance",
+  "url": "https://example.gov.test/privacy/breach-reporting-guidance",
+  "jurisdiction": "CA-ON",
+  "published_date": "2025-01-15",
+  "effective_date": "2025-03-01",
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Organizations must notify the regulator of a breach within 30 days of discovery."
+    },
+    {
+      "id": "c2",
+      "text": "Breach records must be retained for 24 months."
+    },
+    {
+      "id": "c3",
+      "text": "A privacy officer must be designated for each organization."
+    }
+  ]
+}

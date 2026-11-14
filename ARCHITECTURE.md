@@ -50,7 +50,7 @@ Identity: the frontend stores the login email in localStorage (`AuthContext`) an
 | Student view: four-button feedback per module | `POST /api/feedback` | `student_feedback` table + Redis real-time cache (`feedback:<course>:<module>`) |
 | Student view: one-sentence diagnosis card | `GET /api/profile/diagnosis/<course_id>` | `student_diagnosis.py` — template-driven, warm tone, zero numbers (red line R1/R5) |
 | Student view: blue "modules updated" bar + drawer | `GET /api/curriculum/changes/<course_id>` | `change_log` filtered to applied entries |
-| Exports | client jsPDF / `POST /api/curriculum/export/*` | PDF, DOCX, Markdown, IMS Common Cartridge |
+| Exports | client jsPDF / `POST /api/curriculum/export/*` | PDF, DOCX, Markdown (IMS Common Cartridge: in development, not implemented) |
 
 #### StudentDataPage (`/student-data`) — A2A Analytics Dashboard
 
@@ -273,8 +273,8 @@ course_analysis_snapshots          ← instructor-side Warm LTM
 | Excel | openpyxl | Raw data sheets per section |
 | PDF (curriculum) | jsPDF (client-side) | Readings inline, References section |
 | DOCX (curriculum) | python-docx | Same structure as curriculum PDF |
-| IMS Common Cartridge | Python zip | Direct import to Canvas / Moodle / D2L |
-| Markdown | Plain text | Full curriculum with readings and assignments |
+| IMS Common Cartridge | Python zip | **In development — planned, not implemented.** Target: direct import to Canvas / Moodle / D2L |
+| Markdown (client-side) | Plain text | Summary: module titles, objectives, readings, and assignment titles — omits assignment descriptions and deliverables |
 
 ---
 

@@ -11,6 +11,8 @@ import os
 import datetime
 from pathlib import Path
 
+from services import measurement_plan
+
 
 # Storage root — Docker mounts ./data:/data, so /data/ltm inside container
 # For local dev, resolve relative to this file's parent (backend/) → ../data/ltm
@@ -127,6 +129,9 @@ def write_cold_snapshot(report: dict) -> str | None:
 
     applied_change_ids = [c["id"] for c in applied_changes]
 
+    # Enterprise programs: attach the latest measurement plan (if any).
+    plan_ctx = report.get("measurement_plan_context") or _load_plan_context(course_id)
+
     # ── Count existing snapshots to set version ───────────────────────────
     _LTM_DIR.mkdir(parents=True, exist_ok=True)
     # Match both old format (course_id_*) and new format (course_code_*)
@@ -167,6 +172,10 @@ def write_cold_snapshot(report: dict) -> str | None:
             lines.append(f"    reasons: {reasons_str}")
             for k, v in fm.get("metrics", {}).items():
                 lines.append(f"    {k}: {v}")
+
+    if plan_ctx:
+        lines.extend(measurement_plan.snapshot_frontmatter_lines(
+            plan_ctx["plan"], plan_ctx["version"], plan_ctx["status"]))
 
     lines.append("---")
     lines.append("")
@@ -247,6 +256,11 @@ def write_cold_snapshot(report: dict) -> str | None:
         lines.append("No curriculum changes have been applied to this course yet (baseline).")
         lines.append("")
 
+    if plan_ctx:
+        lines.extend(measurement_plan.snapshot_markdown_lines(
+            plan_ctx["plan"], plan_ctx["version"], plan_ctx["status"],
+            plan_ctx.get("source_kinds")))
+
     # ── Write file ────────────────────────────────────────────────────────
     # Use course_code in filename for readability (LLM + human)
     safe_code = course_code.replace("/", "-").replace("\\", "-").replace(" ", "_")
@@ -259,6 +273,41 @@ def write_cold_snapshot(report: dict) -> str | None:
         return str(filepath)
     except Exception as e:
         print(f"[LTM Cold] Write error: {e}")
+        return None
+
+
+def _load_plan_context(course_id: int) -> dict | None:
+    """Latest measurement plan + collected source kinds for an Enterprise
+    program backed by this engine course. None for academic courses or when
+    the DB is unavailable, which leaves the snapshot unchanged."""
+    try:
+        from db import get_db
+        conn = get_db()
+        if not conn:
+            return None
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT p.id, mp.version, mp.status, mp.plan
+                FROM enterprise_programs p
+                JOIN enterprise_measurement_plans mp ON mp.program_id = p.id
+                WHERE p.engine_course_id = %s
+                ORDER BY mp.version DESC LIMIT 1
+            """, (course_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            cur.execute(
+                "SELECT DISTINCT source_kind FROM enterprise_sources WHERE program_id = %s",
+                (row[0],),
+            )
+            return {
+                "version": row[1], "status": row[2], "plan": row[3] or {},
+                "source_kinds": [r[0] for r in cur.fetchall()],
+            }
+        finally:
+            conn.close()
+    except Exception:
         return None
 
 

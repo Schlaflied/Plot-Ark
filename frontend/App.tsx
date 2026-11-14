@@ -15,6 +15,7 @@ import StudentDataPage from './pages/StudentDataPage';
 import SettingsPage from './pages/SettingsPage';
 import StudentProfilePage from './pages/StudentProfilePage';
 import LoginPage from './pages/LoginPage';
+import LtiCallbackPage from './pages/LtiCallbackPage';
 
 const EnterprisePage = React.lazy(() => import('./pages/EnterprisePage'));
 
@@ -80,6 +81,7 @@ const AppRoutes: React.FC = () => {
       />
 
       {/* Student only */}
+      <Route path="/lti/callback" element={<LtiCallbackPage />} />
       <Route path="/profile"      element={<ProtectedRoute element={<StudentProfilePage />} allowedRoles={['student']} />} />
     </Routes>
   );
