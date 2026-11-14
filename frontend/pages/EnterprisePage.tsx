@@ -85,11 +85,20 @@ interface MappingProposal {
   fields: { field: string; label: string; required: boolean }[];
 }
 
+interface StagedImport {
+  id: number;
+  fileName: string;
+  platformLabel: string;
+  sourceLabel: string;
+  summary: { learners: number; events: number; completion_rate: number | null; avg_score: number | null; avg_duration_seconds: number | null; small_group: boolean };
+}
+
 const PLATFORM_CHOICES: [string, string][] = [
   ['auto', 'Detect automatically'],
   ['workday_learning', 'Workday Learning'],
   ['d2l_brightspace', 'D2L Brightspace'],
   ['canvas', 'Canvas'],
+  ['moodle', 'Moodle'],
   ['manual', 'Other / map manually'],
 ];
 
@@ -177,6 +186,9 @@ const EnterprisePage: React.FC = () => {
   const [platform, setPlatform] = useState('auto');
   const [proposal, setProposal] = useState<MappingProposal | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [sourceSite, setSourceSite] = useState('');
+  const [sourceVersion, setSourceVersion] = useState('');
+  const [staged, setStaged] = useState<StagedImport[]>([]);
   const uploadRuleRef = useRef<UploadRule>(GENERAL_UPLOAD);
 
   const acceptedCount = useMemo(
@@ -212,6 +224,37 @@ const EnterprisePage: React.FC = () => {
     }
   };
 
+  const confirmMapping = async () => {
+    if (!reportFile || !proposal) return;
+    const body = new FormData();
+    body.append('file', reportFile);
+    body.append('platform', platform);
+    body.append('mapping', JSON.stringify(mapping));
+    body.append('source_site', sourceSite);
+    body.append('source_version', sourceVersion);
+    try {
+      const res = await fetch('/api/enterprise/mapping/preview', { method: 'POST', body });
+      const data = await res.json();
+      if (!res.ok) {
+        setNotice(data.error ?? 'Could not confirm this mapping.');
+        return;
+      }
+      const sourceLabel: string = data.source?.label ?? 'Unlabelled source';
+      setStaged(prev => [...prev, {
+        id: Date.now(),
+        fileName: reportFile.name,
+        platformLabel: data.platform_label ?? 'Manual mapping',
+        sourceLabel,
+        summary: data.summary,
+      }]);
+      setNotice('Mapping confirmed for this preview. No data was stored.');
+      setReportFile(null);
+      setProposal(null);
+    } catch {
+      setNotice('Mapping preview is unavailable right now. Check that the backend is running.');
+    }
+  };
+
   const missingFields = proposal
     ? [
         ...(['learner_ref', 'completion'] as const).filter(f => !mapping[f]).map(f => proposal.fields.find(x => x.field === f)?.label ?? f),
@@ -231,6 +274,8 @@ const EnterprisePage: React.FC = () => {
     } else if (files.length > 0 && rule === REPORT_UPLOAD) {
       setReportFile(files[0]);
       setPlatform('auto');
+      setSourceSite('');
+      setSourceVersion('');
       setNotice(files.length > 1 ? 'Mapping review shows the first file; map each LMS report separately.' : '');
       void loadProposal(files[0], 'auto');
     } else if (files.length > 0) {
@@ -414,6 +459,29 @@ const EnterprisePage: React.FC = () => {
               </select>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="text-xs text-stone-500">
+                Source site (optional)
+                <input
+                  value={sourceSite}
+                  maxLength={80}
+                  onChange={e => setSourceSite(e.target.value)}
+                  placeholder="e.g. Legacy Moodle"
+                  className="mt-1 block w-full rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-900"
+                />
+              </label>
+              <label className="text-xs text-stone-500">
+                Source version (optional)
+                <input
+                  value={sourceVersion}
+                  maxLength={80}
+                  onChange={e => setSourceVersion(e.target.value)}
+                  placeholder="e.g. Moodle 3.11"
+                  className="mt-1 block w-full rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-900"
+                />
+              </label>
+            </div>
+            <p className="mt-1 text-xs text-stone-400">Descriptive label only; Plot Ark does not detect the site or version.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {proposal.fields.map(({ field, label, required }) => (
                 <label key={field} className="text-xs text-stone-500">
                   {label}{required ? ' *' : ''}
@@ -447,7 +515,7 @@ const EnterprisePage: React.FC = () => {
               <button
                 type="button"
                 disabled={missingFields.length > 0}
-                onClick={() => { setNotice('Mapping confirmed for this preview. No data was stored.'); setReportFile(null); setProposal(null); }}
+                onClick={() => { void confirmMapping(); }}
                 className="rounded-xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Confirm mapping
@@ -456,6 +524,46 @@ const EnterprisePage: React.FC = () => {
                 Cancel
               </button>
             </div>
+          </section>
+        )}
+
+        {staged.length > 0 && (
+          <section aria-label="Cohort comparison by source" className="mt-5 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">Cohort comparison by source</p>
+              <button type="button" onClick={() => setStaged([])} className="text-xs font-medium text-stone-500 hover:text-stone-900">Clear</button>
+            </div>
+            <p className="mt-1 text-xs text-stone-500">Each labelled import stays its own cohort; sources are never pooled. Preview only, nothing is stored.</p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[32rem] text-left text-sm">
+                <thead>
+                  <tr className="text-xs text-stone-400">
+                    <th className="py-1.5 pr-4 font-medium">Source</th>
+                    <th className="py-1.5 pr-4 font-medium">Learners</th>
+                    <th className="py-1.5 pr-4 font-medium">Completion</th>
+                    <th className="py-1.5 pr-4 font-medium">Avg score</th>
+                    <th className="py-1.5 font-medium">Avg time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {staged.map(item => (
+                    <tr key={item.id} className="border-t border-stone-100 text-stone-800">
+                      <td className="py-2 pr-4">
+                        <span className="font-medium">{item.sourceLabel}</span>
+                        <span className="block text-xs text-stone-400">{item.platformLabel} · {item.fileName}</span>
+                      </td>
+                      <td className="py-2 pr-4">{item.summary.learners}{item.summary.small_group ? ' *' : ''}</td>
+                      <td className="py-2 pr-4">{item.summary.completion_rate === null ? '—' : `${Math.round(item.summary.completion_rate * 100)}%`}</td>
+                      <td className="py-2 pr-4">{item.summary.avg_score ?? '—'}</td>
+                      <td className="py-2">{item.summary.avg_duration_seconds === null ? '—' : `${Math.round(item.summary.avg_duration_seconds / 60)} min`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {staged.some(item => item.summary.small_group) && (
+              <p className="mt-2 text-xs text-stone-400">* Fewer than 5 learners: treat as indicative only.</p>
+            )}
           </section>
         )}
 

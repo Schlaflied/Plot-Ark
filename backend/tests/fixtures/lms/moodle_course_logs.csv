@@ -1,0 +1,3 @@
+Time,User full name,Affected user,Event context,Component,Event name,Description,Origin,IP address
+"3/02/26, 09:15",Synthetic Learner One,-,Course: Intro to Safety,System,Course completed,The user with id '101' completed the course.,web,192.0.2.1
+"3/02/26, 09:10",Synthetic Learner Two,-,Course: Intro to Safety,System,Course viewed,The user with id '102' viewed the course.,web,192.0.2.2
