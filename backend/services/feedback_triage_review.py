@@ -52,6 +52,10 @@ def save_escalations(course_id: int, escalations: list) -> None:
         raise ReviewError("Database unavailable", 503)
     try:
         cur = conn.cursor()
+        # Lock the course row so two concurrent analyses for the same course
+        # can't interleave their delete-then-insert and leave a corrupted
+        # pending set (last writer silently dropping the other's rows).
+        cur.execute("SELECT id FROM curricula WHERE id = %s FOR UPDATE", (course_id,))
         cur.execute(
             "DELETE FROM change_log WHERE course_id = %s AND status = 'pending' AND change_type = %s",
             (course_id, CHANGE_TYPE),

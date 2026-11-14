@@ -81,9 +81,15 @@ _TOKEN = re.compile(r"[a-z][a-z']+")
 # purpose: over-redaction is the safe failure mode for learner-identifying
 # text, under-redaction is not.
 _SELF_NAME = re.compile(
-    r"\b(?:i am|i'm|my name is|this is)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b", re.I)
+    # Only the intro phrase is case-insensitive; the name itself must stay
+    # capitalized (a bare `re.I` here would make [A-Z] match lowercase too,
+    # letting "I am unable to submit" get treated as "I am <Name>" and
+    # destroy blocker-detection text — this must never turn case-insensitive).
+    r"\b(?:[Ii] am|[Ii]'m|[Mm]y name is|[Tt]his is)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b")
 _NAME_PAIR = re.compile(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\b")
 _LEARNER_ID_MENTION = re.compile(r"\blearner\s*(?:id)?\s*[:#]?\s*\w{3,}\b", re.I)
+# Tokens that are just redaction placeholders, never real topic content.
+_REDACTION_TOKENS = frozenset({"name", "email", "number", "learner", "id"})
 
 
 def _redact_names(text: str) -> str:
@@ -153,7 +159,7 @@ def _stem(tok: str) -> str:
 
 def _tokens(text: str) -> list[str]:
     toks = [_stem(t.strip("'")) for t in _TOKEN.findall(text.lower())]
-    return [t for t in toks if len(t) > 2 and t not in _STOPWORDS]
+    return [t for t in toks if len(t) > 2 and t not in _STOPWORDS and t not in _REDACTION_TOKENS]
 
 
 def _shorten(text: str, limit: int) -> str:
@@ -178,16 +184,22 @@ def _clean_rows(rows) -> list[dict]:
         if not isinstance(r, dict):
             continue
         learner = str(r.get("learner_id") or "").strip()
-        comment = " ".join(str(r.get("comment") or "").split())
-        comment = _redact_names(comment)
-        if not learner or not comment:
+        raw_comment = " ".join(str(r.get("comment") or "").split())
+        if not learner or not raw_comment:
+            continue
+        # Classify the blocker on the ORIGINAL text before redaction: the
+        # redaction patterns (e.g. "I am <Name>") can otherwise eat the very
+        # words ("I am unable to submit...") that blocker detection needs.
+        blocker = _blocker_type(raw_comment)
+        comment = _redact_names(raw_comment)
+        if not comment:
             continue
         ref = str(r.get("course_ref") or "").strip() or "general"
         key = (learner, ref, comment.lower())
         if key in seen:
             continue
         seen.add(key)
-        out.append({"learner": learner, "comment": comment, "ref": ref})
+        out.append({"learner": learner, "comment": comment, "ref": ref, "blocker": blocker})
     return out
 
 
@@ -267,7 +279,6 @@ def triage_feedback(rows, config: dict | None = None) -> dict:
     by_ref: dict[str, list[dict]] = {}
     for it in clean:
         it["toks"] = Counter(_tokens(it["comment"]))
-        it["blocker"] = _blocker_type(it["comment"])
         by_ref.setdefault(it["ref"], []).append(it)
 
     topics = []

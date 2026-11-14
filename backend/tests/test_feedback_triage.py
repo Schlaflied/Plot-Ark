@@ -145,6 +145,28 @@ class TriageTests(unittest.TestCase):
         t = by_label(result, "buffer") or result["monitor"][0]
         self.assertNotIn("example", t["label"])
 
+    def test_redaction_placeholders_dont_merge_unrelated_topics(self):
+        rows = [{"learner_id": "L60", "course_ref": "MOD4", "comment": "Alice Smith: buffering"},
+                {"learner_id": "L61", "course_ref": "MOD4", "comment": "Bob Jones: deadlines"},
+                {"learner_id": "L62", "course_ref": "MOD4", "comment": "Carol Green: accessibility"}]
+        result = triage.triage_feedback(rows, {"min_group_size": 2})
+        # Each comment is about a different unrelated subject; the shared
+        # "[name]" placeholder must not be what glues them into one cluster
+        # (if it did, they'd form a single 3-learner topic instead of three
+        # separate, too-small-to-report topics).
+        self.assertEqual(result["summary"]["topics_found"], 3)
+        self.assertEqual(result["summary"]["suppressed_small_topics"], 3)
+
+    def test_blocker_detection_survives_self_intro_redaction(self):
+        rows = [{"learner_id": "L63", "course_ref": "MOD4",
+                  "comment": "I am unable to submit my assignment, the button is disabled."}]
+        result = triage.triage_feedback(rows, {"min_group_size": 2})
+        blocker = by_label(result, "Cannot submit") or (
+            result["escalations"][0] if result["escalations"] else None)
+        self.assertIsNotNone(blocker)
+        self.assertTrue(blocker["is_blocker"])
+        self.assertEqual(blocker["level"], "blocker")
+
     def test_config_validation(self):
         for bad in ({"raise_now_min_learners": 0}, {"nope": 1}, {"similarity_threshold": 2}, "x"):
             with self.assertRaises(ValueError):
@@ -163,7 +185,8 @@ class FakeCursor:
 
     def execute(self, sql, params=()):
         params = tuple(json.dumps(p) if isinstance(p, list) else p for p in params)
-        self._cur.execute(sql.replace("%s", "?"), params)
+        sql = sql.replace("%s", "?").replace("FOR UPDATE", "")  # sqlite has no row locking
+        self._cur.execute(sql, params)
 
     def fetchone(self):
         return self._cur.fetchone()
@@ -202,6 +225,8 @@ def make_db():
             flag_reason TEXT, recommendation TEXT, agent TEXT DEFAULT 'curriculum_agent',
             status TEXT DEFAULT 'pending', backup_data TEXT,
             change_type TEXT DEFAULT 'objective_update', detail TEXT);
+        CREATE TABLE curricula (id INTEGER PRIMARY KEY);
+        INSERT INTO curricula (id) VALUES (1);
     """)
     return raw
 
