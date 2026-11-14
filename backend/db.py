@@ -326,6 +326,21 @@ def init_db():
                 cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS custom_prompt TEXT DEFAULT ''")
                 cur.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS model_config JSONB DEFAULT '{}'")
 
+                # ── lti_users (LTI 1.3 launches: matched by issuer + sub, never email) ──
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS lti_users (
+                        issuer TEXT NOT NULL,
+                        sub TEXT NOT NULL,
+                        email TEXT UNIQUE NOT NULL,
+                        role TEXT NOT NULL,
+                        display_name TEXT DEFAULT '',
+                        contact_email TEXT DEFAULT '',
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        last_launch_at TIMESTAMPTZ DEFAULT NOW(),
+                        PRIMARY KEY (issuer, sub)
+                    )
+                """)
+
                 # ── prompt_templates (professor-editable prompt instructions) ──
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS prompt_templates (
