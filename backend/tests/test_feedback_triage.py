@@ -121,6 +121,30 @@ class TriageTests(unittest.TestCase):
         self.assertNotIn("Bob", blob)
         self.assertIn("[name]", blob)
 
+    def test_bare_name_with_no_intro_phrase_is_redacted(self):
+        rows = [{"learner_id": "L52", "course_ref": "MOD3",
+                  "comment": "Alice Smith: the video keeps buffering and buffering."},
+                {"learner_id": "L53", "course_ref": "MOD3",
+                  "comment": "Carol Jones here, the video keeps buffering too."}]
+        result = triage.triage_feedback(rows, {"min_group_size": 2})
+        blob = json.dumps(result)
+        self.assertNotIn("Alice", blob)
+        self.assertNotIn("Smith", blob)
+        self.assertNotIn("Carol", blob)
+        self.assertNotIn("Jones", blob)
+
+    def test_email_redacted_before_labeling_not_just_shortening(self):
+        rows = [{"learner_id": "L54", "course_ref": "MOD3",
+                  "comment": "reach me at alice.smith@example.com the video keeps buffering"},
+                {"learner_id": "L55", "course_ref": "MOD3",
+                  "comment": "the video keeps buffering, reach me at bob@example.com too"}]
+        result = triage.triage_feedback(rows, {"min_group_size": 2})
+        blob = json.dumps(result)
+        self.assertNotIn("alice.smith", blob)
+        self.assertNotIn("example.com", blob)
+        t = by_label(result, "buffer") or result["monitor"][0]
+        self.assertNotIn("example", t["label"])
+
     def test_config_validation(self):
         for bad in ({"raise_now_min_learners": 0}, {"nope": 1}, {"similarity_threshold": 2}, "x"):
             with self.assertRaises(ValueError):

@@ -72,16 +72,28 @@ will with would you your really quite much many bit lot also still even though
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"\+?\d[\d\s().-]{7,}\d")
 _TOKEN = re.compile(r"[a-z][a-z']+")
-# Lightweight, explainable name redaction: self-introductions ("I am Alice
-# Smith", "my name is Bob") and a trailing Learner ID mention. Not a full NER
-# system — it catches the common self-identifying patterns, not every name.
+# Lightweight, explainable name redaction — not a full NER system. Covers:
+#   - self-introductions ("I am Alice Smith", "my name is Bob")
+#   - a bare "Firstname Lastname"-shaped pair anywhere in the text (catches
+#     "Alice Smith: the video keeps buffering" with no intro phrase)
+#   - a learner-id mention
+# A capitalized two-word pair is redacted even outside an intro phrase on
+# purpose: over-redaction is the safe failure mode for learner-identifying
+# text, under-redaction is not.
 _SELF_NAME = re.compile(
     r"\b(?:i am|i'm|my name is|this is)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b", re.I)
+_NAME_PAIR = re.compile(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\b")
 _LEARNER_ID_MENTION = re.compile(r"\blearner\s*(?:id)?\s*[:#]?\s*\w{3,}\b", re.I)
 
 
 def _redact_names(text: str) -> str:
+    # Order matters: email/phone before name patterns so digits/addresses
+    # never get mistaken for word tokens, and before this text is ever
+    # tokenized or labeled (not just when shortened for display).
+    text = _EMAIL.sub("[email]", text)
+    text = _PHONE.sub("[number]", text)
     text = _SELF_NAME.sub("[name]", text)
+    text = _NAME_PAIR.sub("[name]", text)
     text = _LEARNER_ID_MENTION.sub("[learner id]", text)
     return text
 
