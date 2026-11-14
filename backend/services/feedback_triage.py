@@ -97,8 +97,12 @@ _LEARNER_ID_MENTION = re.compile(r"\blearner\s*(?:id)?\s*[:#]?\s*\w{3,}\b", re.I
 # A bare ID-shaped token anywhere in the text (not just after "learner id:"),
 # e.g. "my ID is L52" or "ticket STU4821" — short letter prefix + digits.
 _BARE_ID_TOKEN = re.compile(r"\b[A-Za-z]{1,4}\d{2,6}\b")
-# Tokens that are just redaction placeholders, never real topic content.
-_REDACTION_TOKENS = frozenset({"name", "email", "number", "learner", "id"})
+# Redaction leaves bracketed placeholders like "[email]" in the text. Strip
+# the whole bracketed marker before tokenizing — not just the word inside —
+# so a real, unredacted occurrence of the same English word ("email delivery
+# is broken") still tokenizes and clusters normally. Filtering by word alone
+# would also suppress that legitimate topic.
+_PLACEHOLDER_MARKER = re.compile(r"\[(?:name|email|number|learner id|id)\]")
 
 
 def _redact_names(text: str) -> str:
@@ -168,8 +172,9 @@ def _stem(tok: str) -> str:
 
 
 def _tokens(text: str) -> list[str]:
-    toks = [_stem(t.strip("'")) for t in _TOKEN.findall(text.lower())]
-    return [t for t in toks if len(t) > 2 and t not in _STOPWORDS and t not in _REDACTION_TOKENS]
+    text = _PLACEHOLDER_MARKER.sub(" ", text.lower())
+    toks = [_stem(t.strip("'")) for t in _TOKEN.findall(text)]
+    return [t for t in toks if len(t) > 2 and t not in _STOPWORDS]
 
 
 def _shorten(text: str, limit: int) -> str:

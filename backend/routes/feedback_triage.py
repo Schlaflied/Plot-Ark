@@ -35,9 +35,9 @@ def analyze_feedback():
                     raise ValueError("comments must be a list")
             elif "csv" in data:
                 csv_text = data["csv"]
-                if csv_text is not None and not isinstance(csv_text, str):
-                    raise ValueError("csv must be a string")
-                rows = triage.parse_feedback_csv(csv_text or "")
+                if not isinstance(csv_text, str):
+                    raise ValueError("csv must be a string (use \"\" for explicit empty input)")
+                rows = triage.parse_feedback_csv(csv_text)
             else:
                 raise ValueError("Request must include either 'comments' or 'csv'")
         result = triage.triage_feedback(rows, config)

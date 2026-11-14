@@ -167,6 +167,17 @@ class TriageTests(unittest.TestCase):
         self.assertTrue(blocker["is_blocker"])
         self.assertEqual(blocker["level"], "blocker")
 
+    def test_ordinary_word_matching_a_placeholder_name_still_tokenizes(self):
+        # "email" is also the bracket-placeholder word used for redacted
+        # addresses. A genuine, unredacted use of "email" as an ordinary
+        # topic word must still produce the "email" token for clustering
+        # and labeling — only the bracketed marker itself should disappear.
+        self.assertIn("email", triage._tokens("email delivery is broken"))
+        self.assertIn("name", triage._tokens("my name on the roster is wrong"))
+        # A redacted address contributes no "email" token at all.
+        redacted = triage._redact_names("reach me at alice@example.com please")
+        self.assertNotIn("email", triage._tokens(redacted))
+
     def test_bare_learner_id_in_free_text_is_redacted(self):
         rows = [{"learner_id": "L70", "course_ref": "MOD4",
                   "comment": "my ID is L52, the video keeps buffering"},
@@ -287,6 +298,18 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/feedback-triage/analyze",
                                           json={"csv": ""}).status_code, 400)
         self.assertEqual(self.analyze(config={"raise_now_min_learners": 0}).status_code, 400)
+
+    def test_neither_comments_nor_csv_is_rejected(self):
+        r = self.client.post("/api/feedback-triage/analyze", json={"course_id": 1})
+        self.assertEqual(r.status_code, 400)
+
+    def test_non_string_or_null_csv_is_rejected_not_silently_emptied(self):
+        # These must not silently become an empty CSV (which would wipe the
+        # course's pending escalations) — each must be a 400.
+        for bad in (False, 123, None):
+            r = self.client.post("/api/feedback-triage/analyze",
+                                  json={"course_id": 1, "csv": bad})
+            self.assertEqual(r.status_code, 400, f"csv={bad!r} should be rejected")
 
     def test_threshold_via_route(self):
         r = self.analyze(config={"raise_now_min_learners": 2}).get_json()
