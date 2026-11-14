@@ -121,6 +121,25 @@ class TriageTests(unittest.TestCase):
         self.assertNotIn("Bob", blob)
         self.assertIn("[name]", blob)
 
+    def test_self_intro_redacted_regardless_of_intro_phrase_casing(self):
+        # An earlier fix only alternated the first letter of each intro
+        # word ("[Mm]y name is"), which matched "My NAME IS" but not
+        # "MY NAME IS" — later letters' case still had to match exactly.
+        rows = [{"learner_id": "L90", "course_ref": "MOD3",
+                  "comment": "MY NAME IS Alice, the video keeps buffering"},
+                {"learner_id": "L91", "course_ref": "MOD3",
+                  "comment": "I AM Bob, the video keeps buffering too"}]
+        result = triage.triage_feedback(rows, {"min_group_size": 2})
+        blob = json.dumps(result)
+        self.assertNotIn("Alice", blob)
+        self.assertNotIn("Bob", blob)
+        self.assertIn("[name]", blob)
+        # The intro-phrase casing fix must not make the blocker regexes
+        # (which rely on `_SELF_NAME` leaving ordinary text alone) miss
+        # a real blocker just because it starts with "I am"/"I AM".
+        blocker = triage._blocker_type("I AM unable to submit my assignment")
+        self.assertEqual(blocker, "cannot_submit")
+
     def test_bare_name_with_no_intro_phrase_is_redacted(self):
         rows = [{"learner_id": "L52", "course_ref": "MOD3",
                   "comment": "Alice Smith: the video keeps buffering and buffering."},

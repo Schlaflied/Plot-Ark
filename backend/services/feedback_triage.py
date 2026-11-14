@@ -87,11 +87,14 @@ _TOKEN = re.compile(r"[a-z][a-z']+")
 # unacceptable false-positive rate against normal feedback text. This is a
 # genuine limit of a lightweight, explainable approach, not full NER.
 _SELF_NAME = re.compile(
-    # Only the intro phrase is case-insensitive; the name itself must stay
-    # capitalized (a bare `re.I` here would make [A-Z] match lowercase too,
-    # letting "I am unable to submit" get treated as "I am <Name>" and
-    # destroy blocker-detection text — this must never turn case-insensitive).
-    r"\b(?:[Ii] am|[Ii]'m|[Mm]y name is|[Tt]his is)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b")
+    # (?i:...) scopes case-insensitivity to just the intro-phrase group —
+    # unlike a trailing `, re.I` flag (which would make [A-Z] match lowercase
+    # too and let "I am unable to submit" be treated as "I am <Name>",
+    # destroying blocker-detection text) or manually alternating only the
+    # first letter (which missed "MY NAME IS Alice" — later letters still
+    # didn't match). The name part outside the (?i:...) group stays
+    # capitalized-only either way.
+    r"\b(?i:i am|i'm|my name is|this is)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b")
 _NAME_PAIR = re.compile(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\b")
 _LEARNER_ID_MENTION = re.compile(r"\blearner\s*(?:id)?\s*[:#]?\s*\w{3,}\b", re.I)
 # A bare ID-shaped token anywhere in the text (not just after "learner id:"),
