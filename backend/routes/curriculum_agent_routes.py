@@ -284,6 +284,7 @@ def apply_curriculum_suggestion():
             SELECT id, recommendation, flag_reason
             FROM change_log
             WHERE course_id = %s AND module_id = %s AND status = 'pending'
+              AND COALESCE(change_type, 'objective_update') != 'assessment_design'
             ORDER BY timestamp DESC LIMIT 1
         """, (str(course_id), module_id))
         cl_row = cur.fetchone()
