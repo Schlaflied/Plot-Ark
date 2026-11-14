@@ -1,0 +1,10 @@
+{
+  "sources": [
+    {
+      "source_id": "ca-privacy-guidance",
+      "url": "https://example.gov.test/privacy/breach-reporting-guidance",
+      "jurisdiction": "CA-ON",
+      "authority": "Example Privacy Commissioner (fixture)"
+    }
+  ]
+}
