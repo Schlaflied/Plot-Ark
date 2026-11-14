@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.0](https://github.com/Schlaflied/Plot-Ark/compare/v0.5.0...v0.6.0) (2026-11-14)
+
+
+### Features
+
+* **enterprise:** evaluation-level summary report ([#29](https://github.com/Schlaflied/Plot-Ark/issues/29)) ([#37](https://github.com/Schlaflied/Plot-Ark/issues/37)) ([1b54b3d](https://github.com/Schlaflied/Plot-Ark/commit/1b54b3da045071e830185d90bcedf4582c037ca7))
+* **enterprise:** Moodle mapping preset, source label and cohort comparison by source ([#36](https://github.com/Schlaflied/Plot-Ark/issues/36)) ([056c481](https://github.com/Schlaflied/Plot-Ark/commit/056c48119aa276d582c1a058267ebe2c5da1fba0)), closes [#25](https://github.com/Schlaflied/Plot-Ark/issues/25)
+* **feedback:** triage learner feedback into topics and escalations ([#33](https://github.com/Schlaflied/Plot-Ark/issues/33)) ([f09087f](https://github.com/Schlaflied/Plot-Ark/commit/f09087fef22ebd715cd0d2f46faa62e4b074ecec))
+* **materials:** first-pass WCAG 2.1 accessibility check for HTML and DOCX ([#26](https://github.com/Schlaflied/Plot-Ark/issues/26)) ([#34](https://github.com/Schlaflied/Plot-Ark/issues/34)) ([76ebb11](https://github.com/Schlaflied/Plot-Ark/commit/76ebb11a2e04a2888008b5622de50030b80bddf0))
+* optional local-model mode (AI_PROVIDER=local) ([#35](https://github.com/Schlaflied/Plot-Ark/issues/35)) ([7197222](https://github.com/Schlaflied/Plot-Ark/commit/719722265179d83c5f4bc6aac0a7b55c4e7145e6))
+
 ## [0.5.0](https://github.com/Schlaflied/Plot-Ark/compare/v0.4.0...v0.5.0) (2026-11-14)
 
 
