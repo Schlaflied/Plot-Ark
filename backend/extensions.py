@@ -7,6 +7,7 @@ import google.generativeai as genai
 from tavily import TavilyClient
 
 from config import AI_PROVIDER, OPENAI_API_KEY, GEMINI_API_KEY, TAVILY_API_KEY
+from services import llm as _llm
 from services.secret_store import SecretStorageError, decrypt_secret
 
 # ---------------------------------------------------------------------------
@@ -47,9 +48,21 @@ def _resolve(redis_key: str, env_fallback: str | None) -> str | None:
 # ---------------------------------------------------------------------------
 # AI clients (initialized once at startup; reloaded via reload_clients())
 # ---------------------------------------------------------------------------
-openai_client = OpenAI(api_key=_resolve("openai_key", OPENAI_API_KEY))
-genai.configure(api_key=_resolve("gemini_key", GEMINI_API_KEY) or "")
-tavily_client = TavilyClient(api_key=_resolve("tavily_key", TAVILY_API_KEY))
+# In local mode (AI_PROVIDER=local) no hosted LLM client is created at all, so a
+# misrouted call fails loudly instead of silently reaching a hosted service.
+if AI_PROVIDER == "local":
+    openai_client = None
+    try:
+        tavily_client = TavilyClient(api_key=_resolve("tavily_key", TAVILY_API_KEY))
+    except Exception as _tav_err:  # Tavily is optional in local mode
+        print(f"Tavily unavailable in local mode: {_tav_err}")
+        tavily_client = None
+else:
+    openai_client = OpenAI(api_key=_resolve("openai_key", OPENAI_API_KEY))
+    genai.configure(api_key=_resolve("gemini_key", GEMINI_API_KEY) or "")
+    tavily_client = TavilyClient(api_key=_resolve("tavily_key", TAVILY_API_KEY))
+
+print(_llm.startup_message())
 
 
 def reload_clients() -> None:
@@ -64,15 +77,16 @@ def reload_clients() -> None:
     gemini_key = _resolve("gemini_key", GEMINI_API_KEY) or ""
     tavily_key = _resolve("tavily_key", TAVILY_API_KEY)
 
-    try:
-        openai_client = OpenAI(api_key=openai_key)
-    except Exception as e:
-        print(f"reload_clients: OpenAI init failed: {e}")
+    if AI_PROVIDER != "local":
+        try:
+            openai_client = OpenAI(api_key=openai_key)
+        except Exception as e:
+            print(f"reload_clients: OpenAI init failed: {e}")
 
-    try:
-        genai.configure(api_key=gemini_key)
-    except Exception as e:
-        print(f"reload_clients: Gemini configure failed: {e}")
+        try:
+            genai.configure(api_key=gemini_key)
+        except Exception as e:
+            print(f"reload_clients: Gemini configure failed: {e}")
 
     try:
         tavily_client = TavilyClient(api_key=tavily_key)

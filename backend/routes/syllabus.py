@@ -5,6 +5,7 @@ import json
 from flask import Blueprint, request, jsonify
 from config import AI_PROVIDER
 from extensions import openai_client
+from services import llm
 import google.generativeai as genai
 from services.file_parser import extract_text_from_bytes
 
@@ -89,6 +90,16 @@ Syllabus text:
 {truncated}"""
 
     try:
+        if llm.is_local():
+            raw = llm.local_chat(prompt, temperature=0.2, max_tokens=2000, json_mode=True)
+            parsed = llm.parse_json_object(raw)
+            return jsonify({
+                "fields": parsed.get("fields", {}),
+                "modules": parsed.get("modules", []),
+                "references": parsed.get("references", []),
+                "assignments": parsed.get("assignments", []),
+                "ai_mode": "local",
+            })
         if AI_PROVIDER == "gemini":
             model = genai.GenerativeModel("gemini-2.0-flash-lite")
             response = model.generate_content(prompt)
@@ -109,6 +120,10 @@ Syllabus text:
             "references": parsed.get("references", []),
             "assignments": parsed.get("assignments", []),
         })
+    except llm.LLMError as e:
+        print(f"Syllabus parse (local model) failed: {e}")
+        status = 503 if isinstance(e, llm.LocalModelUnavailable) else 502
+        return jsonify({"error": str(e), "ai_mode": "local"}), status
     except json.JSONDecodeError as e:
         print(f"Syllabus parse JSON error: {e}, raw: {raw[:200]}")
         return jsonify({"error": "AI returned invalid JSON"}), 500

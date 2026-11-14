@@ -12,6 +12,12 @@ _ingest_jobs = {}         # key: job_id → {"status": "running"|"done"|"error",
 
 def get_lightrag_instance(storage_dir: str = None):
     """Return a cached LightRAG instance (not yet initialized — init happens inside async context)."""
+    from services import llm
+    if llm.is_local():
+        raise llm.LLMError(
+            "Knowledge-graph (LightRAG) steps use hosted OpenAI models and are "
+            "disabled in local model mode, so nothing is sent to a hosted service."
+        )
     from lightrag import LightRAG
     from lightrag.llm.openai import gpt_4o_mini_complete, openai_embed
     from lightrag.utils import EmbeddingFunc
