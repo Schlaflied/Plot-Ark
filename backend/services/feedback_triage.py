@@ -76,10 +76,16 @@ _TOKEN = re.compile(r"[a-z][a-z']+")
 #   - self-introductions ("I am Alice Smith", "my name is Bob")
 #   - a bare "Firstname Lastname"-shaped pair anywhere in the text (catches
 #     "Alice Smith: the video keeps buffering" with no intro phrase)
-#   - a learner-id mention
+#   - a learner-id mention ("learner id: X") or a bare ID-shaped token
+#     (letters+digits, e.g. "L52", "STU4821") anywhere in the text
 # A capitalized two-word pair is redacted even outside an intro phrase on
 # purpose: over-redaction is the safe failure mode for learner-identifying
 # text, under-redaction is not.
+# KNOWN LIMIT (documented, not a bug to chase further): a name with no
+# capitalization at all ("alice smith: the video keeps buffering") cannot be
+# distinguished from two ordinary lowercase words by regex without an
+# unacceptable false-positive rate against normal feedback text. This is a
+# genuine limit of a lightweight, explainable approach, not full NER.
 _SELF_NAME = re.compile(
     # Only the intro phrase is case-insensitive; the name itself must stay
     # capitalized (a bare `re.I` here would make [A-Z] match lowercase too,
@@ -88,6 +94,9 @@ _SELF_NAME = re.compile(
     r"\b(?:[Ii] am|[Ii]'m|[Mm]y name is|[Tt]his is)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b")
 _NAME_PAIR = re.compile(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\b")
 _LEARNER_ID_MENTION = re.compile(r"\blearner\s*(?:id)?\s*[:#]?\s*\w{3,}\b", re.I)
+# A bare ID-shaped token anywhere in the text (not just after "learner id:"),
+# e.g. "my ID is L52" or "ticket STU4821" — short letter prefix + digits.
+_BARE_ID_TOKEN = re.compile(r"\b[A-Za-z]{1,4}\d{2,6}\b")
 # Tokens that are just redaction placeholders, never real topic content.
 _REDACTION_TOKENS = frozenset({"name", "email", "number", "learner", "id"})
 
@@ -101,6 +110,7 @@ def _redact_names(text: str) -> str:
     text = _SELF_NAME.sub("[name]", text)
     text = _NAME_PAIR.sub("[name]", text)
     text = _LEARNER_ID_MENTION.sub("[learner id]", text)
+    text = _BARE_ID_TOKEN.sub("[id]", text)
     return text
 
 

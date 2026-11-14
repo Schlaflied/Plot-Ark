@@ -167,6 +167,16 @@ class TriageTests(unittest.TestCase):
         self.assertTrue(blocker["is_blocker"])
         self.assertEqual(blocker["level"], "blocker")
 
+    def test_bare_learner_id_in_free_text_is_redacted(self):
+        rows = [{"learner_id": "L70", "course_ref": "MOD4",
+                  "comment": "my ID is L52, the video keeps buffering"},
+                {"learner_id": "L71", "course_ref": "MOD4",
+                  "comment": "ticket STU4821, the video keeps buffering too"}]
+        result = triage.triage_feedback(rows, {"min_group_size": 2})
+        blob = json.dumps(result)
+        self.assertNotIn("L52", blob)
+        self.assertNotIn("STU4821", blob)
+
     def test_config_validation(self):
         for bad in ({"raise_now_min_learners": 0}, {"nope": 1}, {"similarity_threshold": 2}, "x"):
             with self.assertRaises(ValueError):
