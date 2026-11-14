@@ -451,6 +451,21 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS idx_enterprise_events_scope
                     ON enterprise_learning_events(organization_id, program_id, cohort_id, module_id)
                 """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_confidence_responses (
+                        id BIGSERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL REFERENCES organizations(id),
+                        program_id INTEGER NOT NULL REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        cohort_id INTEGER REFERENCES enterprise_cohorts(id) ON DELETE SET NULL,
+                        program_version TEXT NOT NULL DEFAULT 'v1',
+                        phase TEXT NOT NULL CHECK (phase IN ('pre', 'post')),
+                        learner_ref TEXT NOT NULL,
+                        answers JSONB NOT NULL,
+                        duration_seconds NUMERIC,
+                        submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        UNIQUE(program_id, cohort_id, program_version, phase, learner_ref)
+                    )
+                """)
                 conn.commit()
                 cur.close()
                 conn.close()
