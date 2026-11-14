@@ -131,9 +131,7 @@ def generate_curriculum():
             if llm.is_local():
                 for delta in llm.local_stream(prompt):
                     full_text += delta
-                    yield f"data: {json.dumps({'text': delta})}
-
-"
+                    yield f"data: {json.dumps({'text': delta})}\n\n"
             elif AI_PROVIDER == "gemini":
                 model = genai.GenerativeModel("gemini-2.0-flash-lite")
                 response = model.generate_content(prompt, stream=True)
@@ -154,12 +152,8 @@ def generate_curriculum():
                         yield f"data: {json.dumps({'text': delta})}\n\n"
         except llm.LLMError as e:
             print(f"Local model error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}
-
-"
-            yield "data: [DONE]
-
-"
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            yield "data: [DONE]\n\n"
             return
         except Exception as e:
             print(f"Stream error: {e}")
@@ -232,15 +226,11 @@ def generate_curriculum():
                 threading.Thread(target=_run_structural_analysis, args=(new_id,), daemon=True).start()
         except llm.LLMError as e:
             print(f"Local model error during retry: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}
-
-"
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         except Exception as e:
             print(f"Failed to parse/save curriculum: {e}")
             if llm.is_local():
-                yield f"data: {json.dumps({'type': 'error', 'message': 'Local model output did not match the expected curriculum structure; nothing was saved. Try again or use a larger model.'})}
-
-"
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Local model output did not match the expected curriculum structure; nothing was saved. Try again or use a larger model.'})}\n\n"
         yield "data: [DONE]\n\n"
 
     return Response(
@@ -328,9 +318,7 @@ def generate_skeleton():
             if llm.is_local():
                 for delta in llm.local_stream(prompt):
                     full_text += delta
-                    yield f"data: {json.dumps({'text': delta})}
-
-"
+                    yield f"data: {json.dumps({'text': delta})}\n\n"
             elif AI_PROVIDER == "gemini":
                 model = genai.GenerativeModel("gemini-2.0-flash-lite")
                 response = model.generate_content(prompt, stream=True)
@@ -351,12 +339,8 @@ def generate_skeleton():
                         yield f"data: {json.dumps({'text': delta})}\n\n"
         except llm.LLMError as e:
             print(f"Local model error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}
-
-"
-            yield "data: [DONE]
-
-"
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            yield "data: [DONE]\n\n"
             return
         except Exception as e:
             print(f"Skeleton stream error: {e}")
@@ -384,9 +368,7 @@ def generate_skeleton():
         except Exception as e:
             print(f"Failed to parse skeleton: {e}")
             if llm.is_local():
-                yield f"data: {json.dumps({'type': 'error', 'message': 'Local model output did not match the expected skeleton structure.'})}
-
-"
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Local model output did not match the expected skeleton structure.'})}\n\n"
 
         yield "data: [DONE]\n\n"
 
@@ -454,9 +436,7 @@ def expand_module():
             if llm.is_local():
                 for delta in llm.local_stream(prompt):
                     full_text += delta
-                    yield f"data: {json.dumps({'text': delta})}
-
-"
+                    yield f"data: {json.dumps({'text': delta})}\n\n"
             elif AI_PROVIDER == "gemini":
                 model = genai.GenerativeModel("gemini-2.0-flash-lite")
                 response = model.generate_content(prompt, stream=True)
@@ -477,12 +457,8 @@ def expand_module():
                         yield f"data: {json.dumps({'text': delta})}\n\n"
         except llm.LLMError as e:
             print(f"Local model error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}
-
-"
-            yield "data: [DONE]
-
-"
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            yield "data: [DONE]\n\n"
             return
         except Exception as e:
             print(f"Expand module stream error (module {module_index}): {e}")
@@ -507,9 +483,7 @@ def expand_module():
         except Exception as e:
             print(f"Failed to parse expanded module {module_index}: {e}")
             if llm.is_local():
-                yield f"data: {json.dumps({'type': 'error', 'message': 'Local model output did not match the expected module structure.'})}
-
-"
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Local model output did not match the expected module structure.'})}\n\n"
 
         yield "data: [DONE]\n\n"
 
