@@ -452,6 +452,18 @@ def init_db():
                     ON enterprise_learning_events(organization_id, program_id, cohort_id, module_id)
                 """)
                 cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_measurement_plans (
+                        id SERIAL PRIMARY KEY,
+                        program_id INTEGER NOT NULL REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        version INTEGER NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'draft',
+                        plan JSONB NOT NULL DEFAULT '{}',
+                        approved_at TIMESTAMPTZ,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        UNIQUE(program_id, version)
+                    )
+                """)
+                cur.execute("""
                     CREATE TABLE IF NOT EXISTS enterprise_confidence_responses (
                         id BIGSERIAL PRIMARY KEY,
                         organization_id INTEGER NOT NULL REFERENCES organizations(id),
