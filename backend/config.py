@@ -8,7 +8,12 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 # AI provider selection
 # ---------------------------------------------------------------------------
-AI_PROVIDER = os.getenv("AI_PROVIDER", "openai").lower()
+AI_PROVIDER = os.getenv("AI_PROVIDER", "openai").lower()  # openai | gemini | local
+
+# Local-model mode (AI_PROVIDER=local): any Ollama-compatible endpoint.
+LOCAL_LLM_BASE_URL = os.getenv("LOCAL_LLM_BASE_URL", "http://localhost:11434")
+LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "llama3.1:8b")
+LOCAL_LLM_TIMEOUT = float(os.getenv("LOCAL_LLM_TIMEOUT", "120"))
 
 # ---------------------------------------------------------------------------
 # Database

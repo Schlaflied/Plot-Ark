@@ -192,7 +192,7 @@ git clone https://github.com/Schlaflied/Plot-Ark
 cd Plot-Ark
 
 cp .env.example .env
-# Set AI_PROVIDER=openai or AI_PROVIDER=gemini
+# Set AI_PROVIDER=openai, gemini, or local (see docs/LOCAL_MODEL.md)
 # Add the corresponding API key + TAVILY_API_KEY
 
 docker compose up --build

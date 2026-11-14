@@ -53,6 +53,11 @@ const AiModelsSection: React.FC<{
   const tavilyDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
   const tavilyInit = useRef(true);
 
+  const [aiStatus, setAiStatus] = useState<{ mode: string; message: string; reachable?: boolean } | null>(null);
+  useEffect(() => {
+    fetch('/api/ai/status?check=1').then(r => r.ok ? r.json() : null).then(setAiStatus).catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetchBackendKeys().then(data => {
       setTavilyKey(data.tavily_key || '');
@@ -97,6 +102,20 @@ const AiModelsSection: React.FC<{
           {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : saveStatus === 'error' ? 'Save failed — check encryption key' : '·'}
         </span>
       </div>
+
+      {aiStatus && (
+        <div
+          data-testid="ai-mode-indicator"
+          className={`rounded-xl border px-4 py-2 text-xs font-medium ${
+            aiStatus.mode === 'local'
+              ? (aiStatus.reachable === false ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-800')
+              : 'bg-stone-50 border-stone-200 text-stone-600'
+          }`}
+        >
+          {aiStatus.message}
+          {aiStatus.mode === 'local' && aiStatus.reachable === false && ' — endpoint not reachable.'}
+        </div>
+      )}
 
       {/* Tavily card */}
       <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-5 space-y-3">

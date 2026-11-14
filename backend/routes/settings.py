@@ -2,6 +2,7 @@
 
 from flask import Blueprint, request, jsonify
 from extensions import redis_client, reload_clients
+from services import llm
 from services.secret_store import SecretStorageError, decrypt_secret, encrypt_secret
 
 settings_bp = Blueprint("settings", __name__)
@@ -98,6 +99,12 @@ def get_keys():
 # ─── Professor custom prompt ──────────────────────────────────────────────────
 
 _PROMPT_KEY = _REDIS_PREFIX + "professor_prompt"
+
+
+@settings_bp.route("/api/ai/status", methods=["GET"])
+def ai_status():
+    """Which AI mode is active (hosted or local). Never exposes keys."""
+    return jsonify(llm.status(check=request.args.get("check") == "1"))
 
 
 @settings_bp.route("/api/settings/prompt", methods=["GET"])

@@ -3,6 +3,7 @@
 import json
 from flask import Blueprint, request
 from extensions import openai_client, redis_client
+from services import llm
 from services.research import research_sources, score_credibility
 
 sources_bp = Blueprint("sources", __name__)
@@ -41,6 +42,7 @@ def preview_sources():
             "tags": [],
         })
 
+    tagging_error = None
     if sources:
         try:
             sources_for_tags = [{"title": s["title"], "snippet": s["snippet"]} for s in sources]
@@ -54,22 +56,35 @@ def preview_sources():
                 "Each object corresponds to one source in the same order."
             )
 
-            tag_response = openai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": tag_prompt}],
-                temperature=0.3,
-                max_tokens=500,
-            )
-            raw_tags = tag_response.choices[0].message.content.strip()
-            raw_tags = raw_tags.replace("```json", "").replace("```", "").strip()
-            tag_data = json.loads(raw_tags)
+            if llm.is_local():
+                raw_tags = llm.local_chat(tag_prompt, temperature=0.3, max_tokens=500, json_mode=True)
+                tag_data = llm.parse_json_object(raw_tags, required_keys=("results",))
+                if not isinstance(tag_data["results"], list):
+                    raise llm.LocalModelOutputError("Local model 'results' field was not a list.")
+            else:
+                tag_response = openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": tag_prompt}],
+                    temperature=0.3,
+                    max_tokens=500,
+                )
+                raw_tags = tag_response.choices[0].message.content.strip()
+                raw_tags = raw_tags.replace("```json", "").replace("```", "").strip()
+                tag_data = json.loads(raw_tags)
             results_list = tag_data.get("results", [])
             for i, source in enumerate(sources):
                 if i < len(results_list) and isinstance(results_list[i], dict):
                     source["tags"] = results_list[i].get("tags", [])
                     source["snippet"] = results_list[i].get("summary", source["snippet"])
+        except llm.LLMError as tag_err:
+            # Local mode: report the failure, never fall back to a hosted model.
+            tagging_error = str(tag_err)
+            print(f"Tag generation failed (local model): {tag_err}")
         except Exception as tag_err:
             print(f"Tag generation failed (non-fatal): {tag_err}")
+
+    if tagging_error:
+        return {"sources": sources, "tagging_error": tagging_error, "ai_mode": "local"}
 
     if redis_client is not None:
         try:
