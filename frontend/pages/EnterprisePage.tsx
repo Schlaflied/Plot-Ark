@@ -8,6 +8,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { ManagerFollowUpAdmin, ManagerFollowUpForm } from '../components/enterprise/ManagerFollowUp';
 import {
   AlertTriangle,
   ArrowRight,
@@ -296,6 +297,7 @@ const EnterprisePage: React.FC = () => {
             Submit learning pulse
           </button>
           {notice ? <p role="status" className="mt-3 text-center text-sm font-medium text-emerald-700">{notice}</p> : null}
+          <ManagerFollowUpForm email={auth.email} />
         </main>
       </div>
     );
@@ -543,6 +545,8 @@ const EnterprisePage: React.FC = () => {
             </aside>
           </div>
         </section>
+
+        <ManagerFollowUpAdmin role={auth?.role ?? ''} />
 
         <section className="mt-12 pb-10">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">

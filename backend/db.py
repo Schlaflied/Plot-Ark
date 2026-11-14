@@ -458,6 +458,53 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS idx_enterprise_events_scope
                     ON enterprise_learning_events(organization_id, program_id, cohort_id, module_id)
                 """)
+
+                # ── Manager Follow-up Pulse (post-training behaviour evidence) ──
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_followup_config (
+                        program_id INTEGER PRIMARY KEY REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        intervals_days JSONB NOT NULL DEFAULT '[30, 90]',
+                        program_version TEXT NOT NULL DEFAULT 'v1',
+                        anchor_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                        min_group_size INTEGER NOT NULL DEFAULT 5,
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_followup_managers (
+                        id SERIAL PRIMARY KEY,
+                        program_id INTEGER NOT NULL REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        cohort_id INTEGER NOT NULL REFERENCES enterprise_cohorts(id) ON DELETE CASCADE,
+                        manager_email TEXT NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        UNIQUE(program_id, cohort_id, manager_email)
+                    )
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_followup_responses (
+                        id SERIAL PRIMARY KEY,
+                        manager_id INTEGER NOT NULL REFERENCES enterprise_followup_managers(id) ON DELETE CASCADE,
+                        interval_days INTEGER NOT NULL,
+                        status TEXT NOT NULL,
+                        comment TEXT NOT NULL DEFAULT '',
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        UNIQUE(manager_id, interval_days)
+                    )
+                """)
+                # LTM-side aggregate snapshots, keyed by program version so later
+                # versions can be compared. Aggregates only: no manager identity.
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS enterprise_followup_snapshots (
+                        id SERIAL PRIMARY KEY,
+                        program_id INTEGER NOT NULL REFERENCES enterprise_programs(id) ON DELETE CASCADE,
+                        cohort_id INTEGER NOT NULL REFERENCES enterprise_cohorts(id) ON DELETE CASCADE,
+                        program_version TEXT NOT NULL,
+                        interval_days INTEGER NOT NULL,
+                        aggregate JSONB NOT NULL,
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        UNIQUE(program_id, cohort_id, program_version, interval_days)
+                    )
+                """)
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS enterprise_measurement_plans (
                         id SERIAL PRIMARY KEY,
