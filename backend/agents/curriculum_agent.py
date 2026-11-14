@@ -341,7 +341,7 @@ def _write_change_log(course_id: int, recommendations: list[dict]) -> None:
         cur.execute("""
             DELETE FROM change_log
             WHERE course_id = %s AND status = 'pending'
-              AND COALESCE(change_type, 'objective_update') != 'assessment_design'
+              AND COALESCE(change_type, 'objective_update') NOT IN ('assessment_design', 'feedback_triage')
         """, (course_id,))
         for rec in recommendations:
             flag_reasons = rec.get("actions", [])

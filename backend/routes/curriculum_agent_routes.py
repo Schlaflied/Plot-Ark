@@ -570,10 +570,12 @@ def _write_structural_change_log(course_id: int, flags: list, modules: list) -> 
     try:
         cur = conn.cursor()
 
-        # Clear old non-applied entries so re-runs are clean
+        # Clear old non-applied entries so re-runs are clean (preserve entries
+        # owned by other advisory flows, e.g. assessment_design, feedback_triage)
         cur.execute("""
             DELETE FROM change_log
             WHERE course_id = %s AND status = 'pending'
+              AND COALESCE(change_type, 'objective_update') NOT IN ('assessment_design', 'feedback_triage')
         """, (course_id,))
 
         entries = []
