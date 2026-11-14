@@ -25,6 +25,7 @@ from routes.selfview import selfview_bp
 from routes.enterprise import enterprise_bp
 from routes.enterprise_followup import enterprise_followup_bp
 from routes.assessment_design import assessment_design_bp
+from routes.accessibility import accessibility_bp
 from routes.lti import lti_bp
 from routes.feedback_triage import feedback_triage_bp
 
@@ -48,6 +49,7 @@ app.register_blueprint(selfview_bp)
 app.register_blueprint(enterprise_bp)
 app.register_blueprint(enterprise_followup_bp)
 app.register_blueprint(assessment_design_bp)
+app.register_blueprint(accessibility_bp)
 app.register_blueprint(lti_bp)
 app.register_blueprint(feedback_triage_bp)
 
