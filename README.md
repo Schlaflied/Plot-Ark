@@ -12,9 +12,10 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-History-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-Cache-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 [![LightRAG](https://img.shields.io/badge/LightRAG-MIT-orange)](https://github.com/HKUDS/LightRAG)
-[![xAPI](https://img.shields.io/badge/xAPI-1.0.3-5C6BC0)](https://xapi.com/)
+[![xAPI](https://img.shields.io/badge/xAPI-statements-5C6BC0)](https://xapi.com/)
 [![Tavily](https://img.shields.io/badge/Tavily-Research%20Agent-7C3AED)](https://tavily.com/)
-[![IMS](https://img.shields.io/badge/Export-IMS%20Common%20Cartridge-2E7D32)](https://www.imsglobal.org/)
+[![Export](https://img.shields.io/badge/Export-PDF%20%C2%B7%20DOCX%20%C2%B7%20Markdown-2E7D32)](docs/ACADEMIC.md)
+[![IMS](https://img.shields.io/badge/IMS%20Common%20Cartridge-in%20development-lightgrey)](https://www.imsglobal.org/)
 [![Awesome](https://awesome.re/badge.svg)](https://github.com/Jenqyang/Awesome-AI-Agents)
 [![Built on Hive](https://img.shields.io/badge/Built%20on-Hive-orange?logo=github)](https://github.com/aden-hive/hive)
 [![Hive Contributor](https://img.shields.io/badge/Hive-Contributor-brightgreen)](https://github.com/aden-hive/hive/pulls?q=author%3ASchlaflied)
@@ -62,7 +63,7 @@ flowchart LR
 | **Evidence level** | Individual self-view plus privacy-safe cohort analysis | Cohort-level diagnosis; no employee ranking |
 | **Human control** | Instructor reviews curriculum suggestions | L&D owner reviews revision recommendations |
 | **Memory** | Analysis snapshots preserve course changes across teaching cycles | The same LTM model is intended to compare training versions and later business evidence |
-| **Current state** | Functional end-to-end backend and UI | Product preview with synthetic data; server-side ingestion and parsing are roadmap work |
+| **Current state** | Functional end-to-end backend and UI | Product preview (synthetic data in the UI). Backend ingestion API (SCORM/PDF/PPTX/DOCX, LMS CSV/XLSX) exists with tests, but is not yet wired into the UI; analysis runs on uploaded data are in development |
 
 The two workspaces are not separate products. They share the same core: **evidence → diagnosis → human decision → LTM → next version**.
 
@@ -174,10 +175,10 @@ The two workspaces are not separate products. They share the same core: **eviden
 | **Database** | PostgreSQL | Curricula, xAPI statements, student feedback, `course_analysis_snapshots` (LTM) |
 | **Cache & Memory**| Redis | Graph query cache, learner state, A2A shared memory (`a2a:{session}:{key}`) |
 | **Knowledge Graph**| LightRAG + networkx + react-force-graph-2d| Course material ingestion → interactive concept graph |
-| **Behavior Data** | xAPI 1.0.3 + mini-LRS | Statement ingestion → mock data engine (4 noise levels) → professor analytics panel |
+| **Behavior Data** | xAPI-style statements + minimal built-in statement store (not a certified LRS) | Statement ingestion → mock data engine (4 noise levels) → professor analytics panel |
 | **Analytics Engine**| A2A multi-agent (Hive-style, sql-only Phase 1) | 5-node pipeline: Orchestrator + 4 parallel agents; token tracking; LTM snapshot |
 | **Report Export** | ReportLab + python-docx + openpyxl + matplotlib | PDF (Anthropic-style cover), DOCX, Excel; filenames include course slug + noise label |
-| **Curriculum Export** | IMS Common Cartridge + DOCX + PDF + Markdown | LMS-compatible output in multiple formats |
+| **Curriculum Export** | PDF + Markdown (client-side); DOCX (client-side, saved as `.doc` HTML) | Implemented. A server-side `POST /api/curriculum/export/docx` endpoint exists but the UI's "Export DOCX" button does not call it. IMS Common Cartridge is **in development** (UI button is a placeholder; no backend exporter yet) |
 | **Dev** | Docker Compose | Single-command local environment (frontend :5173, backend :5000) |
 
 ---
@@ -246,11 +247,13 @@ The knowledge graph feature lets you ingest your own course materials (PDFs, PPT
 - [x] Professor prompt template editor — DB-backed prompt management with version control and variable highlighting
 - [x] Week 1 hardening — fail-closed encrypted BYOK storage, browser-secret removal, and main application CI
 - [x] Enterprise L&D Preview — workspace-aware Admin/User login, synthetic compliance-training diagnosis, evidence chain, Learner Pulse, and HITL revision review
+- [x] Enterprise ingestion foundation — server-side program/source API, safe static SCORM extraction, CSV/XLSX normalization, persistence, and tests (`backend/services/enterprise_ingest.py`); not yet connected to the Enterprise UI
 - [x] Enterprise source-intake contract — SCORM ZIP/PDF/PPTX/DOCX/XLSX/CSV selector with explicit client-side count and size limits; xAPI remains optional
-- [ ] Enterprise ingestion backend — safe static SCORM manifest/content extraction, persisted uploads, CSV/XLSX field mapping, evidence coverage, and revision-brief export
+- [ ] Enterprise ingestion — wire the UI to the ingestion API, evidence coverage, real analysis runs, and revision-brief export
 - [ ] Assignment Timeline + Due Date calculator
 - [ ] A2A Phase 2 — LLM integration for CurriculumAgent (dense model required); other agents remain sql-only
 - [ ] Progressive summarization — semester-level LTM summaries for LLM context management
+- [ ] IMS Common Cartridge export — in development (planned; not implemented)
 - [ ] LTI 1.3 — push into Canvas / Moodle
 
 ---
