@@ -1,0 +1,66 @@
+{
+  "course_id": "privacy-101",
+  "title": "Privacy Breach Response Fundamentals",
+  "version": "1.0.0",
+  "content_hash": "fixture-course-v1",
+  "modules": [
+    {
+      "id": "m1",
+      "title": "Breach notification timelines",
+      "claim_refs": [
+        "c1"
+      ]
+    },
+    {
+      "id": "m2",
+      "title": "Record keeping",
+      "claim_refs": [
+        "c2"
+      ]
+    },
+    {
+      "id": "m3",
+      "title": "Roles and accountability",
+      "claim_refs": [
+        "c3"
+      ]
+    }
+  ],
+  "knowledge_graph": {
+    "nodes": [
+      {
+        "id": "kg-notify-timeline",
+        "label": "Regulator notification deadline",
+        "claim_refs": [
+          "c1"
+        ]
+      },
+      {
+        "id": "kg-records",
+        "label": "Breach record retention",
+        "claim_refs": [
+          "c2"
+        ]
+      },
+      {
+        "id": "kg-officer",
+        "label": "Privacy officer role",
+        "claim_refs": [
+          "c3"
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "from": "kg-officer",
+        "to": "kg-notify-timeline",
+        "relation": "prerequisite"
+      },
+      {
+        "from": "kg-notify-timeline",
+        "to": "kg-records",
+        "relation": "prerequisite"
+      }
+    ]
+  }
+}
