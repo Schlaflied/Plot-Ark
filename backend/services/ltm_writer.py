@@ -239,7 +239,7 @@ def write_cold_snapshot(report: dict) -> str | None:
         lines.append("The following changes were applied to this course before this analysis run:")
         lines.append("")
         for ch in applied_changes:
-            source_label = "🤖 Agent" if ch["source"] == "curriculum_agent" else "👤 Professor"
+            source_label = "🤖 Agent" if ch["source"] in ("curriculum_agent", "content_optimizer") else "👤 Professor"
             lines.append(f"- **{ch['module_id']}** ({source_label}, #{ch['id']})")
             if ch["recommendation"]:
                 # Truncate long recommendations

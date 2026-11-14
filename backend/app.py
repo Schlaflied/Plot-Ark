@@ -23,6 +23,7 @@ from routes.profile import profile_bp
 from routes.prompts import prompts_bp
 from routes.selfview import selfview_bp
 from routes.enterprise import enterprise_bp
+from routes.assessment_design import assessment_design_bp
 from routes.lti import lti_bp
 
 app.register_blueprint(curriculum_bp)
@@ -43,6 +44,7 @@ app.register_blueprint(profile_bp)
 app.register_blueprint(prompts_bp)
 app.register_blueprint(selfview_bp)
 app.register_blueprint(enterprise_bp)
+app.register_blueprint(assessment_design_bp)
 app.register_blueprint(lti_bp)
 
 # Initialize database and seed mock data

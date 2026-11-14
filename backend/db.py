@@ -215,6 +215,13 @@ def init_db():
                     EXCEPTION WHEN duplicate_column THEN NULL;
                     END $$;
                 """)
+                # Per-item JSON detail for assessment_design suggestions (idempotent)
+                cur.execute("""
+                    DO $$ BEGIN
+                        ALTER TABLE change_log ADD COLUMN detail TEXT;
+                    EXCEPTION WHEN duplicate_column THEN NULL;
+                    END $$;
+                """)
                 # Add change_type column to distinguish objective/reference/assignment changes
                 cur.execute("""
                     DO $$ BEGIN
