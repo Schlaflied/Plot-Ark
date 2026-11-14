@@ -3,6 +3,8 @@
 import re
 from agents.base import BaseNode, SharedMemory
 from db import get_db
+from services.assessment_design import analyze_assessment_design
+from services.assessment_review import load_course_modules
 
 
 # ── Comment importance scorer ─────────────────────────────────────────────────
@@ -304,6 +306,8 @@ class ContentOptimizerNode(BaseNode):
             "feedback_signals": feedback_signals,
             "text_comments": raw_comments,
             "highlighted_comments": _highlight_comments(raw_comments),
+            # Advisory assessment-design review (recall-only items + alternatives)
+            "assessment_design": analyze_assessment_design(load_course_modules(course_id)),
         }
 
     def _fallback_sql(self, sm: SharedMemory) -> dict:
