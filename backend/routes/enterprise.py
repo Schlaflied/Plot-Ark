@@ -20,6 +20,8 @@ from services.enterprise_mapping import (
     propose_mapping,
     read_table,
 )
+from services import measurement_plan as mplan
+from services.confidence_quality import build_cohort_report
 from services.lightrag_service import slug
 
 
@@ -306,5 +308,266 @@ def upload_sources(program_id: int):
     except Exception as exc:
         conn.rollback()
         return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+# ── Measurement plans (versioned per program) ──────────────────────────────
+
+def _plan_row(row) -> dict:
+    return {
+        "version": row[0],
+        "status": row[1],
+        "plan": row[2] or {},
+        "approved_at": row[3].isoformat() if row[3] else None,
+        "created_at": row[4].isoformat() if row[4] else None,
+    }
+
+
+_PLAN_COLS = "version, status, plan, approved_at, created_at"
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/measurement-plans", methods=["GET"])
+def list_measurement_plans(program_id: int):
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT {_PLAN_COLS} FROM enterprise_measurement_plans "
+            "WHERE program_id = %s ORDER BY version DESC", (program_id,))
+        return jsonify({"plans": [_plan_row(r) for r in cur.fetchall()]})
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/measurement-plans", methods=["POST"])
+def create_measurement_plan(program_id: int):
+    """Create the next plan version. Without a ``plan`` body it starts from a
+    copy of the previous version's plan."""
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM enterprise_programs WHERE id = %s FOR UPDATE", (program_id,))
+        if not cur.fetchone():
+            return jsonify({"error": "Program not found"}), 404
+        cur.execute(
+            "SELECT version, plan FROM enterprise_measurement_plans "
+            "WHERE program_id = %s ORDER BY version DESC LIMIT 1", (program_id,))
+        previous = cur.fetchone()
+        try:
+            if "plan" in data:
+                plan = mplan.normalize_plan(data["plan"])
+            else:
+                plan = mplan.copy_plan_for_new_version(previous[1] if previous else None)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        version = (previous[0] + 1) if previous else 1
+        cur.execute(
+            "INSERT INTO enterprise_measurement_plans (program_id, version, status, plan) "
+            f"VALUES (%s, %s, %s, %s) RETURNING {_PLAN_COLS}",
+            (program_id, version, mplan.STATUS_DRAFT, json.dumps(plan)))
+        row = cur.fetchone()
+        conn.commit()
+        return jsonify(_plan_row(row)), 201
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/measurement-plans/<int:version>", methods=["PUT"])
+def update_measurement_plan(program_id: int, version: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        plan = mplan.normalize_plan(data.get("plan"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT status FROM enterprise_measurement_plans "
+            "WHERE program_id = %s AND version = %s FOR UPDATE", (program_id, version))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Plan version not found"}), 404
+        if not mplan.can_edit(row[0]):
+            return jsonify({"error": "Approved plans are frozen; start a new version"}), 409
+        cur.execute(
+            "UPDATE enterprise_measurement_plans SET plan = %s "
+            f"WHERE program_id = %s AND version = %s RETURNING {_PLAN_COLS}",
+            (json.dumps(plan), program_id, version))
+        result = _plan_row(cur.fetchone())
+        conn.commit()
+        return jsonify(result)
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/measurement-plans/<int:version>/approve", methods=["POST"])
+def approve_measurement_plan(program_id: int, version: int):
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT status FROM enterprise_measurement_plans "
+            "WHERE program_id = %s AND version = %s FOR UPDATE", (program_id, version))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Plan version not found"}), 404
+        if row[0] == mplan.STATUS_APPROVED:
+            return jsonify({"error": "Plan version is already approved"}), 409
+        cur.execute(
+            "UPDATE enterprise_measurement_plans SET status = %s, approved_at = NOW() "
+            f"WHERE program_id = %s AND version = %s RETURNING {_PLAN_COLS}",
+            (mplan.STATUS_APPROVED, program_id, version))
+        result = _plan_row(cur.fetchone())
+        conn.commit()
+        return jsonify(result)
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/measurement-plans/<int:version>/comparison", methods=["GET"])
+def compare_measurement_plan(program_id: int, version: int):
+    """Planned versus collected evidence, listing planned sources with none."""
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT {_PLAN_COLS} FROM enterprise_measurement_plans "
+            "WHERE program_id = %s AND version = %s", (program_id, version))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Plan version not found"}), 404
+        cur.execute(
+            "SELECT DISTINCT source_kind FROM enterprise_sources WHERE program_id = %s",
+            (program_id,))
+        kinds = [r[0] for r in cur.fetchall()]
+        result = _plan_row(row)
+        result["comparison"] = mplan.compare_plan_to_evidence(result["plan"], kinds)
+        return jsonify(result)
+    finally:
+        conn.close()
+
+
+# ── Confidence pulse (pre/post, response-quality checks) ───────────────────
+
+def _confidence_scope(cur, program_id: int, cohort_id):
+    cur.execute("""
+        SELECT p.organization_id,
+               COALESCE(%s::integer, (
+                   SELECT id FROM enterprise_cohorts
+                   WHERE program_id = p.id ORDER BY created_at DESC LIMIT 1
+               ))
+        FROM enterprise_programs p WHERE p.id = %s
+    """, (cohort_id, program_id))
+    return cur.fetchone()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/confidence", methods=["POST"])
+def submit_confidence(program_id: int):
+    """Store pre/post confidence pulse responses (same items before and after)."""
+    data = request.get_json(silent=True) or {}
+    phase = data.get("phase")
+    version = str(data.get("program_version", "v1")).strip() or "v1"
+    responses = data.get("responses")
+    if phase not in ("pre", "post") or not isinstance(responses, list) or not responses:
+        return jsonify({"error": "phase (pre|post) and a non-empty responses list are required"}), 400
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        scope = _confidence_scope(cur, program_id, data.get("cohort_id"))
+        if not scope:
+            return jsonify({"error": "Program not found"}), 404
+        organization_id, cohort_id = scope
+        stored = 0
+        for r in responses:
+            answers = r.get("answers") if isinstance(r, dict) else None
+            ref = str(r.get("learner_ref", "")).strip() if isinstance(r, dict) else ""
+            if not ref or not isinstance(answers, list) or not answers:
+                continue
+            cur.execute("""
+                INSERT INTO enterprise_confidence_responses
+                    (organization_id, program_id, cohort_id, program_version, phase,
+                     learner_ref, answers, duration_seconds)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (program_id, cohort_id, program_version, phase, learner_ref)
+                DO UPDATE SET answers = EXCLUDED.answers,
+                              duration_seconds = EXCLUDED.duration_seconds,
+                              submitted_at = NOW()
+            """, (
+                organization_id, program_id, cohort_id, version, phase,
+                _learner_token(organization_id, ref), json.dumps(answers),
+                r.get("duration_seconds"),
+            ))
+            stored += 1
+        conn.commit()
+        return jsonify({"stored": stored, "skipped": len(responses) - stored}), 201
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/confidence-report", methods=["GET"])
+def confidence_report(program_id: int):
+    """Cohort-level confidence change + response-quality summary (no individual data)."""
+    version = request.args.get("program_version", "v1")
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        scope = _confidence_scope(cur, program_id, request.args.get("cohort_id"))
+        if not scope:
+            return jsonify({"error": "Program not found"}), 404
+        _, cohort_id = scope
+        cur.execute("""
+            SELECT learner_ref, phase, answers, duration_seconds
+            FROM enterprise_confidence_responses
+            WHERE program_id = %s AND cohort_id IS NOT DISTINCT FROM %s AND program_version = %s
+        """, (program_id, cohort_id, version))
+        responses = [
+            {"learner": r[0], "phase": r[1], "answers": r[2],
+             "duration_seconds": float(r[3]) if r[3] is not None else None}
+            for r in cur.fetchall()
+        ]
+        cur.execute("""
+            SELECT learner_ref, SUM(duration_seconds), AVG(score)
+            FROM enterprise_learning_events
+            WHERE program_id = %s AND cohort_id IS NOT DISTINCT FROM %s
+            GROUP BY learner_ref
+        """, (program_id, cohort_id))
+        behavior = {
+            r[0]: {"content_seconds": float(r[1]) if r[1] is not None else None,
+                   "avg_score": float(r[2]) if r[2] is not None else None}
+            for r in cur.fetchall()
+        }
+        report = build_cohort_report(responses, behavior)
+        report.update({"program_id": program_id, "cohort_id": cohort_id, "program_version": version})
+        return jsonify(report)
     finally:
         conn.close()

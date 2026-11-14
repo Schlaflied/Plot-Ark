@@ -12,9 +12,10 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-History-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-Cache-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 [![LightRAG](https://img.shields.io/badge/LightRAG-MIT-orange)](https://github.com/HKUDS/LightRAG)
-[![xAPI](https://img.shields.io/badge/xAPI-1.0.3-5C6BC0)](https://xapi.com/)
+[![xAPI](https://img.shields.io/badge/xAPI-statements-5C6BC0)](https://xapi.com/)
 [![Tavily](https://img.shields.io/badge/Tavily-Research%20Agent-7C3AED)](https://tavily.com/)
-[![IMS](https://img.shields.io/badge/Export-IMS%20Common%20Cartridge-2E7D32)](https://www.imsglobal.org/)
+[![Export](https://img.shields.io/badge/Export-PDF%20%C2%B7%20DOCX%20%C2%B7%20Markdown-2E7D32)](docs/ACADEMIC.md)
+[![IMS](https://img.shields.io/badge/IMS%20Common%20Cartridge-%E5%BC%80%E5%8F%91%E4%B8%AD-lightgrey)](https://www.imsglobal.org/)
 [![Awesome](https://awesome.re/badge.svg)](https://github.com/Jenqyang/Awesome-AI-Agents)
 [![Built on Hive](https://img.shields.io/badge/Built%20on-Hive-orange?logo=github)](https://github.com/aden-hive/hive)
 [![Hive Contributor](https://img.shields.io/badge/Hive-Contributor-brightgreen)](https://github.com/aden-hive/hive/pulls?q=author%3ASchlaflied)
@@ -62,7 +63,7 @@ flowchart LR
 | **证据层级** | 学生私密自见 + 隐私安全的班级分析 | 群组级诊断，不对员工个人排名 |
 | **人的控制** | 教师审核课程修改建议 | L&D 负责人审核培训修改建议 |
 | **长期记忆** | 保存跨学期的课程分析与修改记录 | 使用同一套 LTM 比较培训版本，并为以后连接业务结果保留基础 |
-| **当前状态** | 后端与界面已经形成完整闭环 | 使用合成数据的产品预览；服务端摄取与解析仍在路线图中 |
+| **当前状态** | 后端与界面已经形成完整闭环 | 产品预览（界面使用合成数据）。后端摄取 API（SCORM/PDF/PPTX/DOCX、LMS CSV/XLSX）已有代码与测试，但尚未接入界面；基于上传数据的分析运行仍在开发中 |
 
 高校版和企业版不是两套产品。它们共用同一个核心：**证据 → 诊断 → 人的决定 → LTM → 下一版本**。
 
@@ -172,10 +173,10 @@ flowchart LR
 | **数据库** | PostgreSQL | 课程、xAPI 语句、学生反馈、`course_analysis_snapshots`（LTM） |
 | **缓存与内存**| Redis | 图谱查询缓存、学习者状态、A2A 共享内存（`a2a:{session}:{key}`） |
 | **知识图谱** | LightRAG + networkx + react-force-graph-2d| 课程材料导入 → 交互式概念图谱 |
-| **行为数据** | xAPI 1.0.3 + mini-LRS | 语句采集 → Mock 数据引擎（4 种噪声级别）→ 教授分析面板 |
+| **行为数据** | xAPI 风格语句 + 极简内置语句存储（非认证 LRS） | 语句采集 → Mock 数据引擎（4 种噪声级别）→ 教授分析面板 |
 | **分析引擎** | A2A 多 Agent（Hive 风格，sql-only Phase 1） | 5 节点流水线：Orchestrator + 4 个并行 Agent；Token 追踪；LTM 快照 |
 | **报告导出** | ReportLab + python-docx + openpyxl + matplotlib | PDF（Anthropic 风格封面）、DOCX、Excel；文件名含课程 slug + 噪声标签 |
-| **课程导出** | IMS Common Cartridge + DOCX + PDF + Markdown | 多格式兼容主流 LMS 的输出 |
+| **课程导出** | PDF + Markdown（客户端）；DOCX（客户端，以 `.doc` 后缀保存 HTML） | 已实现。服务端存在 `POST /api/curriculum/export/docx` 接口，但界面的"导出 DOCX"按钮并未调用它。IMS Common Cartridge **开发中**（界面按钮仅为占位，后端尚无导出器） |
 | **开发** | Docker Compose | 一键启动本地环境（前端 :5173，后端 :5000） |
 
 ---
@@ -246,11 +247,13 @@ Enterprise 工作区附带合成数据，用于产品体验和 QA。当前文件
 - [x] 教授 Prompt 模板编辑器 — 数据库驱动的 Prompt 管理 + 版本控制 + 变量高亮
 - [x] 第一周加固 — API Key 加密失败即拒绝保存、移除浏览器端密钥、主应用 CI
 - [x] Enterprise L&D Preview — 工作区 Admin/User 登录分流、合成合规培训诊断、证据链、Learner Pulse 与 HITL 修改审核
+- [x] 企业摄取基础 — 服务端项目/资料 API、安全的 SCORM 静态提取、CSV/XLSX 规范化、持久化与测试（`backend/services/enterprise_ingest.py`）；尚未接入企业版界面
 - [x] 企业数据入口契约 — SCORM ZIP/PDF/PPTX/DOCX/XLSX/CSV 选择器与明确的前端数量/大小限制；xAPI 保持可选
-- [ ] 企业摄取后端 — 安全的 SCORM manifest/内容静态提取、持久化上传、CSV/XLSX 字段映射、证据覆盖率与修改简报导出
+- [ ] 企业摄取 — 界面接入摄取 API、证据覆盖率、真实分析运行与修改简报导出
 - [ ] 作业时间轴 + 截止日期计算器
 - [ ] A2A Phase 2 — CurriculumAgent 接入 LLM（必须 dense 模型）；其余 Agent 保持 sql-only
 - [ ] 渐进式摘要 — 学期级 LTM 摘要用于 LLM 上下文管理
+- [ ] IMS Common Cartridge 导出 — 开发中（计划中，尚未实现）
 - [ ] LTI 1.3 — 推送至 Canvas / Moodle
 
 ---
