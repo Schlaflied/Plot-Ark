@@ -176,7 +176,7 @@ flowchart LR
 | **行为数据** | xAPI 风格语句 + 极简内置语句存储（非认证 LRS） | 语句采集 → Mock 数据引擎（4 种噪声级别）→ 教授分析面板 |
 | **分析引擎** | A2A 多 Agent（Hive 风格，sql-only Phase 1） | 5 节点流水线：Orchestrator + 4 个并行 Agent；Token 追踪；LTM 快照 |
 | **报告导出** | ReportLab + python-docx + openpyxl + matplotlib | PDF（Anthropic 风格封面）、DOCX、Excel；文件名含课程 slug + 噪声标签 |
-| **课程导出** | DOCX（服务端）+ PDF + Markdown（客户端） | 已实现。IMS Common Cartridge **开发中**（界面按钮仅为占位，后端尚无导出器） |
+| **课程导出** | PDF + Markdown（客户端）；DOCX（客户端，以 `.doc` 后缀保存 HTML） | 已实现。服务端存在 `POST /api/curriculum/export/docx` 接口，但界面的"导出 DOCX"按钮并未调用它。IMS Common Cartridge **开发中**（界面按钮仅为占位，后端尚无导出器） |
 | **开发** | Docker Compose | 一键启动本地环境（前端 :5173，后端 :5000） |
 
 ---

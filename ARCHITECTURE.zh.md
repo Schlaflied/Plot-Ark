@@ -272,7 +272,7 @@ course_analysis_snapshots          ← 教授端 Warm LTM
 | PDF（课程） | jsPDF（客户端） | 阅读材料行内展示，末尾 References 汇总 |
 | DOCX（课程） | python-docx | 与课程 PDF 结构一致 |
 | IMS Common Cartridge | Python zip | **开发中——计划功能，尚未实现。** 目标：直接导入 Canvas / Moodle / D2L |
-| Markdown | 纯文本 | 完整课程含阅读材料与作业 |
+| Markdown | 纯文本 | 摘要：模块标题、学习目标、阅读材料与作业标题——不含作业描述与交付物 |
 
 ---
 

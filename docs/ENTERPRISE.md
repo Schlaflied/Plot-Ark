@@ -50,7 +50,7 @@ flowchart LR
 - Human review of revision recommendations.
 - A private, non-ranking four-state Learner Pulse for employees.
 - Client-side upload validation for SCORM ZIP, PDF, PPTX, DOCX, XLSX, and CSV.
-- Backend ingestion foundation (`/api/enterprise/programs`, `.../sources`): server-side upload validation, static SCORM manifest/text extraction with zip-slip protection, CSV/XLSX normalization via column aliases, and persistence, covered by `backend/tests/test_enterprise_ingest.py`. It is **not yet connected to the Enterprise UI**, which still shows synthetic data.
+- Backend ingestion foundation (`/api/enterprise/programs`, `.../sources`): server-side upload validation, static SCORM manifest/text extraction with zip-slip protection, CSV/XLSX normalization via column aliases, and persistence. `backend/tests/test_enterprise_ingest.py` covers validation, extraction, and normalization, but not persistence. It is **not yet connected to the Enterprise UI**, which still shows synthetic data.
 
 ## Not implemented yet
 

@@ -178,7 +178,7 @@ The two workspaces are not separate products. They share the same core: **eviden
 | **Behavior Data** | xAPI-style statements + minimal built-in statement store (not a certified LRS) | Statement ingestion → mock data engine (4 noise levels) → professor analytics panel |
 | **Analytics Engine**| A2A multi-agent (Hive-style, sql-only Phase 1) | 5-node pipeline: Orchestrator + 4 parallel agents; token tracking; LTM snapshot |
 | **Report Export** | ReportLab + python-docx + openpyxl + matplotlib | PDF (Anthropic-style cover), DOCX, Excel; filenames include course slug + noise label |
-| **Curriculum Export** | DOCX (server) + PDF + Markdown (client-side) | Implemented. IMS Common Cartridge is **in development** (UI button is a placeholder; no backend exporter yet) |
+| **Curriculum Export** | PDF + Markdown (client-side); DOCX (client-side, saved as `.doc` HTML) | Implemented. A server-side `POST /api/curriculum/export/docx` endpoint exists but the UI's "Export DOCX" button does not call it. IMS Common Cartridge is **in development** (UI button is a placeholder; no backend exporter yet) |
 | **Dev** | Docker Compose | Single-command local environment (frontend :5173, backend :5000) |
 
 ---

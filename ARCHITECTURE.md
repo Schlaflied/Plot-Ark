@@ -274,7 +274,7 @@ course_analysis_snapshots          ← instructor-side Warm LTM
 | PDF (curriculum) | jsPDF (client-side) | Readings inline, References section |
 | DOCX (curriculum) | python-docx | Same structure as curriculum PDF |
 | IMS Common Cartridge | Python zip | **In development — planned, not implemented.** Target: direct import to Canvas / Moodle / D2L |
-| Markdown (client-side) | Plain text | Full curriculum with readings and assignments |
+| Markdown (client-side) | Plain text | Summary: module titles, objectives, readings, and assignment titles — omits assignment descriptions and deliverables |
 
 ---
 
