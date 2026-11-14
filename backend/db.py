@@ -430,6 +430,12 @@ def init_db():
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     )
                 """)
+                # Minimal evaluation-level tag (reaction/learning/behavior/results);
+                # NULL = untagged. Stand-in for issue #13's tagging.
+                cur.execute("""
+                    ALTER TABLE enterprise_sources
+                    ADD COLUMN IF NOT EXISTS evaluation_level TEXT
+                """)
                 cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_enterprise_sources_program
                     ON enterprise_sources(program_id, created_at DESC)

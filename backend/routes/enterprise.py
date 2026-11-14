@@ -21,6 +21,7 @@ from services.enterprise_mapping import (
     read_table,
 )
 from services import measurement_plan as mplan
+from services import evaluation_summary as evsum
 from services.confidence_quality import build_cohort_report
 from services.lightrag_service import slug
 
@@ -227,6 +228,10 @@ def upload_sources(program_id: int):
     source_kind = request.form.get("source_kind", "training_content").strip()
     if source_kind not in {"training_content", "lms_report"}:
         return jsonify({"error": "source_kind must be training_content or lms_report"}), 400
+    try:
+        evaluation_level = evsum.normalize_level(request.form.get("evaluation_level"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     uploads = request.files.getlist("files[]")
     files = [(upload.filename or "unknown", upload.read()) for upload in uploads]
     try:
@@ -260,11 +265,13 @@ def upload_sources(program_id: int):
         for (filename, content), parsed in zip(files, parsed_sources):
             cur.execute("""
                 INSERT INTO enterprise_sources
-                    (program_id, cohort_id, filename, source_kind, size_bytes, metadata, extracted_text)
-                VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, created_at
+                    (program_id, cohort_id, filename, source_kind, size_bytes, metadata, extracted_text,
+                     evaluation_level)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id, created_at
             """, (
                 program_id, cohort_id, filename, source_kind, len(content),
                 json.dumps(parsed.metadata, default=str), parsed.extracted_text,
+                evaluation_level,
             ))
             source_id, created_at = cur.fetchone()
             for event in parsed.events:
@@ -290,6 +297,7 @@ def upload_sources(program_id: int):
                 "id": source_id,
                 "filename": filename,
                 "source_kind": source_kind,
+                "evaluation_level": evaluation_level,
                 "metadata": parsed.metadata,
                 "events_imported": len(parsed.events),
                 "created_at": created_at.isoformat(),
@@ -569,5 +577,63 @@ def confidence_report(program_id: int):
         report = build_cohort_report(responses, behavior)
         report.update({"program_id": program_id, "cohort_id": cohort_id, "program_version": version})
         return jsonify(report)
+    finally:
+        conn.close()
+
+
+# ── Evaluation-level summary report ────────────────────────────────────────
+
+def _evidence_records(cur, program_id: int) -> list[dict]:
+    """Program-level evidence records (counts only, no learner identifiers)."""
+    records = []
+    cur.execute("""
+        SELECT s.source_kind, s.evaluation_level,
+               (SELECT COUNT(DISTINCT e.learner_ref) FROM enterprise_learning_events e
+                WHERE e.source_id = s.id)
+        FROM enterprise_sources s WHERE s.program_id = %s
+    """, (program_id,))
+    for kind, level, n in cur.fetchall():
+        records.append({"source": kind, "evaluation_level": level,
+                        "count": int(n or 0), "self_report": False})
+    cur.execute("""
+        SELECT COUNT(DISTINCT learner_ref) FROM enterprise_confidence_responses
+        WHERE program_id = %s
+    """, (program_id,))
+    n = cur.fetchone()[0]
+    if n:
+        records.append({"source": "confidence_pulse", "evaluation_level": "learning",
+                        "count": int(n), "self_report": True})
+    cur.execute("""
+        SELECT COALESCE(SUM((aggregate->>'responded')::int), 0)
+        FROM enterprise_followup_snapshots WHERE program_id = %s
+    """, (program_id,))
+    n = cur.fetchone()[0]
+    if n:
+        records.append({"source": "manager_followup", "evaluation_level": "behavior",
+                        "count": int(n), "self_report": False})
+    return records
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/evaluation-summary", methods=["GET"])
+def evaluation_summary(program_id: int):
+    """Level-by-level evidence summary. ?format=markdown returns a readable file.
+
+    Always a draft: wording needs human review before it is shared.
+    """
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM enterprise_programs WHERE id = %s", (program_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Program not found"}), 404
+        summary = evsum.build_summary(_evidence_records(cur, program_id))
+        summary["program_id"] = program_id
+        if request.args.get("format") == "markdown":
+            return (evsum.render_markdown(summary, row[0]), 200,
+                    {"Content-Type": "text/markdown; charset=utf-8"})
+        return jsonify(summary)
     finally:
         conn.close()
