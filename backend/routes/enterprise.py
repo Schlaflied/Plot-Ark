@@ -15,10 +15,13 @@ from services.enterprise_ingest import (
 )
 from services.enterprise_mapping import (
     MappingError,
+    compare_cohorts,
     list_presets,
     map_report,
+    normalize_source_label,
     propose_mapping,
     read_table,
+    summarize_events,
 )
 from services import measurement_plan as mplan
 from services.confidence_quality import build_cohort_report
@@ -193,21 +196,40 @@ def mapping_preview():
         return jsonify({"error": str(exc)}), 400
     proposal = propose_mapping(headers, request.form.get("platform"))
     proposal["row_count"] = len(rows)
+    try:
+        source = normalize_source_label(request.form.get("source_site"), request.form.get("source_version"))
+        proposal["source"] = source
+        # With a confirmed mapping, also return cohort-level metrics so the
+        # review step can stage this import for side-by-side comparison.
+        if request.form.get("mapping"):
+            _, events, final = map_report(
+                filename, content, request.form.get("platform"), _form_overrides(),
+            )
+            proposal["summary"] = summarize_events(events)
+            proposal["final_mapping"] = final
+    except MappingError as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify(proposal)
+
+
+def _form_overrides():
+    raw_mapping = request.form.get("mapping")
+    if not raw_mapping:
+        return None
+    try:
+        overrides = json.loads(raw_mapping)
+    except ValueError as exc:
+        raise MappingError("mapping must be valid JSON") from exc
+    if not isinstance(overrides, dict):
+        raise MappingError("mapping must be a JSON object of field -> column")
+    return overrides
 
 
 def _parse_mapped_report(filename: str, content: bytes) -> ParsedSource:
     platform = request.form.get("platform")
-    raw_mapping = request.form.get("mapping")
-    overrides = None
-    if raw_mapping:
-        try:
-            overrides = json.loads(raw_mapping)
-        except ValueError as exc:
-            raise MappingError("mapping must be valid JSON") from exc
-        if not isinstance(overrides, dict):
-            raise MappingError("mapping must be a JSON object of field -> column")
+    overrides = _form_overrides()
     proposal, events, final = map_report(filename, content, platform, overrides)
+    source = normalize_source_label(request.form.get("source_site"), request.form.get("source_version"))
     return ParsedSource(
         filename=filename,
         source_kind="lms_report",
@@ -217,6 +239,7 @@ def _parse_mapped_report(filename: str, content: bytes) -> ParsedSource:
             "platform": proposal["platform"],
             "mapping": final,
             "unmatched_columns": [c for c in proposal["columns"] if c not in final.values()],
+            "source": source,
         },
         events=events,
     )
@@ -255,6 +278,16 @@ def upload_sources(program_id: int):
         if not scope:
             return jsonify({"error": "Program not found"}), 404
         organization_id, engine_course_id, cohort_id = scope
+        # A source label with no explicit cohort puts the import in its own
+        # cohort named after the label, so sites/versions are never pooled.
+        label = (parsed_sources[0].metadata.get("source") or {}).get("label") if parsed_sources else None
+        if label and not request.form.get("cohort_id"):
+            cur.execute("""
+                INSERT INTO enterprise_cohorts (program_id, label) VALUES (%s, %s)
+                ON CONFLICT (program_id, label) DO UPDATE SET label = EXCLUDED.label
+                RETURNING id
+            """, (program_id, label))
+            cohort_id = cur.fetchone()[0]
         response_sources = []
         module_candidates = []
         for (filename, content), parsed in zip(files, parsed_sources):
@@ -283,7 +316,10 @@ def upload_sources(program_id: int):
                     event["attempts"], event["occurred_at"] or None,
                     # Preserve provenance through source_id without retaining
                     # the original LMS row, which may contain names or email.
-                    json.dumps({"imported_from": source_kind}),
+                    json.dumps({
+                        "imported_from": source_kind,
+                        "source": parsed.metadata.get("source"),
+                    }),
                 ))
             module_candidates.extend(parsed.metadata.get("modules", []))
             response_sources.append({
@@ -308,6 +344,40 @@ def upload_sources(program_id: int):
     except Exception as exc:
         conn.rollback()
         return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@enterprise_bp.route("/api/enterprise/programs/<int:program_id>/cohort-comparison", methods=["GET"])
+def cohort_comparison(program_id: int):
+    """Side-by-side, cohort-level metrics. Cohorts (e.g. one per Moodle site
+    or version) are never pooled; no individual rows are returned."""
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "DB unavailable"}), 503
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT c.id, c.label, e.learner_ref, e.completion, e.score,
+                   e.duration_seconds, e.raw_payload -> 'source'
+            FROM enterprise_cohorts c
+            LEFT JOIN enterprise_learning_events e ON e.cohort_id = c.id
+            WHERE c.program_id = %s
+            ORDER BY c.created_at, c.id
+        """, (program_id,))
+        grouped: dict = {}
+        for cid, label, learner, completion, score, duration, source in cur.fetchall():
+            cohort = grouped.setdefault(cid, {"label": label, "source": None, "events": []})
+            if learner is None:
+                continue
+            cohort["source"] = cohort["source"] or source
+            cohort["events"].append({
+                "learner_ref": learner, "completion": completion,
+                "score": float(score) if score is not None else None,
+                "duration_seconds": float(duration) if duration is not None else None,
+            })
+        cohorts = [c for c in grouped.values() if c["events"]]
+        return jsonify(compare_cohorts(cohorts))
     finally:
         conn.close()
 

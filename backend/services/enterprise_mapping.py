@@ -53,6 +53,11 @@ class Preset:
     # field -> aliases, in priority order (first match wins; others are
     # reported as ambiguous, never dropped).
     columns: dict
+    # Extra lower-cased cell values this platform uses for "completed", on top
+    # of the shared ones. Empty for presets that predate them.
+    completion_values: frozenset = frozenset()
+    # True when time columns hold human text such as "5 mins 3 secs".
+    text_durations: bool = False
 
 
 # Field names come from each vendor's public documentation / community
@@ -104,6 +109,31 @@ PRESETS: dict[str, Preset] = {
             "attempts": ("Attempts", "Attempt"),
             "occurred_at": ("Last Activity", "Last Accessed", "Submitted At", "Last Activity Date"),
         },
+    ),
+    "moodle": Preset(
+        platform="moodle",
+        label="Moodle",
+        source_note="Course logs, activity completion (report builder), quiz attempts and grade exports",
+        columns={
+            # Names follow Moodle's public documentation: standard logs
+            # (Time, User full name, Event context, Event name), quiz results
+            # (State, Started on, Completed, Time taken, Grade/10.00) and the
+            # grader report / report builder (Username, ID number, Activity,
+            # Completion state, Time completed, Course total).
+            "learner_ref": ("Username", "ID number", "User ID", "Email address", "User full name"),
+            "module_id": ("Course module ID", "Activity ID", "Course ID"),
+            "module_title": ("Activity name", "Activity", "Quiz name", "Quiz", "Course module name", "Event context", "Course short name", "Course full name"),
+            "completion": ("Completion state", "Completion status", "State", "Event name"),
+            "score": ("Grade/10.00", "Grade/100.00", "Grade/20.00", "Final grade", "Course total (Real)", "Grade"),
+            "duration_seconds": ("Time taken", "Time spent"),
+            "attempts": ("Attempt", "Attempts", "Attempt number"),
+            "occurred_at": ("Time completed", "Completion date", "Completed", "Time", "Last access to course"),
+        },
+        completion_values=frozenset({
+            "complete (pass)", "complete (fail)", "completed (achieved pass grade)",
+            "finished", "course completed",
+        }),
+        text_durations=True,
     ),
 }
 
@@ -292,8 +322,29 @@ def validate_mapping(mapping: dict, headers: list[str]) -> dict:
     return clean
 
 
-def apply_mapping(rows: list[dict], mapping: dict) -> list[dict]:
-    """Turn raw rows into evidence events using a validated mapping."""
+_DURATION_PART = re.compile(r"(\d+(?:\.\d+)?)\s*(day|hour|min|sec)", re.I)
+_DURATION_SECONDS = {"day": 86400, "hour": 3600, "min": 60, "sec": 1}
+
+
+def _text_duration(value):
+    """Parse Moodle-style "1 hour 5 mins 3 secs"; numbers pass through."""
+    if value in (None, ""):
+        return value
+    parts = _DURATION_PART.findall(str(value))
+    if not parts:
+        return value
+    return sum(float(n) * _DURATION_SECONDS[unit.lower()] for n, unit in parts)
+
+
+def apply_mapping(rows: list[dict], mapping: dict, platform: str | None = None) -> list[dict]:
+    """Turn raw rows into evidence events using a validated mapping.
+
+    ``platform`` selects optional preset-specific value handling; presets that
+    define none behave exactly as before.
+    """
+    preset = PRESETS.get(platform or "")
+    extra_completed = preset.completion_values if preset else frozenset()
+    text_durations = bool(preset and preset.text_durations)
     completion_col = mapping["completion"]
     completion_is_date = "date" in _key(completion_col)
     events = []
@@ -313,7 +364,9 @@ def apply_mapping(rows: list[dict], mapping: dict) -> list[dict]:
 
         raw_completion = get("completion")
         completed = (
-            raw_completion is not None if completion_is_date else _completion(raw_completion)
+            raw_completion is not None if completion_is_date
+            else (_completion(raw_completion)
+                  or str(raw_completion or "").strip().lower() in extra_completed)
         )
         events.append({
             "learner_ref": str(learner),
@@ -322,7 +375,9 @@ def apply_mapping(rows: list[dict], mapping: dict) -> list[dict]:
             "event_type": "completed" if completed else "progressed",
             "completion": completed,
             "score": _number(get("score")),
-            "duration_seconds": _number(get("duration_seconds")),
+            "duration_seconds": _number(
+                _text_duration(get("duration_seconds")) if text_durations else get("duration_seconds")
+            ),
             "attempts": int(_number(get("attempts"), 1)),
             "occurred_at": get("occurred_at"),
             "raw": row,
@@ -344,4 +399,78 @@ def map_report(filename: str, content: bytes, platform: str | None = None,
         mapping.update({k: v for k, v in overrides.items()})
         mapping = {k: v for k, v in mapping.items() if v not in (None, "")}
     final = validate_mapping(mapping, headers)
-    return proposal, apply_mapping(rows, final), final
+    return proposal, apply_mapping(rows, final, proposal["platform"]), final
+
+
+# --------------------------------------------------------------------------
+# Source label and cohort comparison
+# --------------------------------------------------------------------------
+
+MAX_SOURCE_PART = 80
+
+
+def normalize_source_label(site=None, version=None) -> dict | None:
+    """Build the optional, purely descriptive source label for an import.
+
+    ``site`` is a free-text site name (e.g. "Legacy Moodle"); ``version`` is a
+    free-text version note (e.g. "Moodle 3.11"). Nothing is detected or
+    verified. Returns None when both are blank.
+    """
+    def clean(value):
+        text = re.sub(r"[\x00-\x1f\x7f]+", " ", str(value or "")).strip()
+        text = re.sub(r"\s+", " ", text)
+        if len(text) > MAX_SOURCE_PART:
+            raise MappingError(f"Source label parts must be at most {MAX_SOURCE_PART} characters")
+        return text
+
+    site, version = clean(site), clean(version)
+    if not site and not version:
+        return None
+    return {
+        "site": site or None,
+        "version": version or None,
+        "label": " · ".join(p for p in (site, version) if p),
+    }
+
+
+def summarize_events(events: list[dict]) -> dict:
+    """Cohort-level metrics for a set of evidence events (no individual rows)."""
+    learners = {e["learner_ref"] for e in events}
+    scores = [e["score"] for e in events if e.get("score") is not None]
+    durations = [e["duration_seconds"] for e in events if e.get("duration_seconds")]
+    completed = sum(1 for e in events if e.get("completion"))
+    return {
+        "learners": len(learners),
+        "events": len(events),
+        "completion_rate": round(completed / len(events), 4) if events else None,
+        "avg_score": round(sum(scores) / len(scores), 2) if scores else None,
+        "avg_duration_seconds": round(sum(durations) / len(durations), 1) if durations else None,
+        "small_group": len(learners) < MIN_GROUP_SIZE,
+    }
+
+
+MIN_GROUP_SIZE = 5
+_COMPARED_METRICS = ("learners", "completion_rate", "avg_score", "avg_duration_seconds")
+
+
+def compare_cohorts(cohorts: list[dict]) -> dict:
+    """Side-by-side view of cohorts, each ``{"label", "source", "events"}``.
+
+    Cohorts stay separate (never pooled); with exactly two, per-metric
+    differences (second minus first) are added.
+    """
+    rows = []
+    for cohort in cohorts:
+        rows.append({
+            "label": cohort["label"],
+            "source": cohort.get("source"),
+            **summarize_events(cohort["events"]),
+        })
+    result = {"cohorts": rows, "differences": None}
+    if len(rows) == 2:
+        a, b = rows
+        result["differences"] = {
+            m: (round(b[m] - a[m], 4) if a[m] is not None and b[m] is not None else None)
+            for m in _COMPARED_METRICS
+        }
+    return result
