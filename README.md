@@ -249,12 +249,21 @@ The knowledge graph feature lets you ingest your own course materials (PDFs, PPT
 - [x] Enterprise L&D Preview — workspace-aware Admin/User login, synthetic compliance-training diagnosis, evidence chain, Learner Pulse, and HITL revision review
 - [x] Enterprise ingestion foundation — server-side program/source API, safe static SCORM extraction, CSV/XLSX normalization, persistence, and tests (`backend/services/enterprise_ingest.py`); not yet connected to the Enterprise UI
 - [x] Enterprise source-intake contract — SCORM ZIP/PDF/PPTX/DOCX/XLSX/CSV selector with explicit client-side count and size limits; xAPI remains optional
-- [ ] Enterprise ingestion — wire the UI to the ingestion API, evidence coverage, real analysis runs, and revision-brief export
+- [x] LMS export mapping presets — Workday Learning, D2L Brightspace, Canvas, and Moodle (including multi-version Moodle migrations via a source label); propose/override mapping, unmatched columns always shown, never dropped silently
+- [x] Manager Follow-up Pulse + pre/post Confidence Pulse — new Enterprise evidence sources with response-quality checks, cohort-only reporting, and minimum group-size privacy floors
+- [x] Measurement plan at design time — versioned per program, compared against observed evidence with gap detection
+- [x] Evaluation-level summary report — plain-language per-level (reaction/learning/behavior/results) coverage, data-quality flags, no causal language
+- [x] Assessment design triage — flags recall-only assessment items and proposes reflection/application/scaffolded alternatives
+- [x] Feedback triage — clusters open-text learner feedback into topics with distinct-learner counts and a configurable escalation list
+- [x] First-pass accessibility check (WCAG 2.1) — HTML/DOCX, explicitly not a compliance claim
+- [x] Optional local-model mode — `AI_PROVIDER=local` routes supported steps to an Ollama-compatible endpoint; fails loudly, never silently falls back to a hosted model
+- [x] `refresh.mjs` — evidence-driven curriculum-refresh CLI vertical slice (dry-run; snapshot → semantic diff → impact map → change brief → human approval → audit trail)
+- [x] LTI 1.3 Tool MVP for Moodle — OIDC login, launch, deep linking, role mapping; grade passback (AGS) and multi-tenant registry remain follow-ups
+- [ ] Enterprise ingestion — wire the UI to the ingestion API, evidence coverage from real analysis runs, and revision-brief export
 - [ ] Assignment Timeline + Due Date calculator
 - [ ] A2A Phase 2 — LLM integration for CurriculumAgent (dense model required); other agents remain sql-only
 - [ ] Progressive summarization — semester-level LTM summaries for LLM context management
 - [ ] IMS Common Cartridge export — in development (planned; not implemented)
-- [ ] LTI 1.3 — push into Canvas / Moodle
 
 ---
 

@@ -249,12 +249,21 @@ Enterprise 工作区附带合成数据，用于产品体验和 QA。当前文件
 - [x] Enterprise L&D Preview — 工作区 Admin/User 登录分流、合成合规培训诊断、证据链、Learner Pulse 与 HITL 修改审核
 - [x] 企业摄取基础 — 服务端项目/资料 API、安全的 SCORM 静态提取、CSV/XLSX 规范化、持久化与测试（`backend/services/enterprise_ingest.py`）；尚未接入企业版界面
 - [x] 企业数据入口契约 — SCORM ZIP/PDF/PPTX/DOCX/XLSX/CSV 选择器与明确的前端数量/大小限制；xAPI 保持可选
-- [ ] 企业摄取 — 界面接入摄取 API、证据覆盖率、真实分析运行与修改简报导出
+- [x] LMS 导出映射预设 — Workday Learning、D2L Brightspace、Canvas 与 Moodle（含多版本 Moodle 迁移的来源标签）；自动匹配/手动覆盖，未匹配列始终展示、不会静默丢弃
+- [x] Manager Follow-up Pulse + 前后测 Confidence Pulse — 新的企业证据来源，带回答质量检测、仅群组级报告与最小样本量隐私门槛
+- [x] 设计期测量计划 — 按项目版本管理，与实际收集的证据对比并检测缺口
+- [x] 评估层级摘要报告 — 按层级（反应/学习/行为/结果）给出大白话说明与数据质量提示，不含因果性措辞
+- [x] 评估设计分诊 — 标记纯记忆型评估题，提出反思/应用/支架式替代方案
+- [x] 反馈分诊 — 将开放式学员反馈聚类为话题，按独立学员数给出可配置的升级建议
+- [x] 无障碍初筛（WCAG 2.1）— HTML/DOCX，明确声明不是合规认证
+- [x] 可选本地模型模式 — `AI_PROVIDER=local` 将支持的步骤路由到 Ollama 兼容端点；失败即报错，绝不静默回退到托管模型
+- [x] `refresh.mjs` — 证据驱动的课程刷新 CLI 原型（dry-run；快照 → 语义diff → 影响映射 → 变更简报 → 人工审批 → 审计留痕）
+- [x] LTI 1.3 工具 MVP（Moodle）— OIDC 登录、launch、deep linking、角色映射；成绩回传（AGS）与多租户注册表留作后续
+- [ ] 企业摄取 — 界面接入摄取 API、基于真实分析运行的证据覆盖率与修改简报导出
 - [ ] 作业时间轴 + 截止日期计算器
 - [ ] A2A Phase 2 — CurriculumAgent 接入 LLM（必须 dense 模型）；其余 Agent 保持 sql-only
 - [ ] 渐进式摘要 — 学期级 LTM 摘要用于 LLM 上下文管理
 - [ ] IMS Common Cartridge 导出 — 开发中（计划中，尚未实现）
-- [ ] LTI 1.3 — 推送至 Canvas / Moodle
 
 ---
 
