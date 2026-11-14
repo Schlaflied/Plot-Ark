@@ -126,9 +126,14 @@ def record_decision(item_id: int, decision: str, revised_text: str = "") -> dict
         d["decision"] = decision
 
         cur.execute(
-            "UPDATE change_log SET status = %s, recommendation = %s, detail = %s WHERE id = %s",
+            "UPDATE change_log SET status = %s, recommendation = %s, detail = %s "
+            "WHERE id = %s AND status = 'pending'",
             (status, recommendation, json.dumps(d), item_id),
         )
+        if cur.rowcount == 0:
+            conn.rollback()
+            cur.close()
+            raise ReviewError("Escalation has already been reviewed", 409)
         conn.commit()
         cur.close()
         return _row_to_item((item_id, row[1], recommendation, status, json.dumps(d)))

@@ -33,8 +33,10 @@ def analyze_feedback():
                 rows = data["comments"]
                 if not isinstance(rows, list):
                     raise ValueError("comments must be a list")
+            elif "csv" in data:
+                rows = triage.parse_feedback_csv(data["csv"] or "")
             else:
-                rows = triage.parse_feedback_csv(data.get("csv") or "")
+                raise ValueError("Request must include either 'comments' or 'csv'")
         result = triage.triage_feedback(rows, config)
     except (ValueError, TypeError) as e:
         return jsonify({"error": str(e)}), 400

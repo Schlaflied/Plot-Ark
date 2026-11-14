@@ -109,6 +109,18 @@ class TriageTests(unittest.TestCase):
             for ex in t["examples"]:
                 self.assertLessEqual(len(ex), 120)
 
+    def test_self_introduced_names_are_redacted(self):
+        rows = [{"learner_id": "L50", "course_ref": "MOD3",
+                  "comment": "I am Alice Smith; the video keeps buffering and buffering."},
+                {"learner_id": "L51", "course_ref": "MOD3",
+                  "comment": "my name is Bob, the video keeps buffering too."}]
+        result = triage.triage_feedback(rows, {"min_group_size": 2})
+        blob = json.dumps(result)
+        self.assertNotIn("Alice", blob)
+        self.assertNotIn("Smith", blob)
+        self.assertNotIn("Bob", blob)
+        self.assertIn("[name]", blob)
+
     def test_config_validation(self):
         for bad in ({"raise_now_min_learners": 0}, {"nope": 1}, {"similarity_threshold": 2}, "x"):
             with self.assertRaises(ValueError):
@@ -137,6 +149,10 @@ class FakeCursor:
 
     def close(self):
         pass
+
+    @property
+    def rowcount(self):
+        return self._cur.rowcount
 
 
 class FakeConn:

@@ -72,6 +72,18 @@ will with would you your really quite much many bit lot also still even though
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _PHONE = re.compile(r"\+?\d[\d\s().-]{7,}\d")
 _TOKEN = re.compile(r"[a-z][a-z']+")
+# Lightweight, explainable name redaction: self-introductions ("I am Alice
+# Smith", "my name is Bob") and a trailing Learner ID mention. Not a full NER
+# system — it catches the common self-identifying patterns, not every name.
+_SELF_NAME = re.compile(
+    r"\b(?:i am|i'm|my name is|this is)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b", re.I)
+_LEARNER_ID_MENTION = re.compile(r"\blearner\s*(?:id)?\s*[:#]?\s*\w{3,}\b", re.I)
+
+
+def _redact_names(text: str) -> str:
+    text = _SELF_NAME.sub("[name]", text)
+    text = _LEARNER_ID_MENTION.sub("[learner id]", text)
+    return text
 
 
 # ── Import ───────────────────────────────────────────────────────────────
@@ -155,6 +167,7 @@ def _clean_rows(rows) -> list[dict]:
             continue
         learner = str(r.get("learner_id") or "").strip()
         comment = " ".join(str(r.get("comment") or "").split())
+        comment = _redact_names(comment)
         if not learner or not comment:
             continue
         ref = str(r.get("course_ref") or "").strip() or "general"
