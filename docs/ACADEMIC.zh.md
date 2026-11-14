@@ -44,7 +44,7 @@ flowchart LR
 
 ### 3. 收集学习证据
 
-- 通过内置 mini-LRS 收集 xAPI 1.0.3 行为事件。
+- 通过内置的极简语句接口收集 xAPI 风格行为语句（非认证 LRS）。
 - 区分四种学习状态：理解、部分理解、无法定位困难、尚未学习。
 - 由五节点 A2A 流水线分析行为、风险信号、内容摩擦和群组差异。
 - 通过 SSE 在界面中实时展示分析进度。
@@ -66,7 +66,7 @@ flowchart LR
 
 ### 6. 导出与集成
 
-- 课程可导出为 IMS Common Cartridge、PDF、DOCX 或 Markdown。
+- 课程可导出为 PDF、DOCX 或 Markdown。IMS Common Cartridge 导出开发中（尚未实现）。
 - 分析报告可导出为 PDF、DOCX 或 Excel。
 - 支持 OpenAI 兼容模型，并在后端加密保存各 provider 的 API Key。
 
