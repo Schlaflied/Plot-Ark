@@ -29,6 +29,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { DEMO_PROGRAMS, EVAL_LEVELS, type DemoProgram } from '../constants/enterprisePrograms';
 
 type SuggestionStatus = 'pending' | 'accepted' | 'rejected';
 
@@ -151,6 +152,8 @@ const EnterprisePage: React.FC = () => {
   const [statuses, setStatuses] = useState<Record<number, SuggestionStatus>>({});
   const [notice, setNotice] = useState('');
   const [pulse, setPulse] = useState('');
+  const [programId, setProgramId] = useState<DemoProgram['id']>('compliance');
+  const program = DEMO_PROGRAMS.find(p => p.id === programId) ?? DEMO_PROGRAMS[0];
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadRuleRef = useRef<UploadRule>(GENERAL_UPLOAD);
 
@@ -313,15 +316,28 @@ const EnterprisePage: React.FC = () => {
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-400">Demo program</p>
-              <h2 className="mt-2 text-xl font-semibold">Data Privacy & Security</h2>
-              <p className="mt-1 text-sm text-stone-400">Annual compliance training · Cohort Q3</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-400">Demo program · synthetic</p>
+              <div role="group" aria-label="Choose demo program" className="mt-3 flex gap-2">
+                {DEMO_PROGRAMS.map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setProgramId(item.id)}
+                    aria-pressed={item.id === program.id}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-amber-300 ${item.id === program.id ? 'border-amber-400 bg-amber-500 text-white' : 'border-white/15 text-stone-300 hover:bg-white/10'}`}
+                  >
+                    {item.kind}
+                  </button>
+                ))}
+              </div>
+              <h2 className="mt-3 text-xl font-semibold">{program.name}</h2>
+              <p className="mt-1 text-sm text-stone-400">{program.subtitle}</p>
               <div className="mt-5 space-y-3 text-sm">
-                <div className="flex items-center justify-between"><span className="text-stone-400">Content</span><span>1 SCORM package · 12 modules</span></div>
-                <div className="flex items-center justify-between"><span className="text-stone-400">Learning report</span><span>CSV · 248 learners</span></div>
-                <div className="flex items-center justify-between"><span className="text-stone-400">Pulse feedback</span><span>162 responses</span></div>
+                {program.summary.map(row => (
+                  <div key={row.label} className="flex items-center justify-between gap-3"><span className="text-stone-400">{row.label}</span><span className="text-right">{row.value}</span></div>
+                ))}
                 <div className="h-px bg-white/10" />
-                <div className="flex items-center justify-between font-medium"><span>Evidence coverage</span><span className="text-emerald-400">82% · strong</span></div>
+                <div className="flex items-center justify-between font-medium"><span>{program.coverageLabel}</span></div>
               </div>
             </div>
           </div>
@@ -337,10 +353,9 @@ const EnterprisePage: React.FC = () => {
         )}
 
         <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Program metrics">
-          <MetricCard label="Learners" value="248" note="Across one Q3 cohort" icon={<Users size={18} />} />
-          <MetricCard label="Completion" value="72%" note="8 points below target" icon={<CircleGauge size={18} />} />
-          <MetricCard label="Median time" value="34 min" note="Module 7 is 2.4× baseline" icon={<Clock3 size={18} />} />
-          <MetricCard label="Content issues" value="3" note="1 high-confidence finding" icon={<AlertTriangle size={18} />} />
+          {program.metrics.map((m, i) => (
+            <MetricCard key={m.label} label={m.label} value={m.value} note={m.note} icon={[<Users size={18} />, <CircleGauge size={18} />, <Clock3 size={18} />, <AlertTriangle size={18} />][i]} />
+          ))}
         </section>
 
         <section className="mt-10">
@@ -371,30 +386,27 @@ const EnterprisePage: React.FC = () => {
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">High friction</span>
-                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Evidence: strong</span>
+                    <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">{program.diagnosis.badges[0]}</span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{program.diagnosis.badges[1]}</span>
                   </div>
-                  <h3 className="mt-3 text-xl font-semibold">Module 4 · Handling customer data</h3>
-                  <p className="mt-1 text-sm text-stone-500">The scenario asks learners to apply a rule before the course explains it.</p>
+                  <h3 className="mt-3 text-xl font-semibold">{program.diagnosis.title}</h3>
+                  <p className="mt-1 text-sm text-stone-500">{program.diagnosis.description}</p>
                 </div>
                 <BarChart3 size={24} className="text-amber-600" />
               </div>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl bg-stone-50 p-3"><p className="text-xs text-stone-500">Question accuracy</p><p className="mt-1 text-lg font-semibold">62%</p></div>
-                <div className="rounded-xl bg-stone-50 p-3"><p className="text-xs text-stone-500">Unlocated difficulty</p><p className="mt-1 text-lg font-semibold">26 learners</p></div>
-                <div className="rounded-xl bg-stone-50 p-3"><p className="text-xs text-stone-500">Repeat attempts</p><p className="mt-1 text-lg font-semibold">1.8× baseline</p></div>
+                {program.diagnosis.stats.map(([label, value]) => (
+                  <div key={label} className="rounded-xl bg-stone-50 p-3"><p className="text-xs text-stone-500">{label}</p><p className="mt-1 text-lg font-semibold">{value}</p></div>
+                ))}
               </div>
 
               <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
                 <div className="flex items-start gap-3">
                   <Lightbulb size={19} className="mt-0.5 shrink-0 text-amber-700" />
                   <div>
-                    <p className="font-semibold text-amber-950">Likely prerequisite gap</p>
-                    <p className="mt-1 text-sm leading-6 text-amber-900/80">
-                      “Retention period” is required by the customer-data scenario, but the concept is introduced in the following section.
-                      Plot Ark treats this as a likely relationship—not proven causality.
-                    </p>
+                    <p className="font-semibold text-amber-950">{program.diagnosis.insightTitle}</p>
+                    <p className="mt-1 text-sm leading-6 text-amber-900/80">{program.diagnosis.insight}</p>
                   </div>
                 </div>
               </div>
@@ -402,24 +414,54 @@ const EnterprisePage: React.FC = () => {
 
             <aside className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">Evidence chain</p>
-              <div className="mt-5 space-y-4">
-                {[
-                  ['Course structure', 'SCORM manifest places the rule after the scenario.', FileText],
-                  ['Observed behaviour', 'Accuracy drops at the matching checkpoint.', BarChart3],
-                  ['Learner voice', 'The dominant response is “I cannot locate what is unclear.”', Users],
-                ].map(([title, detail, Icon]) => (
-                  <div key={String(title)} className="flex gap-3">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-600">
-                      {React.createElement(Icon as React.ElementType, { size: 15 })}
+              <ul className="mt-5 space-y-3" aria-label="Evidence cards">
+                {program.evidence.map(card => (
+                  <li key={card.id} className="rounded-xl border border-stone-100 bg-stone-50/60 p-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">Level {card.level} · {EVAL_LEVELS[card.level - 1].name}</span>
+                      <span className="rounded-full bg-stone-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-600">{card.source}</span>
                     </div>
-                    <div><p className="text-sm font-semibold">{title as string}</p><p className="mt-0.5 text-xs leading-5 text-stone-500">{detail as string}</p></div>
-                  </div>
+                    <p className="mt-2 text-sm font-semibold">{card.title}</p>
+                    <p className="mt-0.5 text-xs leading-5 text-stone-500">{card.detail}</p>
+                  </li>
                 ))}
-              </div>
+              </ul>
               <div className="mt-6 border-t border-stone-100 pt-4 text-xs leading-5 text-stone-500">
                 Data is anonymized and shown at cohort level. This preview does not rank individual employees.
               </div>
             </aside>
+          </div>
+        </section>
+
+        <section id="coverage" className="mt-12 scroll-mt-20" aria-labelledby="coverage-heading">
+          <div className="mb-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Evaluation level coverage</p>
+            <h2 id="coverage-heading" className="mt-1 font-serif text-3xl">Which levels does the evidence reach?</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-500">Synthetic demo data. Levels follow reaction, learning, behavior, and results. A program only needs the levels that match its purpose.</p>
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2">
+            {DEMO_PROGRAMS.map(item => (
+              <article key={item.id} className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-semibold">{item.name}</h3>
+                <p className="mt-1 text-xs text-stone-500">{item.purpose}</p>
+                <ul className="mt-4 space-y-2" aria-label={`${item.name} level coverage`}>
+                  {EVAL_LEVELS.map(lv => {
+                    const count = item.evidence.filter(e => e.level === lv.level).length;
+                    const expected = item.expectedLevels.includes(lv.level);
+                    const state = count > 0 ? 'covered' : expected ? 'gap' : 'optional';
+                    const styles = state === 'covered' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : state === 'gap' ? 'border-red-300 bg-red-50 text-red-900' : 'border-dashed border-stone-300 bg-stone-50 text-stone-600';
+                    const label = state === 'covered' ? `${count} evidence card${count === 1 ? '' : 's'}` : state === 'gap' ? 'No evidence · gap' : 'No evidence · not expected';
+                    return (
+                      <li key={lv.level} className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${styles}`}>
+                        <span><span className="font-semibold">Level {lv.level} · {lv.name}</span><span className="block text-xs opacity-80">{lv.question}</span></span>
+                        <span className="shrink-0 text-xs font-semibold">{label}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="mt-4 text-xs leading-5 text-stone-600"><span className="font-semibold">Why these levels: </span>{item.levelRationale}</p>
+              </article>
+            ))}
           </div>
         </section>
 
